@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mongene UI Mock</title>
+  <style>
+    :root {
+      --green:#8DDB39;
+      --blue:#11B3F2;
+      --yellow:#FFCD0A;
+      --ink:#222;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --bg:#ffffff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Noto Sans JP, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    /* Background Shapes */
+    .bg-wrap { position: relative; min-height: 100%; overflow: hidden; }
+    .shape { position: absolute; opacity: .18; filter: blur(0.5px); }
+    .shape.circle { width: 6rem; height: 6rem; border-radius: 9999px; background: var(--green); top: 3rem; left: 3rem; }
+    .shape.diamond { width: 5rem; height: 5rem; background: var(--yellow); transform: rotate(45deg); top: 40%; left: 33%; }
+    .shape.tri { width: 8rem; height: 8rem; background: var(--blue); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); right: 4rem; bottom: 5rem; }
+
+    /* Layout */
+    .container { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; }
+    .brand-name { font-weight: 800; color: var(--blue); }
+    .avatar { width: 40px; height: 40px; background: #e5e7eb; border-radius: 9999px; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .tab { border: 0; background: transparent; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; color: var(--ink); }
+    .tab.active { background: var(--green); color: #fff; }
+    .tab:hover { background: #f3f4f6; }
+
+    /* Filters */
+    .filters { display: grid; gap: 10px; margin-bottom: 24px; }
+    .filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .filter-label { font-weight: 600; color: var(--ink); }
+    .chip { border: 1px solid var(--border); background: #fff; padding: 6px 10px; border-radius: 9999px; cursor: pointer; font-size: 14px; }
+    .chip:hover { border-color: #d1d5db; }
+
+    /* Grid of problems */
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+    .card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgb(0 0 0 / 6%); display: flex; flex-direction: column; gap: 16px; }
+
+    /* A4 preview (portrait) — scaled down */
+    .a4 {
+      width: 297px; /* A4 portrait scale width (mm to px rough) */
+      height: 420px; /* scaled height */
+      background: #fff;
+      border: 2px solid #d1d5db;
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto;
+      box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+    }
+    .a4 span { color: #6b7280; font-size: 15px; }
+
+    /* Buttons */
+    .actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .btn { appearance: none; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+    .btn:focus { outline: 3px solid rgb(17 179 242 / 25%); outline-offset: 2px; }
+    .btn-secondary { background: var(--blue); color: #fff; }
+    .btn-secondary:hover { filter: brightness(0.95); }
+    .btn-primary { background: var(--yellow); color: #222; }
+    .btn-primary:hover { filter: brightness(0.95); }
+
+    /* Generate button */
+    .cta { display: flex; justify-content: center; margin-top: 28px; }
+    .btn-generate { background: var(--green); color: #fff; padding: 12px 20px; border-radius: 12px; box-shadow: 0 8px 16px rgb(141 219 57 / 25%); }
+    .btn-generate:hover { filter: brightness(0.98); transform: translateY(-1px); }
+
+    /* Utilities */
+    .sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  </style>
+</head>
+<body>
+  <div class="bg-wrap">
+    <!-- Background shapes -->
+    <div class="shape circle"></div>
+    <div class="shape diamond"></div>
+    <div class="shape tri"></div>
+
+    <div class="container">
+      <!-- Header -->
+      <header>
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-name">Mongene</div>
+        </div>
+        <div class="avatar" aria-hidden="true"></div>
+      </header>
+
+      <!-- Tabs -->
+      <nav class="tabs" aria-label="科目タブ">
+        <button class="tab active" aria-current="page">数学</button>
+        <button class="tab">英語</button>
+        <button class="tab">国語</button>
+      </nav>
+
+      <!-- Filters -->
+      <section class="filters" aria-label="検索フィルター">
+        <div class="filter-row">
+          <div class="filter-label">学年:</div>
+          <button class="chip">中1</button>
+          <button class="chip">中2</button>
+          <button class="chip">中3</button>
+        </div>
+        <div class="filter-row">
+          <div class="filter-label">単元:</div>
+          <button class="chip">式の計算</button>
+          <button class="chip">図形</button>
+          <button class="chip">2次不等式</button>
+        </div>
+        <div class="filter-row">
+          <div class="filter-label">難易度:</div>
+          <button class="chip">Lv1</button>
+          <button class="chip">Lv2</button>
+          <button class="chip">Lv3</button>
+        </div>
+      </section>
+
+      <!-- Problem List -->
+      <section class="grid" aria-label="問題一覧">
+        <!-- Card -->
+        <article class="card" aria-labelledby="p1-title">
+          <div class="a4"><span id="p1-title">A4 プレビュー 1</span></div>
+          <div class="actions">
+            <button class="btn btn-secondary" type="button">プレビュー</button>
+            <button class="btn btn-primary" type="button">印刷</button>
+          </div>
+        </article>
+
+        <article class="card" aria-labelledby="p2-title">
+          <div class="a4"><span id="p2-title">A4 プレビュー 2</span></div>
+          <div class="actions">
+            <button class="btn btn-secondary" type="button">プレビュー</button>
+            <button class="btn btn-primary" type="button">印刷</button>
+          </div>
+        </article>
+
+        <article class="card" aria-labelledby="p3-title">
+          <div class="a4"><span id="p3-title">A4 プレビュー 3</span></div>
+          <div class="actions">
+            <button class="btn btn-secondary" type="button">プレビュー</button>
+            <button class="btn btn-primary" type="button">印刷</button>
+          </div>
+        </article>
+
+        <article class="card" aria-labelledby="p4-title">
+          <div class="a4"><span id="p4-title">A4 プレビュー 4</span></div>
+          <div class="actions">
+            <button class="btn btn-secondary" type="button">プレビュー</button>
+            <button class="btn btn-primary" type="button">印刷</button>
+          </div>
+        </article>
+      </section>
+
+      <!-- Generate -->
+      <div class="cta">
+        <button class="btn btn-generate" type="button">問題を新しく生成</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
