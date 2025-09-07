@@ -1,26 +1,69 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --mongene-green: #8DDB39;
+  --mongene-blue: #11B3F2;
+  --mongene-yellow: #FFCD0A;
+  --mongene-ink: #222222;
+  --mongene-muted: #6b7280;
+  --mongene-border: #e5e7eb;
+  --mongene-bg: #ffffff;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-mongene-green: var(--mongene-green);
+  --color-mongene-blue: var(--mongene-blue);
+  --color-mongene-yellow: var(--mongene-yellow);
+  --color-mongene-ink: var(--mongene-ink);
+  --color-mongene-muted: var(--mongene-muted);
+  --color-mongene-border: var(--mongene-border);
+  --color-mongene-bg: var(--mongene-bg);
+  
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--mongene-bg);
+  color: var(--mongene-ink);
+  font-family: var(--font-sans);
+  margin: 0;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Background shapes utility classes */
+.bg-shape {
+  position: absolute;
+  opacity: 0.18;
+  filter: blur(0.5px);
+}
+
+.bg-shape-circle {
+  width: 6rem;
+  height: 6rem;
+  border-radius: 9999px;
+  background: var(--mongene-green);
+  top: 3rem;
+  left: 3rem;
+}
+
+.bg-shape-diamond {
+  width: 5rem;
+  height: 5rem;
+  background: var(--mongene-yellow);
+  transform: rotate(45deg);
+  top: 40%;
+  left: 33%;
+}
+
+.bg-shape-triangle {
+  width: 8rem;
+  height: 8rem;
+  background: var(--mongene-blue);
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  right: 4rem;
+  bottom: 5rem;
 }
