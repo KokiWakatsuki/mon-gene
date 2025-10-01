@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 // リクエスト構造体
@@ -94,8 +96,15 @@ func generateProblemHandler(w http.ResponseWriter, r *http.Request) {
 	// Claude APIキーの取得
 	apiKey := os.Getenv("CLAUDE_API_KEY")
 	if apiKey == "" {
-		// 環境変数が設定されていない場合はハードコードされた値を使用（開発用）
-		apiKey = "<REDACTED>"
+		log.Printf("Error: CLAUDE_API_KEY environment variable is not set")
+		response := GenerateProblemResponse{
+			Content: "",
+			Success: false,
+			Error:   "APIキーが設定されていません",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	// Claude APIの呼び出し
@@ -192,6 +201,11 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// .envファイルを読み込み
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found or could not be loaded: %v", err)
+	}
+
 	// ルートの設定
 	http.HandleFunc("/", healthHandler)
 	http.HandleFunc("/api/generate-problem", generateProblemHandler)

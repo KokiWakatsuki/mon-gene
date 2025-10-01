@@ -1,0 +1,37 @@
+# Environment variables
+back/.env
+front/.env
+
+# Dependencies
+node_modules/
+back/vendor/
+
+# Build outputs
+back/bin/
+front/.next/
+front/out/
+front/build/
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
