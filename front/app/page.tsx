@@ -175,11 +175,67 @@ export default function Home() {
   };
 
   const handlePrint = (id: string) => {
-    // 印刷プレビューを開く
-    handlePreview(id);
+    const problem = problems.find(p => p.id === id);
+    if (problem) {
+      // 印刷用の新しいウィンドウを開く
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${problem.title}</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                line-height: 1.6;
+              }
+              h1 {
+                font-size: 24px;
+                margin-bottom: 20px;
+                border-bottom: 2px solid #333;
+                padding-bottom: 10px;
+              }
+              .content {
+                white-space: pre-wrap;
+                font-size: 14px;
+              }
+              @media print {
+                body { margin: 0; }
+                h1 { page-break-after: avoid; }
+              }
+            </style>
+          </head>
+          <body>
+            <h1>${problem.title}</h1>
+            <div class="content">${problem.content || ''}</div>
+          </body>
+          </html>
+        `);
+        printWindow.document.close();
+        
+        // ページが読み込まれたら印刷ダイアログを表示
+        printWindow.onload = () => {
+          printWindow.print();
+          printWindow.close();
+        };
+      }
+    }
   };
 
   const handleGenerate = async () => {
+    // 必須フィルターのチェック
+    const requiredFilters = ['学年', '単元', '難易度', '必要な公式数', '計算量', '数値の複雑性', '問題文の文章量'];
+    const missingFilters = requiredFilters.filter(filter => 
+      !selectedFilters[filter] || selectedFilters[filter].length === 0
+    );
+    
+    if (missingFilters.length > 0) {
+      alert(`以下の項目を選択してください: ${missingFilters.join(', ')}`);
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
