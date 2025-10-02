@@ -29,7 +29,8 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
           
           <div className="border-2 border-mongene-border rounded-lg p-8 bg-white min-h-[600px]">
             {problemContent ? (
-              <div className="text-mongene-ink whitespace-pre-wrap leading-relaxed">
+              <div className="print-content text-mongene-ink whitespace-pre-wrap leading-relaxed">
+                <h3 className="text-xl font-bold mb-4">{problemTitle}</h3>
                 {problemContent}
               </div>
             ) : (
@@ -42,7 +43,7 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
             )}
           </div>
           
-          <div className="flex justify-end gap-3 mt-6">
+          <div className="flex justify-end gap-3 mt-6 no-print">
             <button
               onClick={onClose}
               className="px-4 py-2 border border-mongene-border rounded-lg text-mongene-ink hover:bg-gray-50 transition-colors"

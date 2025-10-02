@@ -67,3 +67,39 @@ body {
   right: 4rem;
   bottom: 5rem;
 }
+
+/* 印刷用スタイル */
+@media print {
+  /* 印刷時にページ全体を非表示にする */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* 印刷対象の要素のみを表示 */
+  .print-content, .print-content * {
+    visibility: visible;
+  }
+  
+  /* 印刷対象の要素を全画面に配置 */
+  .print-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  
+  /* 印刷時に不要な要素を非表示 */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* ページの余白を調整 */
+  @page {
+    margin: 1cm;
+  }
+}
