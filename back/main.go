@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/smtp"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -25,9 +27,10 @@ type GenerateProblemRequest struct {
 
 // レスポンス構造体
 type GenerateProblemResponse struct {
-	Content string `json:"content"`
-	Success bool   `json:"success"`
-	Error   string `json:"error,omitempty"`
+	Content     string `json:"content"`
+	Success     bool   `json:"success"`
+	Error       string `json:"error,omitempty"`
+	ImageBase64 string `json:"image_base64,omitempty"`
 }
 
 // 認証関連の構造体
@@ -92,6 +95,53 @@ type ContentItem struct {
 type ClaudeError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+// Core API関連の構造体
+type CoreAnalysisRequest struct {
+	ProblemText     string                 `json:"problem_text"`
+	UnitParameters  map[string]interface{} `json:"unit_parameters"`
+	Subject         string                 `json:"subject"`
+}
+
+type CoreAnalysisResponse struct {
+	Success             bool                              `json:"success"`
+	NeedsGeometry       bool                              `json:"needs_geometry"`
+	DetectedShapes      []string                          `json:"detected_shapes"`
+	SuggestedParameters map[string]map[string]interface{} `json:"suggested_parameters"`
+}
+
+type CoreGeometryRequest struct {
+	ShapeType  string                 `json:"shape_type"`
+	Parameters map[string]interface{} `json:"parameters"`
+	Labels     map[string]string      `json:"labels,omitempty"`
+}
+
+type CoreGeometryResponse struct {
+	Success     bool   `json:"success"`
+	ImageBase64 string `json:"image_base64"`
+	ShapeType   string `json:"shape_type"`
+}
+
+type CorePDFRequest struct {
+	ProblemText string `json:"problem_text"`
+	ImageBase64 string `json:"image_base64,omitempty"`
+}
+
+type CorePDFResponse struct {
+	Success    bool   `json:"success"`
+	PDFBase64  string `json:"pdf_base64"`
+}
+
+type CoreCustomGeometryRequest struct {
+	PythonCode  string `json:"python_code"`
+	ProblemText string `json:"problem_text"`
+}
+
+type CoreCustomGeometryResponse struct {
+	Success     bool   `json:"success"`
+	ImageBase64 string `json:"image_base64"`
+	ProblemText string `json:"problem_text"`
 }
 
 // インメモリデータストア（本来はデータベースを使用）
@@ -172,10 +222,51 @@ func generateProblemHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pythonコードが含まれているかチェック
+	pythonCode := extractPythonCode(content)
+	cleanContent := removePythonCode(content)
+	
+	log.Printf("Original content length: %d", len(content))
+	log.Printf("Python code length: %d", len(pythonCode))
+	log.Printf("Clean content length: %d", len(cleanContent))
+	
+	if pythonCode != "" {
+		preview := pythonCode
+		if len(pythonCode) > 100 {
+			preview = pythonCode[:100] + "..."
+		}
+		log.Printf("Python code found: %s", preview)
+	}
+	
+	var imageBase64 string
+	
+	if pythonCode != "" {
+		// カスタムPythonコードで図形を生成
+		log.Printf("Custom Python code detected, generating custom geometry")
+		imageBase64, err = generateCustomGeometryWithCore(pythonCode, cleanContent)
+		if err != nil {
+			log.Printf("Error generating custom geometry: %v", err)
+		}
+	} else {
+		// 従来の方法で図形が必要かどうかを分析
+		analysisResp, err := analyzeProblemWithCore(cleanContent, req.Filters)
+		if err != nil {
+			log.Printf("Error analyzing problem: %v", err)
+		} else if analysisResp.NeedsGeometry && len(analysisResp.DetectedShapes) > 0 {
+			// 最初に検出された図形を描画
+			shapeType := analysisResp.DetectedShapes[0]
+			imageBase64, err = generateGeometryWithCore(shapeType, analysisResp.SuggestedParameters[shapeType])
+			if err != nil {
+				log.Printf("Error generating geometry: %v", err)
+			}
+		}
+	}
+
 	// 成功レスポンス
 	response := GenerateProblemResponse{
-		Content: content,
-		Success: true,
+		Content:     cleanContent,
+		Success:     true,
+		ImageBase64: imageBase64,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -184,13 +275,51 @@ func generateProblemHandler(w http.ResponseWriter, r *http.Request) {
 
 // Claude APIを呼び出す関数
 func callClaudeAPI(prompt, apiKey string) (string, error) {
+	// 図形描画コード生成を含むプロンプトに拡張
+	enhancedPrompt := prompt + `
+
+もし問題に図形が必要な場合は、問題文の後に以下の形式で図形描画用のPythonコードを追加してください：
+
+---GEOMETRY_CODE_START---
+# 図形描画コード（問題に特化した図形を描画）
+# import文は不要です（事前にインポート済み）
+fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+
+# ここに問題に応じた具体的な図形描画コードを記述
+# 例：正方形ABCD、点P、Q、Rの位置、線分、座標軸など
+# 利用可能な変数: plt, patches, np, numpy
+
+ax.set_aspect('equal')
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+---GEOMETRY_CODE_END---
+
+重要：
+1. 問題文に含まれる具体的な数値や条件を図形に正確に反映してください
+2. 点の位置、線分の長さ、比率などを問題文通りに描画してください
+3. **座標軸の表示判定**：
+   - 問題文のキーワードで判定
+   - 「座標」「グラフ」「関数」「x軸」「y軸」があれば、ax.grid(True, alpha=0.3) で座標軸を表示
+   - 「体積」「面積」「角度」「長さ」「直方体」「円錐」「球」があれば、ax.axis('off') で座標軸を非表示
+4. 図形のラベルは必ずアルファベット（A、B、C、P、Q、R等）を使用してください
+5. ax.text()で日本語を使用しないでください
+6. タイトルやラベルは英語またはアルファベットのみを使用してください
+7. import文は記述しないでください（plt, np, patches, Axes3D, Poly3DCollectionは既に利用可能です）
+8. numpy関数はnp.array(), np.linspace(), np.meshgrid()等で使用してください
+9. 3D図形が必要な場合は以下を使用してください：
+   - fig = plt.figure(figsize=(8, 8))
+   - ax = fig.add_subplot(111, projection='3d')
+   - ax.plot_surface(), ax.add_collection3d(Poly3DCollection())等
+   - ax.view_init(elev=20, azim=-75)で視点を調整
+10. 切断図形や断面図が必要な場合は、切断面をPoly3DCollectionで描画してください`
+
 	claudeReq := ClaudeRequest{
 		Model:     "claude-3-5-sonnet-20241022",
-		MaxTokens: 1000,
+		MaxTokens: 2000, // トークン数を増やす
 		Messages: []Message{
 			{
 				Role:    "user",
-				Content: prompt,
+				Content: enhancedPrompt,
 			},
 		},
 	}
@@ -374,6 +503,60 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// PDF生成エンドポイント
+func generatePDFHandler(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+
+	// OPTIONSリクエストの処理
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// リクエストボディの読み取り
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading request body: %v", err)
+		http.Error(w, "Error reading request", http.StatusBadRequest)
+		return
+	}
+
+	var req CorePDFRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Printf("Error parsing JSON: %v", err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Received PDF generation request for problem text length: %d", len(req.ProblemText))
+
+	// Core APIでPDF生成
+	pdfBase64, err := generatePDFWithCore(req.ProblemText, req.ImageBase64)
+	if err != nil {
+		log.Printf("Error generating PDF: %v", err)
+		response := CorePDFResponse{
+			Success: false,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// 成功レスポンス
+	response := CorePDFResponse{
+		Success:   true,
+		PDFBase64: pdfBase64,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // パスワードリセットエンドポイント
 func forgotPasswordHandler(w http.ResponseWriter, r *http.Request) {
 	enableCORS(w)
@@ -450,6 +633,181 @@ Mongeneサポートチーム
 	json.NewEncoder(w).Encode(response)
 }
 
+// Core APIとの連携関数
+func analyzeProblemWithCore(problemText string, filters map[string]interface{}) (*CoreAnalysisResponse, error) {
+	coreURL := os.Getenv("CORE_API_URL")
+	if coreURL == "" {
+		coreURL = "http://core:1234" // Dockerコンテナ内ではサービス名を使用
+	}
+
+	reqData := CoreAnalysisRequest{
+		ProblemText:    problemText,
+		UnitParameters: filters,
+		Subject:        "math",
+	}
+
+	reqBody, err := json.Marshal(reqData)
+	if err != nil {
+		return nil, fmt.Errorf("JSON marshaling error: %v", err)
+	}
+
+	resp, err := http.Post(coreURL+"/analyze-problem", "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("response reading error: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Core API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var analysisResp CoreAnalysisResponse
+	if err := json.Unmarshal(respBody, &analysisResp); err != nil {
+		return nil, fmt.Errorf("JSON unmarshaling error: %v", err)
+	}
+
+	return &analysisResp, nil
+}
+
+func generateGeometryWithCore(shapeType string, parameters map[string]interface{}) (string, error) {
+	coreURL := os.Getenv("CORE_API_URL")
+	if coreURL == "" {
+		coreURL = "http://core:1234" // Dockerコンテナ内ではサービス名を使用
+	}
+
+	reqData := CoreGeometryRequest{
+		ShapeType:  shapeType,
+		Parameters: parameters,
+	}
+
+	reqBody, err := json.Marshal(reqData)
+	if err != nil {
+		return "", fmt.Errorf("JSON marshaling error: %v", err)
+	}
+
+	resp, err := http.Post(coreURL+"/draw-geometry", "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return "", fmt.Errorf("HTTP request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("response reading error: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Core API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var geometryResp CoreGeometryResponse
+	if err := json.Unmarshal(respBody, &geometryResp); err != nil {
+		return "", fmt.Errorf("JSON unmarshaling error: %v", err)
+	}
+
+	return geometryResp.ImageBase64, nil
+}
+
+func generatePDFWithCore(problemText, imageBase64 string) (string, error) {
+	coreURL := os.Getenv("CORE_API_URL")
+	if coreURL == "" {
+		coreURL = "http://core:1234" // Dockerコンテナ内ではサービス名を使用
+	}
+
+	reqData := CorePDFRequest{
+		ProblemText: problemText,
+		ImageBase64: imageBase64,
+	}
+
+	reqBody, err := json.Marshal(reqData)
+	if err != nil {
+		return "", fmt.Errorf("JSON marshaling error: %v", err)
+	}
+
+	resp, err := http.Post(coreURL+"/generate-pdf", "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return "", fmt.Errorf("HTTP request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("response reading error: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Core API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var pdfResp CorePDFResponse
+	if err := json.Unmarshal(respBody, &pdfResp); err != nil {
+		return "", fmt.Errorf("JSON unmarshaling error: %v", err)
+	}
+
+	return pdfResp.PDFBase64, nil
+}
+
+// Pythonコードを抽出する関数
+func extractPythonCode(content string) string {
+	re := regexp.MustCompile(`(?s)---GEOMETRY_CODE_START---(.*?)---GEOMETRY_CODE_END---`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	return ""
+}
+
+// 問題文からPythonコードを除去する関数
+func removePythonCode(content string) string {
+	re := regexp.MustCompile(`(?s)---GEOMETRY_CODE_START---.*?---GEOMETRY_CODE_END---`)
+	return strings.TrimSpace(re.ReplaceAllString(content, ""))
+}
+
+// カスタム図形生成関数
+func generateCustomGeometryWithCore(pythonCode, problemText string) (string, error) {
+	coreURL := os.Getenv("CORE_API_URL")
+	if coreURL == "" {
+		coreURL = "http://core:1234" // Dockerコンテナ内ではサービス名を使用
+	}
+
+	reqData := CoreCustomGeometryRequest{
+		PythonCode:  pythonCode,
+		ProblemText: problemText,
+	}
+
+	reqBody, err := json.Marshal(reqData)
+	if err != nil {
+		return "", fmt.Errorf("JSON marshaling error: %v", err)
+	}
+
+	resp, err := http.Post(coreURL+"/draw-custom-geometry", "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return "", fmt.Errorf("HTTP request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("response reading error: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Core API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var customGeometryResp CoreCustomGeometryResponse
+	if err := json.Unmarshal(respBody, &customGeometryResp); err != nil {
+		return "", fmt.Errorf("JSON unmarshaling error: %v", err)
+	}
+
+	return customGeometryResp.ImageBase64, nil
+}
+
 // 認証チェック関数
 func isAuthenticated(token string) bool {
 	session, exists := sessions[token]
@@ -484,6 +842,7 @@ func main() {
 	// ルートの設定
 	http.HandleFunc("/", healthHandler)
 	http.HandleFunc("/api/generate-problem", generateProblemHandler)
+	http.HandleFunc("/api/generate-pdf", generatePDFHandler)
 	http.HandleFunc("/api/login", loginHandler)
 	http.HandleFunc("/api/forgot-password", forgotPasswordHandler)
 
@@ -491,6 +850,7 @@ func main() {
 	log.Println("Endpoints:")
 	log.Println("  GET  / - Health check")
 	log.Println("  POST /api/generate-problem - Generate problem using Claude API")
+	log.Println("  POST /api/generate-pdf - Generate PDF with problem and image")
 	log.Println("  POST /api/login - User authentication")
 	log.Println("  POST /api/forgot-password - Password reset")
 

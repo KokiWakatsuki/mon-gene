@@ -8,9 +8,10 @@ interface ProblemPreviewModalProps {
   problemId: string;
   problemTitle: string;
   problemContent?: string;
+  imageBase64?: string;
 }
 
-export default function ProblemPreviewModal({ isOpen, onClose, problemId, problemTitle, problemContent }: ProblemPreviewModalProps) {
+export default function ProblemPreviewModal({ isOpen, onClose, problemId, problemTitle, problemContent, imageBase64 }: ProblemPreviewModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -29,9 +30,26 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
           
           <div className="border-2 border-mongene-border rounded-lg p-8 bg-white min-h-[600px]">
             {problemContent ? (
-              <div className="print-content text-mongene-ink whitespace-pre-wrap leading-relaxed">
+              <div className="print-content text-mongene-ink">
                 <h3 className="text-xl font-bold mb-4">{problemTitle}</h3>
-                {problemContent}
+                {imageBase64 ? (
+                  <div className="flex gap-6">
+                    <div className="flex-1 whitespace-pre-wrap leading-relaxed">
+                      {problemContent}
+                    </div>
+                    <div className="w-80 flex-shrink-0">
+                      <img 
+                        src={`data:image/png;base64,${imageBase64}`}
+                        alt="問題図形"
+                        className="w-full h-auto border border-gray-200 rounded"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap leading-relaxed">
+                    {problemContent}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center h-full">

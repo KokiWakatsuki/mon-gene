@@ -1,0 +1,8 @@
+typst==0.13.7
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+matplotlib==3.8.2
+numpy==1.24.3
+reportlab==4.0.7
+Pillow==10.1.0

@@ -6,11 +6,12 @@ interface ProblemCardProps {
   id: string;
   title: string;
   content?: string;
+  imageBase64?: string;
   onPreview: (id: string) => void;
   onPrint: (id: string) => void;
 }
 
-export default function ProblemCard({ id, title, content, onPreview, onPrint }: ProblemCardProps) {
+export default function ProblemCard({ id, title, content, imageBase64, onPreview, onPrint }: ProblemCardProps) {
   // 問題内容の最初の部分を取得（プレビュー用）
   const getPreviewContent = () => {
     if (!content) return title;
@@ -38,9 +39,26 @@ export default function ProblemCard({ id, title, content, onPreview, onPrint }: 
             {title}
           </div>
           <div className="flex-1 overflow-hidden">
-            <div className="text-xs text-mongene-ink leading-relaxed whitespace-pre-wrap">
-              {getPreviewContent()}
-            </div>
+            {imageBase64 ? (
+              <div className="h-full flex gap-3">
+                <div className="flex-1 overflow-hidden">
+                  <div className="text-xs text-mongene-ink leading-relaxed whitespace-pre-wrap">
+                    {getPreviewContent()}
+                  </div>
+                </div>
+                <div className="w-40 flex-shrink-0">
+                  <img 
+                    src={`data:image/png;base64,${imageBase64}`}
+                    alt="問題図形"
+                    className="w-full h-full object-contain border border-gray-200 rounded"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-mongene-ink leading-relaxed whitespace-pre-wrap">
+                {getPreviewContent()}
+              </div>
+            )}
           </div>
         </div>
       </div>

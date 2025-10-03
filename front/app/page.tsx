@@ -15,18 +15,19 @@ export default function Home() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeSubject, setActiveSubject] = useState('数学');
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
-  const [previewModal, setPreviewModal] = useState<{ isOpen: boolean; problemId: string; problemTitle: string; problemContent?: string }>({
+  const [previewModal, setPreviewModal] = useState<{ isOpen: boolean; problemId: string; problemTitle: string; problemContent?: string; imageBase64?: string }>({
     isOpen: false,
     problemId: '',
     problemTitle: '',
     problemContent: '',
+    imageBase64: undefined,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [problems, setProblems] = useState([
-    { id: '1', title: 'A4 プレビュー 1', content: 'これはサンプル問題です。' },
-    { id: '2', title: 'A4 プレビュー 2', content: 'これはサンプル問題です。' },
-    { id: '3', title: 'A4 プレビュー 3', content: 'これはサンプル問題です。' },
-    { id: '4', title: 'A4 プレビュー 4', content: 'これはサンプル問題です。' },
+    { id: '1', title: 'A4 プレビュー 1', content: 'これはサンプル問題です。', imageBase64: undefined },
+    { id: '2', title: 'A4 プレビュー 2', content: 'これはサンプル問題です。', imageBase64: undefined },
+    { id: '3', title: 'A4 プレビュー 3', content: 'これはサンプル問題です。', imageBase64: undefined },
+    { id: '4', title: 'A4 プレビュー 4', content: 'これはサンプル問題です。', imageBase64: undefined },
   ]);
 
   // 認証チェック
@@ -75,6 +76,7 @@ export default function Home() {
     '数学': [
       { label: '式の計算', value: 'calculation' },
       { label: '図形', value: 'geometry' },
+      { label: '空間図形', value: 'spatial_geometry' },
       { label: '2次不等式', value: 'quadratic' },
       { label: '関数', value: 'function' },
       { label: '確率', value: 'probability' },
@@ -211,6 +213,7 @@ export default function Home() {
         problemId: id,
         problemTitle: problem.title,
         problemContent: problem.content,
+        imageBase64: problem.imageBase64,
       });
     }
   };
@@ -221,6 +224,14 @@ export default function Home() {
       // 印刷用の新しいウィンドウを開く
       const printWindow = window.open('', '_blank');
       if (printWindow) {
+        const imageHtml = problem.imageBase64 
+          ? `<div style="text-align: center; margin: 20px 0;">
+               <img src="data:image/png;base64,${problem.imageBase64}" 
+                    style="max-width: 100%; height: auto; border: 1px solid #ddd;" 
+                    alt="問題図形" />
+             </div>`
+          : '';
+        
         printWindow.document.write(`
           <!DOCTYPE html>
           <html>
@@ -241,16 +252,28 @@ export default function Home() {
               .content {
                 white-space: pre-wrap;
                 font-size: 14px;
+                margin-bottom: 20px;
+              }
+              .image-container {
+                text-align: center;
+                margin: 20px 0;
+              }
+              .image-container img {
+                max-width: 100%;
+                height: auto;
+                border: 1px solid #ddd;
               }
               @media print {
                 body { margin: 0; }
                 h1 { page-break-after: avoid; }
+                .image-container { page-break-inside: avoid; }
               }
             </style>
           </head>
           <body>
             <h1>${problem.title}</h1>
             <div class="content">${problem.content || ''}</div>
+            ${imageHtml}
           </body>
           </html>
         `);
@@ -290,6 +313,7 @@ export default function Home() {
       
       let generatedContent = '';
       let problemTitle = '';
+      let newProblemId = String(problems.length + 1);
       
       if (API_CONFIG.USE_REAL_API) {
         // バックエンドサーバー経由でClaude APIを呼び出す
@@ -316,33 +340,59 @@ export default function Home() {
         problemTitle = `AI生成問題 ${problems.length + 1}`;
         
         console.log('バックエンドAPIレスポンス:', data);
+        
+        // 新しい問題を追加（画像データを含む）
+        const newProblemId = String(problems.length + 1);
+        const newProblem = {
+          id: newProblemId,
+          title: problemTitle,
+          content: generatedContent,
+          imageBase64: data.image_base64 || undefined,
+        };
+        
+        setProblems(prev => [...prev, newProblem]);
+        
+        // ローディングを終了
+        setIsLoading(false);
+        
+        // 生成された問題のプレビューを自動的に表示（画像データを含む）
+        setPreviewModal({
+          isOpen: true,
+          problemId: newProblemId,
+          problemTitle: problemTitle,
+          problemContent: generatedContent,
+          imageBase64: data.image_base64 || undefined,
+        });
+        
       } else {
         // テスト版（ダミーデータ）
         console.log('テスト版を使用しています');
         generatedContent = `これはテスト用の問題です。\n\n選択された条件:\n${prompt}\n\n実際のAPI版では、ここにClaude AIが生成した問題が表示されます。`;
         problemTitle = `テスト問題 ${problems.length + 1}`;
+        
+        // 新しい問題を追加（テスト版でも画像データを含む）
+        const newProblemId = String(problems.length + 1);
+        const newProblem = {
+          id: newProblemId,
+          title: problemTitle,
+          content: generatedContent,
+          imageBase64: undefined,
+        };
+        
+        setProblems(prev => [...prev, newProblem]);
+        
+        // ローディングを終了
+        setIsLoading(false);
+        
+        // 生成された問題のプレビューを自動的に表示
+        setPreviewModal({
+          isOpen: true,
+          problemId: newProblemId,
+          problemTitle: problemTitle,
+          problemContent: generatedContent,
+          imageBase64: undefined,
+        });
       }
-      
-      // 新しい問題を追加
-      const newProblemId = String(problems.length + 1);
-      const newProblem = {
-        id: newProblemId,
-        title: problemTitle,
-        content: generatedContent,
-      };
-      
-      setProblems(prev => [...prev, newProblem]);
-      
-      // ローディングを終了
-      setIsLoading(false);
-      
-      // 生成された問題のプレビューを自動的に表示
-      setPreviewModal({
-        isOpen: true,
-        problemId: newProblemId,
-        problemTitle: problemTitle,
-        problemContent: generatedContent,
-      });
       
     } catch (error) {
       setIsLoading(false);
@@ -392,6 +442,7 @@ export default function Home() {
               id={problem.id}
               title={problem.title}
               content={problem.content}
+              imageBase64={problem.imageBase64}
               onPreview={handlePreview}
               onPrint={handlePrint}
             />
@@ -411,10 +462,11 @@ export default function Home() {
 
       <ProblemPreviewModal
         isOpen={previewModal.isOpen}
-        onClose={() => setPreviewModal({ isOpen: false, problemId: '', problemTitle: '', problemContent: '' })}
+        onClose={() => setPreviewModal({ isOpen: false, problemId: '', problemTitle: '', problemContent: '', imageBase64: undefined })}
         problemId={previewModal.problemId}
         problemTitle={previewModal.problemTitle}
         problemContent={previewModal.problemContent}
+        imageBase64={previewModal.imageBase64}
       />
 
       <LoadingModal
