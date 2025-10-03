@@ -2,12 +2,16 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/smtp"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -24,6 +28,42 @@ type GenerateProblemResponse struct {
 	Content string `json:"content"`
 	Success bool   `json:"success"`
 	Error   string `json:"error,omitempty"`
+}
+
+// 認証関連の構造体
+type LoginRequest struct {
+	SchoolCode string `json:"schoolCode"`
+	Password   string `json:"password"`
+	Remember   bool   `json:"remember"`
+}
+
+type LoginResponse struct {
+	Success bool   `json:"success"`
+	Token   string `json:"token,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+type ForgotPasswordRequest struct {
+	SchoolCode string `json:"schoolCode"`
+}
+
+type ForgotPasswordResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+}
+
+type School struct {
+	Code     string `json:"code"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
+
+// セッション管理用
+type Session struct {
+	Token      string    `json:"token"`
+	SchoolCode string    `json:"schoolCode"`
+	ExpiresAt  time.Time `json:"expiresAt"`
 }
 
 // Claude APIリクエスト構造体
@@ -53,6 +93,17 @@ type ClaudeError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
 }
+
+// インメモリデータストア（本来はデータベースを使用）
+var schools = map[string]School{
+	"00000": {
+		Code:     "00000",
+		Password: "password",
+		Email:    "nutfes.script@gmail.com",
+	},
+}
+
+var sessions = make(map[string]Session)
 
 // CORS設定
 func enableCORS(w http.ResponseWriter) {
@@ -190,6 +241,230 @@ func callClaudeAPI(prompt, apiKey string) (string, error) {
 	return claudeResp.Content[0].Text, nil
 }
 
+// ランダムトークン生成
+func generateToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+// メール送信機能
+func sendEmail(to, subject, body string) error {
+	from := os.Getenv("SMTP_FROM")
+	password := os.Getenv("SMTP_PASSWORD")
+	smtpHost := os.Getenv("SMTP_HOST")
+	smtpPort := os.Getenv("SMTP_PORT")
+
+	// 設定値の詳細チェック
+	if from == "" {
+		log.Printf("SMTP設定エラー: SMTP_FROM が設定されていません")
+	}
+	if password == "" || password == "your-gmail-app-password" {
+		log.Printf("SMTP設定エラー: SMTP_PASSWORD が設定されていないか、デフォルト値のままです")
+	}
+	if smtpHost == "" {
+		log.Printf("SMTP設定エラー: SMTP_HOST が設定されていません")
+	}
+	if smtpPort == "" {
+		log.Printf("SMTP設定エラー: SMTP_PORT が設定されていません")
+	}
+
+	if from == "" || password == "" || password == "your-gmail-app-password" || smtpHost == "" || smtpPort == "" {
+		log.Printf("SMTP設定が不完全です。デモ用にログ出力します。")
+		log.Printf("To: %s", to)
+		log.Printf("Subject: %s", subject)
+		log.Printf("Body: %s", body)
+		log.Printf("")
+		log.Printf("実際のメール送信を有効にするには:")
+		log.Printf("1. Gmailでアプリパスワードを生成してください")
+		log.Printf("2. .envファイルのSMTP_PASSWORDを実際のアプリパスワードに変更してください")
+		return nil
+	}
+
+	msg := "From: " + from + "\n" +
+		"To: " + to + "\n" +
+		"Subject: " + subject + "\n\n" +
+		body
+
+	auth := smtp.PlainAuth("", from, password, smtpHost)
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, []string{to}, []byte(msg))
+	
+	if err != nil {
+		log.Printf("メール送信エラー: %v", err)
+		return err
+	}
+	
+	log.Printf("メールを正常に送信しました: %s", to)
+	return nil
+}
+
+// ログインエンドポイント
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading request body: %v", err)
+		http.Error(w, "Error reading request", http.StatusBadRequest)
+		return
+	}
+
+	var req LoginRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Printf("Error parsing JSON: %v", err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// 認証チェック
+	school, exists := schools[req.SchoolCode]
+	if !exists || school.Password != req.Password {
+		response := LoginResponse{
+			Success: false,
+			Error:   "塾コードまたはパスワードが正しくありません",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// トークン生成
+	token, err := generateToken()
+	if err != nil {
+		log.Printf("Error generating token: %v", err)
+		response := LoginResponse{
+			Success: false,
+			Error:   "認証トークンの生成に失敗しました",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// セッション保存（24時間有効）
+	expiresAt := time.Now().Add(24 * time.Hour)
+	if req.Remember {
+		expiresAt = time.Now().Add(30 * 24 * time.Hour) // 30日間
+	}
+
+	sessions[token] = Session{
+		Token:      token,
+		SchoolCode: req.SchoolCode,
+		ExpiresAt:  expiresAt,
+	}
+
+	response := LoginResponse{
+		Success: true,
+		Token:   token,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// パスワードリセットエンドポイント
+func forgotPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading request body: %v", err)
+		http.Error(w, "Error reading request", http.StatusBadRequest)
+		return
+	}
+
+	var req ForgotPasswordRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Printf("Error parsing JSON: %v", err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// 塾コードの存在確認
+	school, exists := schools[req.SchoolCode]
+	if !exists {
+		response := ForgotPasswordResponse{
+			Success: false,
+			Error:   "指定された塾コードが見つかりません",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// メール送信
+	subject := "【Mongene】パスワードのお知らせ"
+	emailBody := fmt.Sprintf(`
+こんにちは、
+
+お忘れになったパスワードをお知らせいたします。
+
+塾コード: %s
+パスワード: %s
+
+今後ともMongeneをよろしくお願いいたします。
+
+Mongeneサポートチーム
+`, school.Code, school.Password)
+
+	err = sendEmail(school.Email, subject, emailBody)
+	if err != nil {
+		log.Printf("Error sending email: %v", err)
+		response := ForgotPasswordResponse{
+			Success: false,
+			Error:   "メールの送信に失敗しました",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response := ForgotPasswordResponse{
+		Success: true,
+		Message: "パスワードを記載したメールを送信しました",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// 認証チェック関数
+func isAuthenticated(token string) bool {
+	session, exists := sessions[token]
+	if !exists {
+		return false
+	}
+
+	if time.Now().After(session.ExpiresAt) {
+		delete(sessions, token)
+		return false
+	}
+
+	return true
+}
+
 // ヘルスチェックエンドポイント
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	enableCORS(w)
@@ -209,11 +484,15 @@ func main() {
 	// ルートの設定
 	http.HandleFunc("/", healthHandler)
 	http.HandleFunc("/api/generate-problem", generateProblemHandler)
+	http.HandleFunc("/api/login", loginHandler)
+	http.HandleFunc("/api/forgot-password", forgotPasswordHandler)
 
 	log.Println("Starting Mongene Backend Server on :8080")
 	log.Println("Endpoints:")
 	log.Println("  GET  / - Health check")
 	log.Println("  POST /api/generate-problem - Generate problem using Claude API")
+	log.Println("  POST /api/login - User authentication")
+	log.Println("  POST /api/forgot-password - Password reset")
 
 	server := http.Server{
 		Addr:    ":8080",

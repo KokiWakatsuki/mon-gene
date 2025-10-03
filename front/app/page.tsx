@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Tabs from './components/Tabs';
 import Filters from './components/Filters';
@@ -11,6 +11,8 @@ import LoadingModal from './components/LoadingModal';
 import { API_CONFIG } from '../config/api';
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeSubject, setActiveSubject] = useState('数学');
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
   const [previewModal, setPreviewModal] = useState<{ isOpen: boolean; problemId: string; problemTitle: string; problemContent?: string }>({
@@ -26,6 +28,45 @@ export default function Home() {
     { id: '3', title: 'A4 プレビュー 3', content: 'これはサンプル問題です。' },
     { id: '4', title: 'A4 プレビュー 4', content: 'これはサンプル問題です。' },
   ]);
+
+  // 認証チェック
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+      
+      // TODO: バックエンドでトークンの有効性を確認する場合
+      // 現在はトークンの存在のみをチェック
+      setIsAuthenticated(true);
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, []);
+
+  // 認証チェック中の表示
+  if (isCheckingAuth) {
+    return (
+      <div className="relative min-h-screen overflow-hidden bg-mongene-bg">
+        <BackgroundShapes />
+        <div className="relative z-10 flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="w-8 h-8 bg-mongene-blue rounded-lg mx-auto mb-4"></div>
+            <div className="font-extrabold text-mongene-blue mb-2">Mongene</div>
+            <div className="text-mongene-muted">認証を確認しています...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 認証されていない場合（念のため）
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const subjects = ['数学', '英語', '国語'];
 
