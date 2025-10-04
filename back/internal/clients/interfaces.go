@@ -13,7 +13,7 @@ type ClaudeClient interface {
 type CoreClient interface {
 	AnalyzeProblem(ctx context.Context, problemText string, filters map[string]interface{}) (*CoreAnalysisResponse, error)
 	GenerateGeometry(ctx context.Context, shapeType string, parameters map[string]interface{}) (string, error)
-	GeneratePDF(ctx context.Context, problemText, imageBase64 string) (string, error)
+	GeneratePDF(ctx context.Context, problemText, imageBase64, solutionText string) (string, error)
 	GenerateCustomGeometry(ctx context.Context, pythonCode, problemText string) (string, error)
 }
 

@@ -42,14 +42,35 @@ func (h *ProblemHandler) GenerateProblem(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// デバッグログを追加
+	println("🔍 [DEBUG] Generated problem:")
+	println("  Content length:", len(problem.Content))
+	println("  Solution length:", len(problem.Solution))
+	println("  ImageBase64 length:", len(problem.ImageBase64))
+	if len(problem.Solution) > 0 {
+		println("  Solution preview:", problem.Solution[:min(100, len(problem.Solution))])
+	} else {
+		println("  Solution preview: (empty)")
+	}
+
 	// レスポンス形式に変換
 	response := models.GenerateProblemResponse{
 		Content:     problem.Content,
 		Success:     true,
 		ImageBase64: problem.ImageBase64,
+		Solution:    problem.Solution,
 	}
 
+	println("🔍 [DEBUG] Response solution length:", len(response.Solution))
+
 	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (h *ProblemHandler) GeneratePDF(w http.ResponseWriter, r *http.Request) {

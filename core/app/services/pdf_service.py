@@ -1,5 +1,5 @@
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
@@ -29,7 +29,7 @@ class PDFService:
                 # フォールバック: Helvetica（日本語は表示されない可能性）
                 self.japanese_font = 'Helvetica'
     
-    async def generate_pdf(self, problem_text: str, image_base64: str = None) -> PDFGenerateResponse:
+    async def generate_pdf(self, problem_text: str, image_base64: str = None, solution_text: str = None) -> PDFGenerateResponse:
         """PDFを生成する"""
         try:
             # PDFバッファを作成
@@ -111,6 +111,33 @@ class PDFService:
                 except Exception as e:
                     # 画像処理エラーの場合はスキップ
                     print(f"Image processing error: {e}")
+            
+            # 解答・解説がある場合は改ページして追加
+            if solution_text and solution_text.strip():
+                # 改ページを追加
+                story.append(PageBreak())
+                
+                # 解答・解説のタイトル
+                solution_title_style = ParagraphStyle(
+                    'SolutionTitle',
+                    parent=styles['Heading1'],
+                    fontName=self.japanese_font,
+                    fontSize=16,
+                    spaceAfter=30,
+                    alignment=TA_CENTER
+                )
+                
+                story.append(Paragraph("解答・解説", solution_title_style))
+                story.append(Spacer(1, 20))
+                
+                # 解答・解説の内容を段落に分割して追加
+                solution_paragraphs = solution_text.split('\n\n')
+                for para in solution_paragraphs:
+                    if para.strip():
+                        # 改行を<br/>タグに変換
+                        formatted_para = para.replace('\n', '<br/>')
+                        story.append(Paragraph(formatted_para, body_style))
+                        story.append(Spacer(1, 12))
             
             # PDFを生成
             doc.build(story)

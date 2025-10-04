@@ -110,10 +110,11 @@ func (c *coreClient) GenerateGeometry(ctx context.Context, shapeType string, par
 	return response.ImageBase64, nil
 }
 
-func (c *coreClient) GeneratePDF(ctx context.Context, problemText, imageBase64 string) (string, error) {
+func (c *coreClient) GeneratePDF(ctx context.Context, problemText, imageBase64, solutionText string) (string, error) {
 	requestData := map[string]interface{}{
-		"problem_text": problemText,
-		"image_base64": imageBase64,
+		"problem_text":  problemText,
+		"image_base64":  imageBase64,
+		"solution_text": solutionText,
 	}
 
 	jsonData, err := json.Marshal(requestData)

@@ -24,11 +24,13 @@ type GenerateProblemResponse struct {
 	Success     bool   `json:"success"`
 	Error       string `json:"error,omitempty"`
 	ImageBase64 string `json:"image_base64,omitempty"`
+	Solution    string `json:"solution,omitempty"`
 }
 
 type PDFGenerateRequest struct {
-	ProblemText string `json:"problem_text" validate:"required"`
-	ImageBase64 string `json:"image_base64,omitempty"`
+	ProblemText  string `json:"problem_text" validate:"required"`
+	ImageBase64  string `json:"image_base64,omitempty"`
+	SolutionText string `json:"solution_text,omitempty"`
 }
 
 type PDFGenerateResponse struct {

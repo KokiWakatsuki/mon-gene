@@ -131,7 +131,7 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 }
 
 func (s *problemService) GeneratePDF(ctx context.Context, req models.PDFGenerateRequest) (string, error) {
-	pdfBase64, err := s.coreClient.GeneratePDF(ctx, req.ProblemText, req.ImageBase64)
+	pdfBase64, err := s.coreClient.GeneratePDF(ctx, req.ProblemText, req.ImageBase64, req.SolutionText)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate PDF: %w", err)
 	}
@@ -261,12 +261,51 @@ func (s *problemService) removeImportStatements(code string) string {
 
 // extractSolutionText extracts solution text from the content
 func (s *problemService) extractSolutionText(content string) string {
+	fmt.Printf("🔍 [DEBUG] Extracting solution from content (length: %d)\n", len(content))
+	
 	re := regexp.MustCompile(`(?s)---SOLUTION_START---(.*?)---SOLUTION_END---`)
 	matches := re.FindStringSubmatch(content)
 	if len(matches) > 1 {
-		return strings.TrimSpace(matches[1])
+		solution := strings.TrimSpace(matches[1])
+		fmt.Printf("✅ [DEBUG] Solution extracted successfully (length: %d)\n", len(solution))
+		return solution
 	}
+	
+	fmt.Printf("❌ [DEBUG] No solution markers found, checking for alternative patterns\n")
+	
+	// 代替パターン1: 【解答】や【解説】を含む部分を探す
+	solutionPatterns := []string{
+		`(?s)【解答・解説】(.*?)(?:---|\z)`,
+		`(?s)【解答】(.*?)(?:【|---|\z)`,
+		`(?s)【解説】(.*?)(?:【|---|\z)`,
+		`(?s)解答・解説(.*?)(?:---|\z)`,
+		`(?s)解答:(.*?)(?:解説|---|\z)`,
+		`(?s)解説:(.*?)(?:---|\z)`,
+	}
+	
+	for i, pattern := range solutionPatterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			solution := strings.TrimSpace(matches[1])
+			if len(solution) > 10 { // 最低限の長さチェック
+				fmt.Printf("✅ [DEBUG] Solution found with pattern %d (length: %d)\n", i+1, len(solution))
+				return solution
+			}
+		}
+	}
+	
+	fmt.Printf("❌ [DEBUG] No solution found with any pattern\n")
+	fmt.Printf("🔍 [DEBUG] Content preview (last 500 chars): %s\n", content[max(0, len(content)-500):])
+	
 	return ""
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // removePythonCode removes Python code from the content

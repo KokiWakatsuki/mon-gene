@@ -11,7 +11,8 @@ async def generate_pdf(request: PDFGenerateRequest):
     try:
         result = await pdf_service.generate_pdf(
             request.problem_text,
-            request.image_base64
+            request.image_base64,
+            request.solution_text
         )
         return result
     except Exception as e:

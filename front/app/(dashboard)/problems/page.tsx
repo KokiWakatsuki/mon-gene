@@ -15,15 +15,16 @@ export default function Home() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeSubject, setActiveSubject] = useState('数学');
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
-  const [previewModal, setPreviewModal] = useState<{ isOpen: boolean; problemId: string; problemTitle: string; problemContent?: string; imageBase64?: string }>({
+  const [previewModal, setPreviewModal] = useState<{ isOpen: boolean; problemId: string; problemTitle: string; problemContent?: string; imageBase64?: string; solutionText?: string }>({
     isOpen: false,
     problemId: '',
     problemTitle: '',
     problemContent: '',
     imageBase64: undefined,
+    solutionText: undefined,
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [problems, setProblems] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string }>>([]);
+  const [problems, setProblems] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
 
   // 認証チェック
   useEffect(() => {
@@ -209,6 +210,7 @@ export default function Home() {
         problemTitle: problem.title,
         problemContent: problem.content,
         imageBase64: problem.imageBase64,
+        solutionText: problem.solution,
       });
     }
   };
@@ -228,10 +230,10 @@ export default function Home() {
           : '';
         
         // 解答・解説がある場合は別ページに追加
-        const solutionHtml = (problem as any).solution 
+        const solutionHtml = problem.solution 
           ? `<div style="page-break-before: always;">
                <h1>解答・解説</h1>
-               <div class="content">${(problem as any).solution}</div>
+               <div class="content">${problem.solution}</div>
              </div>`
           : '';
         
@@ -344,10 +346,15 @@ export default function Home() {
         problemTitle = `AI生成問題 ${problems.length + 1}`;
         
         console.log('🔍 バックエンドAPIレスポンス:', data);
+        console.log('🔍 data.content:', data.content);
+        console.log('🔍 data.solution:', data.solution);
+        console.log('🔍 data.Solution:', data.Solution);
         console.log('🔍 data.ImageBase64:', data.ImageBase64);
         console.log('🔍 data.image_base64:', data.image_base64);
         console.log('🔍 ImageBase64 exists:', !!(data.ImageBase64 || data.image_base64));
         console.log('🔍 ImageBase64 length:', (data.ImageBase64 || data.image_base64 || '').length);
+        console.log('🔍 Solution exists:', !!(data.solution || data.Solution));
+        console.log('🔍 Solution length:', (data.solution || data.Solution || '').length);
         
         // 画像データの処理
         const imageBase64 = data.ImageBase64 || data.image_base64;
@@ -357,7 +364,9 @@ export default function Home() {
         console.log('🔍 Final imageBase64 length:', finalImageBase64?.length || 0);
         
         // 解答・解説データの処理
-        const solutionText = data.solution || '';
+        const solutionText = data.solution || data.Solution || '';
+        console.log('🔍 Final solutionText:', solutionText);
+        console.log('🔍 Final solutionText length:', solutionText.length);
         
         // 新しい問題を追加（画像データと解答・解説を含む）
         const newProblemId = String(problems.length + 1);
@@ -381,6 +390,7 @@ export default function Home() {
           problemTitle: problemTitle,
           problemContent: generatedContent,
           imageBase64: finalImageBase64,
+          solutionText: solutionText,
         });
         
       } else {
@@ -410,6 +420,7 @@ export default function Home() {
           problemTitle: problemTitle,
           problemContent: generatedContent,
           imageBase64: undefined,
+          solutionText: undefined,
         });
       }
       
@@ -481,11 +492,12 @@ export default function Home() {
 
       <ProblemPreviewModal
         isOpen={previewModal.isOpen}
-        onClose={() => setPreviewModal({ isOpen: false, problemId: '', problemTitle: '', problemContent: '', imageBase64: undefined })}
+        onClose={() => setPreviewModal({ isOpen: false, problemId: '', problemTitle: '', problemContent: '', imageBase64: undefined, solutionText: undefined })}
         problemId={previewModal.problemId}
         problemTitle={previewModal.problemTitle}
         problemContent={previewModal.problemContent}
         imageBase64={previewModal.imageBase64}
+        solutionText={previewModal.solutionText}
       />
 
       <LoadingModal
