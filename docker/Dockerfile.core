@@ -19,5 +19,6 @@ COPY . .
 # ポート1234を公開
 EXPOSE 1234
 
-# FastAPIサーバーを起動
-CMD ["python", "main.py"]
+# Pythonパスを設定してFastAPIサーバーを起動
+ENV PYTHONPATH=/app
+CMD ["python", "app/main.py"]

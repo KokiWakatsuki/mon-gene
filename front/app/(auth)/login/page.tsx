@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import BackgroundShapes from '../components/BackgroundShapes';
+import BackgroundShapes from '../../components/layout/BackgroundShapes';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -61,7 +61,7 @@ export default function LoginPage() {
       localStorage.setItem('authToken', data.token);
       
       // トップページへリダイレクト
-      window.location.href = '/';
+        window.location.href = '/problems';
     } catch (error) {
       setError(error instanceof Error ? error.message : '塾コードまたはパスワードが正しくありません。');
     } finally {

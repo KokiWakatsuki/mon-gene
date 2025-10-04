@@ -12,6 +12,18 @@ interface ProblemCardProps {
 }
 
 export default function ProblemCard({ id, title, content, imageBase64, onPreview, onPrint }: ProblemCardProps) {
+  // デバッグ用コンソール出力
+  React.useEffect(() => {
+    console.log(`🔍 ProblemCard Debug - ID: ${id}`);
+    console.log(`📝 Title: ${title}`);
+    console.log(`📄 Content length: ${content?.length || 0}`);
+    console.log(`🖼️ ImageBase64 exists: ${!!imageBase64}`);
+    console.log(`🖼️ ImageBase64 length: ${imageBase64?.length || 0}`);
+    if (imageBase64) {
+      console.log(`🖼️ ImageBase64 preview: ${imageBase64.substring(0, 50)}...`);
+    }
+  }, [id, title, content, imageBase64]);
+
   // 問題内容の最初の部分を取得（プレビュー用）
   const getPreviewContent = () => {
     if (!content) return title;
@@ -51,12 +63,17 @@ export default function ProblemCard({ id, title, content, imageBase64, onPreview
                     src={`data:image/png;base64,${imageBase64}`}
                     alt="問題図形"
                     className="w-full h-full object-contain border border-gray-200 rounded"
+                    onLoad={() => console.log('✅ Image loaded successfully')}
+                    onError={(e) => console.error('❌ Image load error:', e)}
                   />
                 </div>
               </div>
             ) : (
               <div className="text-xs text-mongene-ink leading-relaxed whitespace-pre-wrap">
                 {getPreviewContent()}
+                <div className="mt-2 text-xs text-red-500">
+                  🔍 Debug: imageBase64 = {imageBase64 ? 'exists' : 'null/undefined'}
+                </div>
               </div>
             )}
           </div>
