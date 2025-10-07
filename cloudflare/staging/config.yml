@@ -1,0 +1,12 @@
+tunnel: <tunnel-id>
+credentials-file: /home/nonroot/.cloudflared/<tunnel-id>.json
+protocol: http2
+
+ingress:
+  - hostname: mon-gene.wakatsuki.app
+    service: http://front:3000
+  - hostname: mon-gene-api.wakatsuki.app
+    service: http://back:8080
+  - hostname: mon-gene-core.wakatsuki.app
+    service: http://core:1234
+  - service: http_status:404

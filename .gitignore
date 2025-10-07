@@ -87,3 +87,6 @@ Thumbs.db
 *.test
 *.out
 go.work
+
+cloudflare/staging/cert.pem
+cloudflare/staging/*.json

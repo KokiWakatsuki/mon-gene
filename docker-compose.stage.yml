@@ -1,0 +1,97 @@
+version: "3.8"
+
+services:
+  cloudflare:
+    image: 'cloudflare/cloudflared:latest'
+    container_name: "mon-gene-cloudflare"
+    volumes: 
+      - './cloudflare/staging:/home/nonroot/.cloudflared'
+    command: tunnel run
+    depends_on:
+      - front
+      - back
+      - core
+    networks:
+      - mon-gene-network
+
+  front:
+    build:
+      context: ./front
+      dockerfile: ../docker/Dockerfile.front
+    container_name: "mon-gene-front"
+    expose:
+      - "3000"
+    depends_on:
+      - back
+    volumes:
+      - ./front:/app
+    environment:
+      - NODE_ENV=staging
+      - NEXT_PUBLIC_API_URL=https://mon-gene-api.wakatsuki.app
+      - NEXT_PUBLIC_CORE_URL=https://mon-gene-core.wakatsuki.app
+    networks:
+      - mon-gene-network
+    tty: true
+
+  back:
+    build:
+      context: ./back
+      dockerfile: ../docker/Dockerfile.back
+    container_name: "mon-gene-back"
+    expose:
+      - "8080"
+    depends_on:
+      - db
+    volumes:
+      - ./back:/app
+    environment:
+      - GO_ENV=staging
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=staging
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - CORE_SERVICE_URL=http://core:1234
+    networks:
+      - mon-gene-network
+    tty: true
+
+  core:
+    build:
+      context: ./core
+      dockerfile: ../docker/Dockerfile.core
+    container_name: "mon-gene-core"
+    expose:
+      - "1234"
+    volumes:
+      - ./core:/app
+    environment:
+      - PYTHON_ENV=staging
+    networks:
+      - mon-gene-network
+    tty: true
+
+  db:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.db
+    container_name: "mon-gene-db"
+    expose:
+      - "3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass_staging
+      MYSQL_DATABASE: staging
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    volumes:
+      - db-staging-data:/var/lib/mysql
+    networks:
+      - mon-gene-network
+    tty: true
+
+volumes:
+  db-staging-data:
+
+networks:
+  mon-gene-network:
+    driver: bridge
