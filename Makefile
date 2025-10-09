@@ -23,3 +23,10 @@ front-reup:
 
 prod-up:
 	sudo docker compose -f docker-compose.stage.yml up -d
+
+prod-reup:
+	sudo docker compose down -v --remove-orphans
+	sudo docker system prune -a --volumes -f
+	sudo docker builder prune -a -f
+	sudo docker system df
+	sudo docker compose -f docker-compose.stage.yml up -d
