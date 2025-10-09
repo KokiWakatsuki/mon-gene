@@ -20,3 +20,6 @@ reup:
 
 front-reup:
 	docker compose restart front
+
+prod-up:
+	sudo docker compose -f docker-compose.stage.yml up -d
