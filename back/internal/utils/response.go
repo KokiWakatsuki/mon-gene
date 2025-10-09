@@ -13,6 +13,7 @@ type ErrorResponse struct {
 
 // WriteErrorResponse writes an error response to the client
 func WriteErrorResponse(w http.ResponseWriter, statusCode int, message string) {
+	EnableCORS(w)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	
@@ -26,6 +27,7 @@ func WriteErrorResponse(w http.ResponseWriter, statusCode int, message string) {
 
 // WriteJSONResponse writes a JSON response to the client
 func WriteJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	EnableCORS(w)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	
@@ -38,15 +40,8 @@ func WriteJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) 
 
 // EnableCORS enables CORS for the response
 func EnableCORS(w http.ResponseWriter) {
-	// 環境に応じてオリジンを設定
-	allowedOrigins := []string{
-		"http://localhost:3000",           // 開発環境
-		"https://mon-gene.wakatsuki.app",  // 本番環境
-	}
-	
-	// すべての許可されたオリジンを設定（簡単な実装）
-	// 本来はリクエストのOriginヘッダーをチェックして適切なものを返すべき
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
 }
