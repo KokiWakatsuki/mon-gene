@@ -5,6 +5,7 @@ import (
 
 	"github.com/mon-gene/back/internal/api/handlers"
 	"github.com/mon-gene/back/internal/api/middleware"
+	"github.com/mon-gene/back/internal/utils"
 )
 
 // Router sets up all the routes for the application
@@ -23,7 +24,16 @@ func NewRouter(
 	mux.HandleFunc("/api/login", authHandler.Login)
 	mux.HandleFunc("/api/forgot-password", authHandler.ForgotPassword)
 	mux.HandleFunc("/api/logout", authHandler.Logout)
-	mux.HandleFunc("/api/user-info", authHandler.GetUserInfo)
+	
+	// User info endpoint (supports GET and OPTIONS)
+	mux.HandleFunc("/api/user-info", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET", "OPTIONS":
+			authHandler.GetUserInfo(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
 
 	// Problem generation endpoints
 	mux.HandleFunc("/api/generate-problem", problemHandler.GenerateProblem)

@@ -68,6 +68,15 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
+	// CORSヘッダーを設定
+	utils.EnableCORS(w)
+	
+	// OPTIONSリクエスト（プリフライト）の処理
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
 	token := r.Header.Get("Authorization")
 	if token == "" {
 		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
