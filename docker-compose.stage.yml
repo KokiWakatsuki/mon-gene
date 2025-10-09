@@ -23,8 +23,6 @@ services:
       - "3000"
     depends_on:
       - back
-    volumes:
-      - ./front:/app
     environment:
       - NODE_ENV=staging
       - NEXT_PUBLIC_API_URL=https://mon-gene-api.wakatsuki.app
@@ -42,8 +40,6 @@ services:
       - "8080"
     depends_on:
       - db
-    volumes:
-      - ./back:/app
     environment:
       - GO_ENV=staging
       - DB_HOST=db
@@ -63,8 +59,6 @@ services:
     container_name: "mon-gene-core"
     expose:
       - "1234"
-    volumes:
-      - ./core:/app
     environment:
       - PYTHON_ENV=staging
     networks:
