@@ -13,9 +13,6 @@ services:
       - ./front:/app
     environment:
       - NODE_ENV=development
-      - NEXT_PUBLIC_USE_REAL_API=true
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-      - NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8080/api/generate-problem
     tty: true
 
   back:

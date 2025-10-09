@@ -10,5 +10,7 @@ RUN npm install
 # アプリ本体を後からコピー
 COPY . .
 
-# 開発サーバーを起動
-CMD ["npm", "run", "dev"]
+# Next.jsのビルドを実行してTailwind CSSを処理
+RUN npm run build
+
+CMD ["npm", "run", "start"]
