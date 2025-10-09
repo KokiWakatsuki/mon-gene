@@ -11,15 +11,36 @@ import (
 
 type ProblemHandler struct {
 	problemService services.ProblemService
+	authService    services.AuthService
 }
 
-func NewProblemHandler(problemService services.ProblemService) *ProblemHandler {
+func NewProblemHandler(problemService services.ProblemService, authService services.AuthService) *ProblemHandler {
 	return &ProblemHandler{
 		problemService: problemService,
+		authService:    authService,
 	}
 }
 
 func (h *ProblemHandler) GenerateProblem(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
 	var req models.GenerateProblemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
@@ -36,7 +57,8 @@ func (h *ProblemHandler) GenerateProblem(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	problem, err := h.problemService.GenerateProblem(r.Context(), req)
+	// ユーザーのSchoolCodeを渡して問題を生成
+	problem, err := h.problemService.GenerateProblem(r.Context(), req, user.SchoolCode)
 	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
 		return

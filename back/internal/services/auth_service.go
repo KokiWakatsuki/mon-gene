@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"github.com/mon-gene/back/internal/models"
 	"github.com/mon-gene/back/internal/repositories"
+	"github.com/mon-gene/back/internal/utils"
 )
 
 type AuthService interface {
@@ -71,10 +71,11 @@ func (s *authService) Login(ctx context.Context, req models.LoginRequest) (*mode
 	}
 
 	session := &models.Session{
-		ID:        token,
-		UserID:    user.ID,
-		ExpiresAt: expiresAt,
-		CreatedAt: time.Now(),
+		ID:         token,
+		UserID:     user.ID,
+		SchoolCode: user.SchoolCode,
+		ExpiresAt:  expiresAt,
+		CreatedAt:  time.Now(),
 	}
 
 	if err := s.sessionRepo.Create(ctx, session); err != nil {
@@ -144,10 +145,8 @@ func (s *authService) ValidateToken(ctx context.Context, token string) (*models.
 		return nil, fmt.Errorf("token expired")
 	}
 
-	// ユーザー取得（UserIDから塾コードを逆引きする必要があるため、簡易実装）
-	// 実際の実装では、UserRepositoryにGetByIDメソッドを追加するか、
-	// セッションに塾コードも保存する方が良い
-	user, err := s.userRepo.GetBySchoolCode(ctx, "00000") // 現在はseedデータのみなので固定
+	// セッションに保存されたSchoolCodeを使用してユーザーを取得
+	user, err := s.userRepo.GetBySchoolCode(ctx, session.SchoolCode)
 	if err != nil {
 		return nil, fmt.Errorf("user not found")
 	}
@@ -175,17 +174,12 @@ func (s *authService) generateToken() (string, error) {
 
 // verifyPassword verifies the password using bcrypt
 func (s *authService) verifyPassword(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
+	return utils.VerifyPassword(password, hash)
 }
 
 // hashPassword hashes a password using bcrypt
 func (s *authService) hashPassword(password string) (string, error) {
-	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedBytes), nil
+	return utils.HashPassword(password)
 }
 
 // generateRandomPassword generates a random password

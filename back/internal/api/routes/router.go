@@ -23,6 +23,7 @@ func NewRouter(
 	mux.HandleFunc("/api/login", authHandler.Login)
 	mux.HandleFunc("/api/forgot-password", authHandler.ForgotPassword)
 	mux.HandleFunc("/api/logout", authHandler.Logout)
+	mux.HandleFunc("/api/user-info", authHandler.GetUserInfo)
 
 	// Problem generation endpoints
 	mux.HandleFunc("/api/generate-problem", problemHandler.GenerateProblem)

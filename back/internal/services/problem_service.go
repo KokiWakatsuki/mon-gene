@@ -13,7 +13,7 @@ import (
 )
 
 type ProblemService interface {
-	GenerateProblem(ctx context.Context, req models.GenerateProblemRequest) (*models.Problem, error)
+	GenerateProblem(ctx context.Context, req models.GenerateProblemRequest, userSchoolCode string) (*models.Problem, error)
 	GeneratePDF(ctx context.Context, req models.PDFGenerateRequest) (string, error)
 }
 
@@ -21,22 +21,38 @@ type problemService struct {
 	claudeClient clients.ClaudeClient
 	coreClient   clients.CoreClient
 	problemRepo  repositories.ProblemRepository
+	userRepo     repositories.UserRepository
 }
 
 func NewProblemService(
 	claudeClient clients.ClaudeClient,
 	coreClient clients.CoreClient,
 	problemRepo repositories.ProblemRepository,
+	userRepo repositories.UserRepository,
 ) ProblemService {
 	return &problemService{
 		claudeClient: claudeClient,
 		coreClient:   coreClient,
 		problemRepo:  problemRepo,
+		userRepo:     userRepo,
 	}
 }
 
-func (s *problemService) GenerateProblem(ctx context.Context, req models.GenerateProblemRequest) (*models.Problem, error) {
-	// 実際のClaude APIを使用した問題生成
+func (s *problemService) GenerateProblem(ctx context.Context, req models.GenerateProblemRequest, userSchoolCode string) (*models.Problem, error) {
+	// 1. ユーザーの問題生成回数制限をチェック
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	
+	// 制限チェック（-1は制限なし）
+	if user.ProblemGenerationLimit >= 0 && user.ProblemGenerationCount >= user.ProblemGenerationLimit {
+		return nil, fmt.Errorf("問題生成回数の上限（%d回）に達しました", user.ProblemGenerationLimit)
+	}
+	
+	fmt.Printf("🔢 User %s: %d/%d problems generated\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit)
+	
+	// 2. 実際のClaude APIを使用した問題生成
 	enhancedPrompt := s.enhancePromptForGeometry(req.Prompt)
 	fmt.Printf("🔍 Enhanced prompt: %s\n", enhancedPrompt)
 	
@@ -125,6 +141,16 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 		if err := s.problemRepo.Create(ctx, problem); err != nil {
 			return nil, fmt.Errorf("failed to save problem: %w", err)
 		}
+	}
+
+	// 4. 問題生成成功時にユーザーの生成回数を更新
+	user.ProblemGenerationCount++
+	user.UpdatedAt = time.Now()
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		// ログに記録するが、問題生成は成功として扱う
+		fmt.Printf("⚠️ Failed to update user generation count: %v\n", err)
+	} else {
+		fmt.Printf("✅ Updated user %s generation count to %d\n", userSchoolCode, user.ProblemGenerationCount)
 	}
 
 	return problem, nil

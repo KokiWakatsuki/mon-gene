@@ -18,6 +18,7 @@ export const API_CONFIG = {
   
   // バックエンドサーバー経由でのAPI呼び出し設定
   BACKEND_API_URL: process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8080/api/generate-problem',
+  USER_INFO_API_URL: process.env.NEXT_PUBLIC_USER_INFO_API_URL || 'http://localhost:8080/api/user-info',
   
   // 他のAPI設定もここに追加できます
 };

@@ -35,11 +35,11 @@ func main() {
 	
 	// サービスを初期化（実際のリポジトリを使用）
 	authService := services.NewAuthService(userRepo, sessionRepo, emailService)
-	problemService := services.NewProblemService(claudeClient, coreClient, nil)
+	problemService := services.NewProblemService(claudeClient, coreClient, nil, userRepo)
 
 	// ハンドラーの初期化
 	authHandler := handlers.NewAuthHandler(authService)
-	problemHandler := handlers.NewProblemHandler(problemService)
+	problemHandler := handlers.NewProblemHandler(problemService, authService)
 	healthHandler := handlers.NewHealthHandler()
 
 	// ルーターの設定

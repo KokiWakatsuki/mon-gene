@@ -25,20 +25,49 @@ export default function Home() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [problems, setProblems] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
+  const [userInfo, setUserInfo] = useState<{
+    school_code: string;
+    email: string;
+    problem_generation_limit: number;
+    problem_generation_count: number;
+  } | null>(null);
+
+  // ユーザー情報を取得する関数
+  const fetchUserInfo = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch(API_CONFIG.USER_INFO_API_URL, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUserInfo(data);
+      }
+    } catch (error) {
+      console.error('ユーザー情報の取得に失敗しました:', error);
+    }
+  };
 
   // 認証チェック
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       const token = localStorage.getItem('authToken');
       if (!token) {
         window.location.href = '/login';
         return;
       }
       
-      // TODO: バックエンドでトークンの有効性を確認する場合
-      // 現在はトークンの存在のみをチェック
       setIsAuthenticated(true);
       setIsCheckingAuth(false);
+      
+      // ユーザー情報を取得
+      await fetchUserInfo();
     };
 
     checkAuth();
@@ -294,7 +323,20 @@ export default function Home() {
     }
   };
 
+  // 上限チェック機能
+  const isGenerationLimitReached = () => {
+    if (!userInfo) return false;
+    if (userInfo.problem_generation_limit === -1) return false; // 制限なし
+    return userInfo.problem_generation_count >= userInfo.problem_generation_limit;
+  };
+
   const handleGenerate = async () => {
+    // 上限チェック
+    if (isGenerationLimitReached()) {
+      alert(`問題生成回数の上限（${userInfo?.problem_generation_limit}回）に達しました。これ以上問題を生成することはできません。`);
+      return;
+    }
+
     // 必須フィルターのチェック
     const requiredFilters = ['学年', '単元', '難易度', '必要な公式数', '計算量', '数値の複雑性', '問題文の文章量'];
     const missingFilters = requiredFilters.filter(filter => 
@@ -325,10 +367,17 @@ export default function Home() {
         // バックエンドサーバー経由でClaude APIを呼び出す
         console.log('バックエンドサーバー経由でClaude APIを呼び出しています...');
         
+        // 認証トークンを取得
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          throw new Error('認証トークンが見つかりません。再度ログインしてください。');
+        }
+
         const response = await fetch(API_CONFIG.BACKEND_API_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
             prompt: prompt,
@@ -379,6 +428,9 @@ export default function Home() {
         };
         
         setProblems(prev => [...prev, newProblem]);
+        
+        // ユーザー情報を更新（生成回数をインクリメント）
+        await fetchUserInfo();
         
         // ローディングを終了
         setIsLoading(false);
@@ -479,13 +531,49 @@ export default function Home() {
           ))}
         </section>
         
-        <div className="flex justify-center">
+        {/* ユーザー情報表示 */}
+        {userInfo && (
+          <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
+            <div className="flex items-center justify-between">
+              <div className="text-mongene-ink">
+                <span className="font-medium">塾コード: {userInfo.school_code}</span>
+                <span className="ml-4">
+                  問題生成回数: {userInfo.problem_generation_count}/
+                  {userInfo.problem_generation_limit === -1 ? '無制限' : userInfo.problem_generation_limit}
+                </span>
+              </div>
+              {isGenerationLimitReached() && (
+                <div className="text-red-600 font-bold">
+                  ⚠️ 生成上限に達しました
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col items-center">
+          {/* 上限に達した場合の専用メッセージ */}
+          {isGenerationLimitReached() && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-center max-w-md">
+              <div className="font-bold mb-2">🚫 問題生成上限に達しました</div>
+              <div className="text-sm">
+                問題生成回数の上限（{userInfo?.problem_generation_limit}回）に達したため、
+                これ以上問題を生成することはできません。
+              </div>
+            </div>
+          )}
+          
           <button
-            className="appearance-none border-0 rounded-xl px-5 py-3 font-bold cursor-pointer bg-mongene-green text-mongene-ink shadow-lg hover:brightness-98 hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-3 focus:ring-mongene-green/25 focus:ring-offset-2"
+            className={`appearance-none border-0 rounded-xl px-5 py-3 font-bold transition-all focus:outline-none focus:ring-3 focus:ring-offset-2 ${
+              isGenerationLimitReached()
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                : 'bg-mongene-green text-mongene-ink shadow-lg hover:brightness-98 hover:-translate-y-0.5 cursor-pointer focus:ring-mongene-green/25'
+            }`}
             type="button"
             onClick={handleGenerate}
+            disabled={isGenerationLimitReached()}
           >
-            問題を新しく生成
+            {isGenerationLimitReached() ? '生成上限に達しました' : '問題を新しく生成'}
           </button>
         </div>
       </div>

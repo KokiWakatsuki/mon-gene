@@ -78,6 +78,9 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 
+# User data files (sensitive information)
+back/data/users.csv
+
 # Go specific
 *.exe
 *.exe~

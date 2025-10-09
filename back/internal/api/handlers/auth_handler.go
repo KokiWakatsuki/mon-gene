@@ -67,6 +67,36 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSONResponse(w, http.StatusOK, response)
 }
 
+func (h *AuthHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	// ユーザー情報のレスポンス（パスワードハッシュは除外）
+	response := map[string]interface{}{
+		"success":                   true,
+		"school_code":              user.SchoolCode,
+		"email":                    user.Email,
+		"problem_generation_limit": user.ProblemGenerationLimit,
+		"problem_generation_count": user.ProblemGenerationCount,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get("Authorization")
 	if token == "" {
