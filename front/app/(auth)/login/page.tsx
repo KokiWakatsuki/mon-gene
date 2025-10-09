@@ -41,7 +41,7 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:8080/api/login', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -81,7 +81,7 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:8080/api/forgot-password', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

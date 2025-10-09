@@ -24,9 +24,10 @@ services:
     depends_on:
       - back
     environment:
-      - NODE_ENV=staging
-      - NEXT_PUBLIC_API_URL=https://mon-gene-api.wakatsuki.app
-      - NEXT_PUBLIC_CORE_URL=https://mon-gene-core.wakatsuki.app
+      - NODE_ENV=production
+      - NEXT_PUBLIC_USE_REAL_API=true
+      - NEXT_PUBLIC_API_BASE_URL=https://mon-gene-api.wakatsuki.app
+      - NEXT_PUBLIC_BACKEND_API_URL=https://mon-gene-api.wakatsuki.app/api/generate-problem
     networks:
       - mon-gene-network
     tty: true

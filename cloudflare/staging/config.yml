@@ -1,5 +1,5 @@
-tunnel: <tunnel-id>
-credentials-file: /home/nonroot/.cloudflared/<tunnel-id>.json
+tunnel: da38d59a-ee75-48bb-a8ee-e47e10a4c055
+credentials-file: /home/nonroot/.cloudflared/da38d59a-ee75-48bb-a8ee-e47e10a4c055.json
 protocol: http2
 
 ingress:
