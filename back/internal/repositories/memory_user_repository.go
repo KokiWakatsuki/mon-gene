@@ -76,8 +76,8 @@ func (r *memoryUserRepository) loadUsersFromCSV() ([]*models.User, error) {
 
 	// ヘッダー行をスキップして処理
 	for i, record := range records[1:] {
-		if len(record) < 5 {
-			log.Printf("⚠️ 行 %d: 列数が不足しています", i+2)
+		if len(record) < 8 {
+			log.Printf("⚠️ 行 %d: 列数が不足しています (期待値: 8, 実際: %d)", i+2, len(record))
 			continue
 		}
 
@@ -109,12 +109,16 @@ func (r *memoryUserRepository) loadUsersFromCSV() ([]*models.User, error) {
 			PasswordHash:          passwordHash,
 			ProblemGenerationLimit: limit,
 			ProblemGenerationCount: 0,
+			Role:                  record[5],
+			PreferredAPI:          record[6],
+			PreferredModel:        record[7],
 			CreatedAt:             now,
 			UpdatedAt:             now,
 		}
 
 		users = append(users, user)
-		log.Printf("📝 ユーザー追加: SchoolCode=%s, Email=%s, Limit=%d", user.SchoolCode, user.Email, user.ProblemGenerationLimit)
+		log.Printf("📝 ユーザー追加: SchoolCode=%s, Email=%s, Role=%s, API=%s, Model=%s", 
+			user.SchoolCode, user.Email, user.Role, user.PreferredAPI, user.PreferredModel)
 	}
 
 	return users, nil
@@ -136,6 +140,9 @@ func (r *memoryUserRepository) createDefaultUser() {
 		PasswordHash:          passwordHash,
 		ProblemGenerationLimit: 3,
 		ProblemGenerationCount: 0,
+		Role:                  "teacher",
+		PreferredAPI:          "claude",
+		PreferredModel:        "claude-3-haiku",
 		CreatedAt:             now,
 		UpdatedAt:             now,
 	}

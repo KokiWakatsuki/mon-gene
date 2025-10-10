@@ -17,6 +17,7 @@ type AuthService interface {
 	ForgotPassword(ctx context.Context, req models.ForgotPasswordRequest) (*models.ForgotPasswordResponse, error)
 	ValidateToken(ctx context.Context, token string) (*models.User, error)
 	Logout(ctx context.Context, token string) error
+	UpdateUserSettings(ctx context.Context, schoolCode, preferredAPI, preferredModel string) error
 }
 
 type authService struct {
@@ -161,6 +162,26 @@ func (s *authService) ValidateToken(ctx context.Context, token string) (*models.
 
 func (s *authService) Logout(ctx context.Context, token string) error {
 	return s.sessionRepo.Delete(ctx, token)
+}
+
+func (s *authService) UpdateUserSettings(ctx context.Context, schoolCode, preferredAPI, preferredModel string) error {
+	// ユーザーを取得
+	user, err := s.userRepo.GetBySchoolCode(ctx, schoolCode)
+	if err != nil {
+		return fmt.Errorf("ユーザーが見つかりません: %w", err)
+	}
+
+	// 設定を更新
+	user.PreferredAPI = preferredAPI
+	user.PreferredModel = preferredModel
+	user.UpdatedAt = time.Now()
+
+	// ユーザーを更新
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("ユーザー設定の更新に失敗しました: %w", err)
+	}
+
+	return nil
 }
 
 // generateToken generates a random token

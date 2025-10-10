@@ -9,6 +9,9 @@ type User struct {
 	Email                string    `json:"email" db:"email"`
 	ProblemGenerationLimit int     `json:"problem_generation_limit" db:"problem_generation_limit"` // -1 = 制限なし, 0以上 = 制限回数
 	ProblemGenerationCount int     `json:"problem_generation_count" db:"problem_generation_count"` // 現在の生成回数
+	Role                 string    `json:"role" db:"role"`                                         // admin, developer, teacher
+	PreferredAPI         string    `json:"preferred_api" db:"preferred_api"`                       // chatgpt, claude, gemini
+	PreferredModel       string    `json:"preferred_model" db:"preferred_model"`                   // モデル名
 	CreatedAt            time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at" db:"updated_at"`
 }

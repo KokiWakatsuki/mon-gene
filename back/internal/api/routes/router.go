@@ -35,6 +35,26 @@ func NewRouter(
 		}
 	})
 
+	// User profile endpoint (supports GET and OPTIONS)
+	mux.HandleFunc("/api/user/profile", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET", "OPTIONS":
+			authHandler.GetUserProfile(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	// User settings endpoint (supports PUT and OPTIONS)
+	mux.HandleFunc("/api/user/settings", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PUT", "OPTIONS":
+			authHandler.UpdateUserSettings(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
 	// Problem generation endpoints
 	mux.HandleFunc("/api/generate-problem", problemHandler.GenerateProblem)
 	mux.HandleFunc("/api/generate-pdf", problemHandler.GeneratePDF)

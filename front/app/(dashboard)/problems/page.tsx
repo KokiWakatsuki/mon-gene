@@ -35,7 +35,7 @@ export default function Home() {
   // ユーザー情報を取得する関数
   const fetchUserInfo = async () => {
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('token');
       if (!token) return;
 
       const response = await fetch(API_CONFIG.USER_INFO_API_URL, {
@@ -57,7 +57,7 @@ export default function Home() {
   // 認証チェック
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('token');
       if (!token) {
         window.location.href = '/login';
         return;
@@ -368,7 +368,7 @@ export default function Home() {
         console.log('バックエンドサーバー経由でClaude APIを呼び出しています...');
         
         // 認証トークンを取得
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('token');
         if (!token) {
           throw new Error('認証トークンが見つかりません。再度ログインしてください。');
         }

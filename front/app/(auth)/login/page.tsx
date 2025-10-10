@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import BackgroundShapes from '../../components/layout/BackgroundShapes';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     schoolCode: '',
     password: '',
@@ -41,6 +43,9 @@ export default function LoginPage() {
     }
 
     try {
+      console.log('API URL:', process.env.NEXT_PUBLIC_API_BASE_URL);
+      console.log('Login data:', { schoolCode: formData.schoolCode, password: formData.password, remember: formData.remember });
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,18 +56,23 @@ export default function LoginPage() {
         }),
       });
       
+      console.log('Response status:', response.status);
       const data = await response.json();
+      console.log('Response data:', data);
       
       if (!data.success) {
         throw new Error(data.error || 'ログインに失敗しました');
       }
       
       // トークンをローカルストレージに保存
-      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('token', data.token);
+      console.log('Token saved:', data.token);
       
       // トップページへリダイレクト
-        window.location.href = '/problems';
+      console.log('Redirecting to /problems');
+      router.push('/problems');
     } catch (error) {
+      console.error('Login error:', error);
       setError(error instanceof Error ? error.message : '塾コードまたはパスワードが正しくありません。');
     } finally {
       setIsLoading(false);

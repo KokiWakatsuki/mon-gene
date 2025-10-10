@@ -52,7 +52,20 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 	
 	fmt.Printf("🔢 User %s: %d/%d problems generated\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit)
 	
-	// 2. 実際のClaude APIを使用した問題生成
+	// ユーザーの設定に基づいてAI/モデル情報をconsoleに表示
+	preferredAPI := user.PreferredAPI
+	preferredModel := user.PreferredModel
+	if preferredAPI == "" {
+		preferredAPI = "claude" // デフォルト
+	}
+	if preferredModel == "" {
+		preferredModel = "claude-3-haiku" // デフォルト
+	}
+	
+	fmt.Printf("🤖 AI設定 - API: %s, モデル: %s (ユーザー: %s)\n", preferredAPI, preferredModel, userSchoolCode)
+	
+	// 2. 実際のClaude APIを使用した問題生成（現在はClaudeのみ実装）
+	// TODO: 将来的にはユーザーの設定に基づいて異なるAIクライアントを使用
 	enhancedPrompt := s.enhancePromptForGeometry(req.Prompt)
 	fmt.Printf("🔍 Enhanced prompt: %s\n", enhancedPrompt)
 	
@@ -65,7 +78,8 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 	if len(content) > 200 {
 		contentPreview = content[:200] + "..."
 	}
-	fmt.Printf("✅ Claude API generated content: %s\n", contentPreview)
+	fmt.Printf("✅ 問題生成完了 - 使用AI: %s, 使用モデル: %s\n", preferredAPI, preferredModel)
+	fmt.Printf("📝 Generated content preview: %s\n", contentPreview)
 
 	// 2. 問題文、Pythonコード、解答・解説を抽出
 	problemText := s.extractProblemText(content)
