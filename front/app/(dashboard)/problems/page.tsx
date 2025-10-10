@@ -323,6 +323,65 @@ export default function Home() {
     }
   };
 
+  // エラーハンドリング関数
+  const handleGenerationError = async (error: unknown) => {
+    let errorMessage = '不明なエラーが発生しました';
+    let isTokenLimitError = false;
+    let suggestions: string[] = [];
+    
+    if (error instanceof Response) {
+      // HTTPレスポンスエラーの場合
+      try {
+        const errorData = await error.json();
+        if (errorData.error) {
+          errorMessage = errorData.error;
+          
+          // トークン関連のエラーかチェック
+          if (errorMessage.includes('トークン数が上限を超えています') || 
+              errorMessage.includes('入力テキストが長すぎます') ||
+              errorMessage.includes('生成されるレスポンスが長すぎます')) {
+            isTokenLimitError = true;
+            suggestions = [
+              '・問題文の文章量を「短い」に設定してください',
+              '・必要な公式数を少なくしてください',
+              '・計算量を「簡単」に設定してください',
+              '・より具体的で短い条件を指定してください'
+            ];
+          }
+        }
+      } catch (parseError) {
+        errorMessage = `HTTP Error ${error.status}: ${error.statusText}`;
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+      
+      // エラーメッセージからトークン関連エラーを検出
+      if (errorMessage.includes('トークン数が上限を超えています') || 
+          errorMessage.includes('入力テキストが長すぎます') ||
+          errorMessage.includes('生成されるレスポンスが長すぎます') ||
+          errorMessage.includes('context_length_exceeded') ||
+          errorMessage.includes('max_tokens_exceeded') ||
+          errorMessage.includes('maximum context length') ||
+          errorMessage.includes('too many tokens')) {
+        isTokenLimitError = true;
+        suggestions = [
+          '・問題文の文章量を「短い」に設定してください',
+          '・必要な公式数を少なくしてください',
+          '・計算量を「簡単」に設定してください',
+          '・より具体的で短い条件を指定してください'
+        ];
+      }
+    }
+    
+    // エラーメッセージを表示
+    if (isTokenLimitError) {
+      const suggestionText = suggestions.length > 0 ? '\n\n対処法:\n' + suggestions.join('\n') : '';
+      alert(`🚫 トークン数制限エラー\n\n${errorMessage}${suggestionText}`);
+    } else {
+      alert(`❌ 問題生成に失敗しました\n\n${errorMessage}`);
+    }
+  };
+
   // 上限チェック機能
   const isGenerationLimitReached = () => {
     if (!userInfo) return false;
@@ -479,8 +538,9 @@ export default function Home() {
     } catch (error) {
       setIsLoading(false);
       console.error('問題生成エラー:', error);
-      const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-      alert(`問題生成に失敗しました: ${errorMessage}`);
+      
+      // エラーレスポンスを解析して詳細なメッセージを表示
+      await handleGenerationError(error);
     }
   };
 

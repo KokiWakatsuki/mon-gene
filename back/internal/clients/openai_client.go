@@ -124,15 +124,21 @@ func (c *openAIClient) GenerateContent(ctx context.Context, prompt string) (stri
 		var errorResponse OpenAIResponse
 		if err := json.Unmarshal(body, &errorResponse); err == nil && errorResponse.Error != nil {
 			switch errorResponse.Error.Code {
+			case "context_length_exceeded":
+				return "", NewTokenLimitError(fmt.Sprintf("入力テキストが長すぎます。テキストを短くして再度お試しください。詳細: %s", errorResponse.Error.Message))
+			case "max_tokens_exceeded":
+				return "", NewTokenLimitError(fmt.Sprintf("生成されるレスポンスが長すぎます。より短いプロンプトを使用してください。詳細: %s", errorResponse.Error.Message))
 			case "insufficient_quota":
-				return "", fmt.Errorf("OpenAI APIのクォータが不足しています。プランと請求詳細を確認してください。エラー: %s", errorResponse.Error.Message)
+				return "", NewQuotaExceededError(fmt.Sprintf("プランと請求詳細を確認してください。詳細: %s", errorResponse.Error.Message))
 			case "invalid_api_key":
-				return "", fmt.Errorf("OpenAI APIキーが無効です。設定を確認してください。エラー: %s", errorResponse.Error.Message)
+				return "", NewInvalidAPIKeyError(fmt.Sprintf("設定を確認してください。詳細: %s", errorResponse.Error.Message))
+			case "rate_limit_exceeded":
+				return "", NewRateLimitError(fmt.Sprintf("しばらく待ってから再試行してください。詳細: %s", errorResponse.Error.Message))
 			default:
-				return "", fmt.Errorf("OpenAI API error (%s): %s", errorResponse.Error.Code, errorResponse.Error.Message)
+				return "", NewGeneralError(fmt.Sprintf("OpenAI API error (%s): %s", errorResponse.Error.Code, errorResponse.Error.Message))
 			}
 		}
-		return "", fmt.Errorf("OpenAI API error (status %d): %s", resp.StatusCode, string(body))
+		return "", NewGeneralError(fmt.Sprintf("OpenAI API error (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	var response OpenAIResponse
@@ -141,7 +147,20 @@ func (c *openAIClient) GenerateContent(ctx context.Context, prompt string) (stri
 	}
 
 	if response.Error != nil {
-		return "", fmt.Errorf("OpenAI API error: %s", response.Error.Message)
+		switch response.Error.Code {
+		case "context_length_exceeded":
+			return "", NewTokenLimitError(fmt.Sprintf("入力テキストが長すぎます。テキストを短くして再度お試しください。詳細: %s", response.Error.Message))
+		case "max_tokens_exceeded":
+			return "", NewTokenLimitError(fmt.Sprintf("生成されるレスポンスが長すぎます。より短いプロンプトを使用してください。詳細: %s", response.Error.Message))
+		case "insufficient_quota":
+			return "", NewQuotaExceededError(fmt.Sprintf("プランと請求詳細を確認してください。詳細: %s", response.Error.Message))
+		case "invalid_api_key":
+			return "", NewInvalidAPIKeyError(fmt.Sprintf("設定を確認してください。詳細: %s", response.Error.Message))
+		case "rate_limit_exceeded":
+			return "", NewRateLimitError(fmt.Sprintf("しばらく待ってから再試行してください。詳細: %s", response.Error.Message))
+		default:
+			return "", NewGeneralError(fmt.Sprintf("OpenAI API error: %s", response.Error.Message))
+		}
 	}
 
 	if len(response.Choices) == 0 {

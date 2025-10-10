@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 )
 
 type claudeClient struct {
@@ -110,7 +111,45 @@ func (c *claudeClient) GenerateContent(ctx context.Context, prompt string) (stri
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Claude API error (status %d): %s", resp.StatusCode, string(body))
+		// より詳細なエラー情報を提供
+		var errorData map[string]interface{}
+		if err := json.Unmarshal(body, &errorData); err == nil {
+			if errorObj, exists := errorData["error"]; exists {
+				if errorMap, ok := errorObj.(map[string]interface{}); ok {
+					errorType := ""
+					errorMessage := ""
+					if t, exists := errorMap["type"]; exists {
+						if typeStr, ok := t.(string); ok {
+							errorType = typeStr
+						}
+					}
+					if m, exists := errorMap["message"]; exists {
+						if msgStr, ok := m.(string); ok {
+							errorMessage = msgStr
+						}
+					}
+
+					switch errorType {
+					case "invalid_request_error":
+						if strings.Contains(errorMessage, "maximum context length") || strings.Contains(errorMessage, "too many tokens") {
+							return "", NewTokenLimitError(fmt.Sprintf("入力テキストが長すぎます。テキストを短くして再度お試しください。詳細: %s", errorMessage))
+						}
+						return "", NewGeneralError(fmt.Sprintf("Claude API リクエストエラー: %s", errorMessage))
+					case "authentication_error":
+						return "", NewInvalidAPIKeyError(fmt.Sprintf("設定を確認してください。詳細: %s", errorMessage))
+					case "permission_error":
+						return "", NewInvalidAPIKeyError(fmt.Sprintf("APIキーの権限を確認してください。詳細: %s", errorMessage))
+					case "rate_limit_error":
+						return "", NewRateLimitError(fmt.Sprintf("しばらく待ってから再試行してください。詳細: %s", errorMessage))
+					case "api_error", "overloaded_error":
+						return "", NewGeneralError(fmt.Sprintf("Claude APIサーバーエラー: %s", errorMessage))
+					default:
+						return "", NewGeneralError(fmt.Sprintf("Claude API error (%s): %s", errorType, errorMessage))
+					}
+				}
+			}
+		}
+		return "", NewGeneralError(fmt.Sprintf("Claude API error (status %d): %s", resp.StatusCode, string(body)))
 	}
 
 	var claudeResp ClaudeResponse
