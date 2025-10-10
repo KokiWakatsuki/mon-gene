@@ -16,23 +16,30 @@ interface User {
 const API_OPTIONS = [
   { value: 'chatgpt', label: 'ChatGPT' },
   { value: 'claude', label: 'Claude' },
-  { value: 'gemini', label: 'Gemini' }
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'laboratory', label: 'Laboratory' }
 ];
 
 const MODEL_OPTIONS = {
   chatgpt: [
-    { value: 'gpt-4', label: 'GPT-4' },
-    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }
+    { value: 'gpt-5', label: 'GPT-5 (次世代統合モデル)' },
+    { value: 'gpt-4.1', label: 'GPT-4.1 (長文・高精度)' },
+    { value: 'gpt-4.5', label: 'GPT-4.5 (感情理解・創造性)' },
+    { value: 'o3-pro', label: 'o3-pro (最高信頼性・推論)' },
+    { value: 'o4-mini-high', label: 'o4-mini-high (高機能・自律推論)' }
   ],
   claude: [
-    { value: 'claude-3-opus', label: 'Claude 3 Opus' },
-    { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet' },
-    { value: 'claude-3-haiku', label: 'Claude 3 Haiku' }
+    { value: 'claude-opus-4-1-20250805', label: 'Claude Opus 4.1 (専門タスク)' },
+    { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 (コーディング・エージェント)' },
+    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (高性能・バランス)' }
   ],
   gemini: [
-    { value: 'gemini-pro', label: 'Gemini Pro' },
-    { value: 'gemini-pro-vision', label: 'Gemini Pro Vision' }
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (最先端の思考・推論)' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (価格・性能最適)' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (高スループット)' }
+  ],
+  laboratory: [
+    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (Laboratory専用)' }
   ]
 };
 
@@ -204,8 +211,15 @@ export default function SettingsPage() {
               {/* API選択 */}
               <div>
                 <h2 className="text-lg font-semibold mb-3">API選択</h2>
+                {user.role !== 'admin' && (
+                  <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-800">
+                      ⚠️ あなたの権限では Laboratory API のみ使用できます。
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
-                  {API_OPTIONS.map((api) => (
+                  {API_OPTIONS.filter(api => user.role === 'admin' || api.value === 'laboratory').map((api) => (
                     <label key={api.value} className="flex items-center space-x-2">
                       <input
                         type="radio"

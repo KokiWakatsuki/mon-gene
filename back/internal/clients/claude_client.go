@@ -57,7 +57,7 @@ func (c *claudeClient) GenerateContent(ctx context.Context, prompt string) (stri
 
 	request := ClaudeRequest{
 		Model:     "claude-3-haiku-20240307",
-		MaxTokens: 2000,
+		MaxTokens: 500,
 		Messages: []Message{
 			{
 				Role:    "user",
