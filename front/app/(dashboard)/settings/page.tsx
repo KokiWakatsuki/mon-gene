@@ -22,24 +22,26 @@ const API_OPTIONS = [
 
 const MODEL_OPTIONS = {
   chatgpt: [
-    { value: 'gpt-5', label: 'GPT-5 (次世代統合モデル)' },
-    { value: 'gpt-4.1', label: 'GPT-4.1 (長文・高精度)' },
-    { value: 'gpt-4.5', label: 'GPT-4.5 (感情理解・創造性)' },
-    { value: 'o3-pro', label: 'o3-pro (最高信頼性・推論)' },
-    { value: 'o4-mini-high', label: 'o4-mini-high (高機能・自律推論)' }
+    { value: 'gpt-5-pro', label: 'gpt-5-pro: GPT-5 Pro (次世代高性能モデル)' },
+    { value: 'gpt-4o', label: 'gpt-4o: GPT-4 Omni (マルチモーダル高性能)' },
+    { value: 'gpt-4o-2024-05-13', label: 'gpt-4o-2024-05-13: GPT-4o (2024年5月版)' },
+    { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo: GPT-3.5 Turbo (高速・コスト効率)' },
+    { value: 'gpt-3.5-turbo-instruct', label: 'gpt-3.5-turbo-instruct: GPT-3.5 Instruct (指示特化)' }
   ],
   claude: [
-    { value: 'claude-opus-4-1-20250805', label: 'Claude Opus 4.1 (専門タスク)' },
-    { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 (コーディング・エージェント)' },
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (高性能・バランス)' }
+    { value: 'claude-sonnet-4-5-20250929', label: 'claude-sonnet-4-5-20250929: Claude Sonnet 4.5 (自律コーディング・複雑エージェント)' },
+    { value: 'claude-opus-4-1-20250805', label: 'claude-opus-4-1-20250805: Claude Opus 4.1 (専門的複雑タスク)' },
+    { value: 'claude-sonnet-4-20250514', label: 'claude-sonnet-4-20250514: Claude Sonnet 4 (知能と速度のバランス)' },
+    { value: 'claude-3-5-haiku', label: 'claude-3-5-haiku: Claude 3.5 Haiku (高速・大量処理)' }
   ],
   gemini: [
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (最先端の思考・推論)' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (価格・性能最適)' },
-    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (高スループット)' }
+    { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro: Gemini 2.5 Pro (最先端の思考・推論)' },
+    { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash: Gemini 2.5 Flash (価格・性能最適)' },
+    { value: 'gemini-2.5-flash-lite', label: 'gemini-2.5-flash-lite: Gemini 2.5 Flash-Lite (高スループット)' },
+    { value: 'gemini-2.5-pro-preview-03-25', label: 'gemini-2.5-pro-preview-03-25: Gemini 2.5 Pro Preview (3月版)' }
   ],
   laboratory: [
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (Laboratory専用)' }
+    { value: 'claude-sonnet-4-20250514', label: 'claude-sonnet-4-20250514: Claude Sonnet 4 (Laboratory専用)' }
   ]
 };
 
@@ -204,6 +206,12 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <span className="font-medium">生成制限:</span> {user.problem_generation_limit === -1 ? '無制限' : user.problem_generation_limit}
+                  </div>
+                  <div>
+                    <span className="font-medium">設定AI:</span> {user.preferred_api || '未設定'}
+                  </div>
+                  <div>
+                    <span className="font-medium">設定モデル:</span> {user.preferred_model || '未設定'}
                   </div>
                 </div>
               </div>

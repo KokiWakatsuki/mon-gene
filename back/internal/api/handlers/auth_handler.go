@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/mon-gene/back/internal/models"
 	"github.com/mon-gene/back/internal/services"
@@ -189,14 +191,32 @@ func (h *AuthHandler) UpdateUserSettings(w http.ResponseWriter, r *http.Request)
 	}
 
 	// バリデーション
-	validAPIs := map[string]bool{"chatgpt": true, "claude": true, "gemini": true}
+	validAPIs := map[string]bool{"chatgpt": true, "openai": true, "claude": true, "gemini": true, "google": true, "laboratory": true}
 	if !validAPIs[req.PreferredAPI] {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "無効なAPIが指定されました")
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "無効なAPIが指定されました。サポートされているAPI: chatgpt, openai, claude, gemini, google, laboratory")
 		return
 	}
 
 	if req.PreferredModel == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "モデル名は必須です")
+		return
+	}
+
+	// APIキーの存在確認
+	var apiKeyExists bool
+	switch req.PreferredAPI {
+	case "chatgpt", "openai":
+		apiKeyExists = os.Getenv("OPENAI_API_KEY") != ""
+	case "claude":
+		apiKeyExists = os.Getenv("CLAUDE_API_KEY") != ""
+	case "gemini", "google":
+		apiKeyExists = os.Getenv("GOOGLE_API_KEY") != ""
+	case "laboratory":
+		apiKeyExists = os.Getenv("LABORATORY_API_KEY") != ""
+	}
+
+	if !apiKeyExists {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("選択されたAPI「%s」のAPIキーが設定されていません。管理者にお問い合わせください", req.PreferredAPI))
 		return
 	}
 

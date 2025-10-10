@@ -19,6 +19,8 @@ type ProblemService interface {
 
 type problemService struct {
 	claudeClient clients.ClaudeClient
+	openaiClient clients.OpenAIClient
+	googleClient clients.GoogleClient
 	coreClient   clients.CoreClient
 	problemRepo  repositories.ProblemRepository
 	userRepo     repositories.UserRepository
@@ -26,12 +28,16 @@ type problemService struct {
 
 func NewProblemService(
 	claudeClient clients.ClaudeClient,
+	openaiClient clients.OpenAIClient,
+	googleClient clients.GoogleClient,
 	coreClient clients.CoreClient,
 	problemRepo repositories.ProblemRepository,
 	userRepo repositories.UserRepository,
 ) ProblemService {
 	return &problemService{
 		claudeClient: claudeClient,
+		openaiClient: openaiClient,
+		googleClient: googleClient,
 		coreClient:   coreClient,
 		problemRepo:  problemRepo,
 		userRepo:     userRepo,
@@ -55,23 +61,44 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 	// ユーザーの設定に基づいてAI/モデル情報をconsoleに表示
 	preferredAPI := user.PreferredAPI
 	preferredModel := user.PreferredModel
-	if preferredAPI == "" {
-		preferredAPI = "claude" // デフォルト
-	}
-	if preferredModel == "" {
-		preferredModel = "claude-3-haiku" // デフォルト
+	
+	// 設定が空の場合はエラーを返す
+	if preferredAPI == "" || preferredModel == "" {
+		return nil, fmt.Errorf("AI設定が不完全です。設定ページでAPIとモデルを選択してください。現在の設定: API=%s, モデル=%s", preferredAPI, preferredModel)
 	}
 	
 	fmt.Printf("🤖 AI設定 - API: %s, モデル: %s (ユーザー: %s)\n", preferredAPI, preferredModel, userSchoolCode)
 	
-	// 2. 実際のClaude APIを使用した問題生成（現在はClaudeのみ実装）
-	// TODO: 将来的にはユーザーの設定に基づいて異なるAIクライアントを使用
+	// 2. ユーザーの設定に基づいて適切なAIクライアントを選択
 	enhancedPrompt := s.enhancePromptForGeometry(req.Prompt)
 	fmt.Printf("🔍 Enhanced prompt: %s\n", enhancedPrompt)
 	
-	content, err := s.claudeClient.GenerateContent(ctx, enhancedPrompt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate content with Claude API: %w", err)
+	var content string
+	switch preferredAPI {
+	case "openai", "chatgpt":
+		// ユーザーの設定に基づいて新しいクライアントを作成
+		dynamicClient := clients.NewOpenAIClient(preferredModel)
+		content, err = dynamicClient.GenerateContent(ctx, enhancedPrompt)
+		if err != nil {
+			return nil, fmt.Errorf("OpenAI APIでの問題生成に失敗しました: %w", err)
+		}
+	case "google", "gemini":
+		// ユーザーの設定に基づいて新しいクライアントを作成
+		dynamicClient := clients.NewGoogleClient(preferredModel)
+		content, err = dynamicClient.GenerateContent(ctx, enhancedPrompt)
+		if err != nil {
+			return nil, fmt.Errorf("Google APIでの問題生成に失敗しました: %w", err)
+		}
+	case "claude", "laboratory":
+		// ユーザーの設定に基づいて新しいクライアントを作成
+		// laboratoryもClaudeとして扱う
+		dynamicClient := clients.NewClaudeClient(preferredModel)
+		content, err = dynamicClient.GenerateContent(ctx, enhancedPrompt)
+		if err != nil {
+			return nil, fmt.Errorf("Claude APIでの問題生成に失敗しました: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("サポートされていないAPI「%s」が指定されています。設定ページで正しいAPIを選択してください。サポートされているAPI: openai, google, claude", preferredAPI)
 	}
 	
 	contentPreview := content

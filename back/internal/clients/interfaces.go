@@ -4,9 +4,24 @@ import (
 	"context"
 )
 
+// AIClient defines the interface for AI API interactions
+type AIClient interface {
+	GenerateContent(ctx context.Context, prompt string) (string, error)
+}
+
 // ClaudeClient defines the interface for Claude API interactions
 type ClaudeClient interface {
-	GenerateContent(ctx context.Context, prompt string) (string, error)
+	AIClient
+}
+
+// OpenAIClient defines the interface for OpenAI API interactions
+type OpenAIClient interface {
+	AIClient
+}
+
+// GoogleClient defines the interface for Google API interactions
+type GoogleClient interface {
+	AIClient
 }
 
 // CoreClient defines the interface for Core API interactions

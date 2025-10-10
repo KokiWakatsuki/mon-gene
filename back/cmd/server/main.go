@@ -22,8 +22,10 @@ func main() {
 	// サービスの初期化
 	emailService := services.NewEmailService()
 	
-	// 実際のクライアントを初期化
-	claudeClient := clients.NewClaudeClient()
+	// 実際のクライアントを初期化（空のモデル名で初期化、ユーザー設定に基づいて動的に作成）
+	claudeClient := clients.NewClaudeClient("")  // ユーザー設定に基づいて動的に作成
+	openaiClient := clients.NewOpenAIClient("")  // ユーザー設定に基づいて動的に作成
+	googleClient := clients.NewGoogleClient("")  // ユーザー設定に基づいて動的に作成
 	coreClient := clients.NewCoreClient()
 	
 	// メモリベースのリポジトリを初期化
@@ -32,10 +34,11 @@ func main() {
 	
 	log.Printf("✅ リポジトリを初期化しました（メモリベース）")
 	log.Printf("📧 seedデータ: 塾コード=00000, メール=nutfes.script@gmail.com")
+	log.Printf("🤖 AIクライアントを初期化しました（Claude, OpenAI, Google）")
 	
 	// サービスを初期化（実際のリポジトリを使用）
 	authService := services.NewAuthService(userRepo, sessionRepo, emailService)
-	problemService := services.NewProblemService(claudeClient, coreClient, nil, userRepo)
+	problemService := services.NewProblemService(claudeClient, openaiClient, googleClient, coreClient, nil, userRepo)
 
 	// ハンドラーの初期化
 	authHandler := handlers.NewAuthHandler(authService)

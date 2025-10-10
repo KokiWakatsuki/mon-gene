@@ -12,6 +12,7 @@ import (
 
 type claudeClient struct {
 	apiKey  string
+	model   string
 	baseURL string
 	client  *http.Client
 }
@@ -42,9 +43,20 @@ type Usage struct {
 	OutputTokens int `json:"output_tokens"`
 }
 
-func NewClaudeClient() ClaudeClient {
+func NewClaudeClient(model string) ClaudeClient {
+	apiKey := os.Getenv("CLAUDE_API_KEY")
+	if apiKey == "" {
+		fmt.Printf("⚠️ CLAUDE_API_KEY not found in environment variables\n")
+	}
+	
+	// モデル名が空の場合はデフォルトを使用しない
+	if model == "" {
+		fmt.Printf("⚠️ Claude model not specified\n")
+	}
+	
 	return &claudeClient{
-		apiKey:  os.Getenv("CLAUDE_API_KEY"),
+		apiKey:  apiKey,
+		model:   model,
 		baseURL: "https://api.anthropic.com/v1/messages",
 		client:  &http.Client{},
 	}
@@ -52,12 +64,18 @@ func NewClaudeClient() ClaudeClient {
 
 func (c *claudeClient) GenerateContent(ctx context.Context, prompt string) (string, error) {
 	if c.apiKey == "" {
-		return "", fmt.Errorf("CLAUDE_API_KEY is not set")
+		return "", fmt.Errorf("Claude API key not configured")
 	}
 
+	if c.model == "" {
+		return "", fmt.Errorf("Claude model not specified. Please configure your AI settings in the settings page")
+	}
+
+	fmt.Printf("🤖 Using Claude API with model: %s\n", c.model)
+
 	request := ClaudeRequest{
-		Model:     "claude-3-haiku-20240307",
-		MaxTokens: 500,
+		Model:     c.model,
+		MaxTokens: 2000,
 		Messages: []Message{
 			{
 				Role:    "user",
@@ -92,7 +110,7 @@ func (c *claudeClient) GenerateContent(ctx context.Context, prompt string) (stri
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("Claude API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	var claudeResp ClaudeResponse
@@ -101,8 +119,11 @@ func (c *claudeClient) GenerateContent(ctx context.Context, prompt string) (stri
 	}
 
 	if len(claudeResp.Content) == 0 {
-		return "", fmt.Errorf("no content in response")
+		return "", fmt.Errorf("no content returned from Claude API")
 	}
 
-	return claudeResp.Content[0].Text, nil
+	content := claudeResp.Content[0].Text
+	fmt.Printf("✅ Claude API response received (length: %d)\n", len(content))
+
+	return content, nil
 }
