@@ -4,9 +4,18 @@ import (
 	"context"
 )
 
+// FileContent represents a file or image for multimodal input
+type FileContent struct {
+	Name     string
+	Type     string // "image", "document", etc.
+	Data     string // base64 encoded data
+	MimeType string
+}
+
 // AIClient defines the interface for AI API interactions
 type AIClient interface {
 	GenerateContent(ctx context.Context, prompt string) (string, error)
+	GenerateMultimodalContent(ctx context.Context, prompt string, files []FileContent) (string, error)
 }
 
 // ClaudeClient defines the interface for Claude API interactions

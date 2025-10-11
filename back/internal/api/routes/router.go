@@ -13,6 +13,7 @@ func NewRouter(
 	authHandler *handlers.AuthHandler,
 	problemHandler *handlers.ProblemHandler,
 	healthHandler *handlers.HealthHandler,
+	chatHandler *handlers.ChatHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -91,6 +92,16 @@ func NewRouter(
 		switch r.Method {
 		case "GET", "OPTIONS":
 			problemHandler.GetUserProblems(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	// Chat endpoint
+	mux.HandleFunc("/api/chat", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST", "OPTIONS":
+			chatHandler.Chat(w, r)
 		default:
 			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}

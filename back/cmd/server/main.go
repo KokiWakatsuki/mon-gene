@@ -69,9 +69,10 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	problemHandler := handlers.NewProblemHandler(problemService, authService)
 	healthHandler := handlers.NewHealthHandler()
+	chatHandler := handlers.NewChatHandler(authService)
 
 	// ルーターの設定
-	router := routes.NewRouter(authHandler, problemHandler, healthHandler)
+	router := routes.NewRouter(authHandler, problemHandler, healthHandler, chatHandler)
 
 	// サーバーの起動
 	port := os.Getenv("PORT")
@@ -89,6 +90,7 @@ func main() {
 	log.Printf("  - POST /api/generate-pdf")
 	log.Printf("  - GET  /api/problems/search?keyword=<keyword>")
 	log.Printf("  - GET  /api/problems/history")
+	log.Printf("  - POST /api/chat")
 	
 	if err := http.ListenAndServe(":"+port, router); err != nil {
 		log.Fatal("Server failed to start:", err)

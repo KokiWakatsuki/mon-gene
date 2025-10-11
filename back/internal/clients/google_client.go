@@ -208,3 +208,18 @@ func (c *googleClient) GenerateContent(ctx context.Context, prompt string) (stri
 
 	return content, nil
 }
+
+func (c *googleClient) GenerateMultimodalContent(ctx context.Context, prompt string, files []FileContent) (string, error) {
+	// 現在は基本的な実装として、ファイルの説明をテキストに追加してGenerateContentを呼び出し
+	enhancedPrompt := prompt
+	
+	if len(files) > 0 {
+		enhancedPrompt += "\n\n添付ファイル:\n"
+		for _, file := range files {
+			enhancedPrompt += fmt.Sprintf("- %s (%s, タイプ: %s)\n", file.Name, file.MimeType, file.Type)
+		}
+		enhancedPrompt += "\n上記のファイルについて分析・処理してください。"
+	}
+	
+	return c.GenerateContent(ctx, enhancedPrompt)
+}

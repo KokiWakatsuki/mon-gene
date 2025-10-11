@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface User {
@@ -11,6 +11,23 @@ interface User {
   preferred_api: string;
   preferred_model: string;
   problem_generation_limit: number;
+}
+
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  model?: string;
+  api?: string;
+  files?: ChatFile[];
+}
+
+interface ChatFile {
+  name: string;
+  type: string;
+  data: string; // base64 encoded
+  mimeType: string;
 }
 
 const API_OPTIONS = [
@@ -55,9 +72,156 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Chat related states
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // File upload states
+  const [selectedFiles, setSelectedFiles] = useState<ChatFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     fetchUserData();
   }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatMessages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach(file => {
+      // ファイルサイズ制限 (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`ファイル "${file.name}" が大きすぎます。10MB以下のファイルを選択してください。`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        const base64Data = result.split(',')[1]; // Remove data URL prefix
+
+        const fileType = file.type.startsWith('image/') ? 'image' : 'document';
+
+        const newFile: ChatFile = {
+          name: file.name,
+          type: fileType,
+          data: base64Data,
+          mimeType: file.type,
+        };
+
+        setSelectedFiles(prev => [...prev, newFile]);
+      };
+
+      reader.readAsDataURL(file);
+    });
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const sendMessage = async () => {
+    if ((!inputMessage.trim() && selectedFiles.length === 0) || isSending || !user) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: inputMessage.trim() || '(ファイルのみ)',
+      timestamp: new Date(),
+      files: selectedFiles.length > 0 ? selectedFiles : undefined
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    const filesToSend = [...selectedFiles];
+    setSelectedFiles([]);
+    setIsSending(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const requestBody: any = {
+        message: userMessage.content
+      };
+
+      if (filesToSend.length > 0) {
+        requestBody.files = filesToSend.map(file => ({
+          name: file.name,
+          type: file.type,
+          data: file.data,
+          mimeType: file.mimeType
+        }));
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.reply,
+          timestamp: new Date(),
+          model: data.model,
+          api: data.api
+        };
+        setChatMessages(prev => [...prev, assistantMessage]);
+      } else {
+        const errorData = await response.text();
+        const errorMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `エラー: ${errorData}`,
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, errorMessage]);
+      }
+    } catch (error) {
+      console.error('メッセージ送信に失敗しました:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'メッセージの送信に失敗しました。ネットワーク接続を確認してください。',
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const clearChat = () => {
+    setChatMessages([]);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
   const fetchUserData = async () => {
     try {
@@ -310,6 +474,176 @@ export default function SettingsPage() {
                 >
                   {saving ? '保存中...' : '設定を保存'}
                 </button>
+              </div>
+
+              {/* AI チャット機能 */}
+              <div className="border-t pt-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold">AIチャット</h2>
+                  <button
+                    onClick={() => setShowChat(!showChat)}
+                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+                  >
+                    {showChat ? 'チャットを閉じる' : 'チャットを開く'}
+                  </button>
+                </div>
+
+                {user.preferred_api && user.preferred_model ? (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-sm text-blue-800">
+                      💡 現在の設定: {user.preferred_api} - {user.preferred_model}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-800">
+                      ⚠️ AIを使用するには、まずAPI設定とモデル設定を保存してください。
+                    </p>
+                  </div>
+                )}
+
+                {showChat && (
+                  <div className="space-y-4">
+                    {/* チャット履歴 */}
+                    <div className="border border-gray-200 rounded-md p-4 h-96 overflow-y-auto bg-gray-50">
+                      {chatMessages.length === 0 ? (
+                        <div className="flex items-center justify-center h-full text-gray-500">
+                          <p>チャットを開始してください</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {chatMessages.map((message) => (
+                            <div
+                              key={message.id}
+                              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div
+                                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                                  message.role === 'user'
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-white border border-gray-200'
+                                }`}
+                              >
+                                {/* ファイル表示 */}
+                                {message.files && message.files.length > 0 && (
+                                  <div className="mb-2">
+                                    {message.files.map((file, fileIndex) => (
+                                      <div key={fileIndex} className={`text-xs px-2 py-1 rounded mb-1 ${
+                                        message.role === 'user' ? 'bg-blue-400' : 'bg-gray-100'
+                                      }`}>
+                                        <span>
+                                          {file.type === 'image' ? '🖼️' : '📄'} {file.name}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                <p className="whitespace-pre-wrap">{message.content}</p>
+                                <div className="text-xs mt-1 opacity-70">
+                                  {message.timestamp.toLocaleTimeString()}
+                                  {message.model && (
+                                    <span className="ml-2">({message.api} - {message.model})</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {isSending && (
+                            <div className="flex justify-start">
+                              <div className="bg-white border border-gray-200 max-w-xs lg:max-w-md px-4 py-2 rounded-lg">
+                                <p className="text-gray-500">入力中...</p>
+                              </div>
+                            </div>
+                          )}
+                          <div ref={messagesEndRef} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ファイル選択表示 */}
+                    {selectedFiles.length > 0 && (
+                      <div className="border border-gray-200 rounded-md p-3 bg-gray-50">
+                        <h4 className="text-sm font-medium mb-2">選択したファイル:</h4>
+                        <div className="space-y-2">
+                          {selectedFiles.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between bg-white px-3 py-2 rounded border">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm">
+                                  {file.type === 'image' ? '🖼️' : '📄'} {file.name}
+                                </span>
+                                <span className="text-xs text-gray-500">({file.mimeType})</span>
+                              </div>
+                              <button
+                                onClick={() => removeFile(index)}
+                                className="text-red-500 hover:text-red-700 text-sm"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* メッセージ入力 */}
+                    <div className="space-y-2">
+                      <div className="flex space-x-2">
+                        <div className="flex-1">
+                          <textarea
+                            value={inputMessage}
+                            onChange={(e) => setInputMessage(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            placeholder="メッセージを入力してください... (Enterで送信、Shift+Enterで改行)"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                            rows={2}
+                            disabled={isSending || !user.preferred_api || !user.preferred_model}
+                          />
+                        </div>
+                        <div className="flex flex-col space-y-2">
+                          <button
+                            onClick={sendMessage}
+                            disabled={(!inputMessage.trim() && selectedFiles.length === 0) || isSending || !user.preferred_api || !user.preferred_model}
+                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                          >
+                            {isSending ? '送信中...' : '送信'}
+                          </button>
+                          {chatMessages.length > 0 && (
+                            <button
+                              onClick={clearChat}
+                              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 text-sm"
+                            >
+                              クリア
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* ファイルアップロードボタン */}
+                      <div className="flex space-x-2">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileSelect}
+                          multiple
+                          accept="image/*,.pdf,.txt,.doc,.docx,.csv,.json"
+                          className="hidden"
+                          disabled={isSending}
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isSending || !user.preferred_api || !user.preferred_model}
+                          className="flex items-center space-x-2 bg-gray-500 text-white px-3 py-2 rounded hover:bg-gray-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                        >
+                          <span>📎</span>
+                          <span>ファイル添付</span>
+                        </button>
+                        <div className="text-xs text-gray-500 flex items-center">
+                          画像、PDF、テキストファイル等（10MB以下）
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
