@@ -94,31 +94,79 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
             </button>
             <button
               onClick={() => {
-                // 印刷用のスタイルを追加
-                const printStyles = `
-                  <style>
-                    @media print {
-                      body * { visibility: hidden; }
-                      .print-content, .print-content * { visibility: visible; }
-                      .print-content { position: absolute; left: 0; top: 0; width: 100%; }
-                      .solution-page { page-break-before: always !important; }
-                      .no-print { display: none !important; }
-                    }
-                  </style>
-                `;
-                
-                // 一時的にスタイルを追加
-                const styleElement = document.createElement('div');
-                styleElement.innerHTML = printStyles;
-                document.head.appendChild(styleElement);
-                
-                // 印刷実行
-                window.print();
-                
-                // スタイルを削除
-                setTimeout(() => {
-                  document.head.removeChild(styleElement);
-                }, 1000);
+                // 印刷用の新しいウィンドウを開く
+                const printWindow = window.open('', '_blank');
+                if (printWindow) {
+                  const imageHtml = imageBase64 
+                    ? `<div style="text-align: center; margin: 20px 0;">
+                         <img src="data:image/png;base64,${imageBase64}" 
+                              style="max-width: 100%; height: auto; border: 1px solid #ddd;" 
+                              alt="問題図形" />
+                       </div>`
+                    : '';
+                  
+                  // 解答・解説がある場合は別ページに追加
+                  const solutionHtml = solutionText 
+                    ? `<div style="page-break-before: always;">
+                         <h1>解答・解説</h1>
+                         <div class="content">${solutionText}</div>
+                       </div>`
+                    : '';
+                  
+                  printWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <title>${problemTitle}</title>
+                      <style>
+                        body {
+                          font-family: Arial, sans-serif;
+                          margin: 20px;
+                          line-height: 1.6;
+                        }
+                        h1 {
+                          font-size: 24px;
+                          margin-bottom: 20px;
+                          border-bottom: 2px solid #333;
+                          padding-bottom: 10px;
+                        }
+                        .content {
+                          white-space: pre-wrap;
+                          font-size: 14px;
+                          margin-bottom: 20px;
+                        }
+                        .image-container {
+                          text-align: center;
+                          margin: 20px 0;
+                        }
+                        .image-container img {
+                          max-width: 100%;
+                          height: auto;
+                          border: 1px solid #ddd;
+                        }
+                        @media print {
+                          body { margin: 0; }
+                          h1 { page-break-after: avoid; }
+                          .image-container { page-break-inside: avoid; }
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <h1>${problemTitle}</h1>
+                      <div class="content">${problemContent || ''}</div>
+                      ${imageHtml}
+                      ${solutionHtml}
+                    </body>
+                    </html>
+                  `);
+                  printWindow.document.close();
+                  
+                  // ページが読み込まれたら印刷ダイアログを表示
+                  printWindow.onload = () => {
+                    printWindow.print();
+                    printWindow.close();
+                  };
+                }
               }}
               className="px-4 py-2 bg-mongene-yellow text-mongene-ink rounded-lg font-semibold hover:brightness-95 transition-all"
             >
