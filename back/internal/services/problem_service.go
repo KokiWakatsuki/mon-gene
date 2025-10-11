@@ -15,6 +15,9 @@ import (
 type ProblemService interface {
 	GenerateProblem(ctx context.Context, req models.GenerateProblemRequest, userSchoolCode string) (*models.Problem, error)
 	GeneratePDF(ctx context.Context, req models.PDFGenerateRequest) (string, error)
+	SearchProblemsByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error)
+	SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
+	GetUserProblems(ctx context.Context, userID int64, limit, offset int) ([]*models.Problem, error)
 }
 
 type problemService struct {
@@ -45,11 +48,22 @@ func NewProblemService(
 }
 
 func (s *problemService) GenerateProblem(ctx context.Context, req models.GenerateProblemRequest, userSchoolCode string) (*models.Problem, error) {
-	// 1. ユーザーの問題生成回数制限をチェック
+	// 1. ユーザー情報を取得
 	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
+	
+	// 2. 同じパラメータで既に生成された問題があるか検索
+	if s.problemRepo != nil {
+		existingProblems, err := s.problemRepo.SearchByParameters(ctx, user.ID, req.Subject, req.Prompt, req.Filters)
+		if err == nil && len(existingProblems) > 0 {
+			fmt.Printf("♻️ Found existing problem with same parameters. Reusing problem ID: %d\n", existingProblems[0].ID)
+			return existingProblems[0], nil
+		}
+	}
+	
+	// 3. ユーザーの問題生成回数制限をチェック
 	
 	// 制限チェック（-1は制限なし）
 	if user.ProblemGenerationLimit >= 0 && user.ProblemGenerationCount >= user.ProblemGenerationLimit {
@@ -169,12 +183,15 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 
 	// 3. 問題をデータベースに保存
 	problem := &models.Problem{
+		UserID:      user.ID,
+		Subject:     req.Subject,
+		Prompt:      req.Prompt,
 		Content:     problemText,
 		Solution:    solutionText,
 		ImageBase64: imageBase64,
-		Subject:     req.Subject,
 		Filters:     req.Filters,
 		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 
 	// リポジトリが実装されている場合のみ保存
@@ -182,6 +199,7 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 		if err := s.problemRepo.Create(ctx, problem); err != nil {
 			return nil, fmt.Errorf("failed to save problem: %w", err)
 		}
+		fmt.Printf("💾 Problem saved to database with ID: %d\n", problem.ID)
 	}
 
 	// 4. 問題生成成功時にユーザーの生成回数を更新
@@ -385,4 +403,46 @@ func (s *problemService) removePythonCode(content string) string {
 func (s *problemService) removeSolutionText(content string) string {
 	re := regexp.MustCompile(`(?s)---SOLUTION_START---.*?---SOLUTION_END---`)
 	return strings.TrimSpace(re.ReplaceAllString(content, ""))
+}
+
+// SearchProblemsByParameters パラメータで問題を検索
+func (s *problemService) SearchProblemsByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error) {
+	if s.problemRepo == nil {
+		return nil, fmt.Errorf("problem repository is not initialized")
+	}
+	
+	problems, err := s.problemRepo.SearchByParameters(ctx, userID, subject, prompt, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search problems by parameters: %w", err)
+	}
+	
+	return problems, nil
+}
+
+// SearchProblemsByKeyword キーワードで問題を検索
+func (s *problemService) SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error) {
+	if s.problemRepo == nil {
+		return nil, fmt.Errorf("problem repository is not initialized")
+	}
+	
+	problems, err := s.problemRepo.SearchByKeyword(ctx, userID, keyword, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search problems by keyword: %w", err)
+	}
+	
+	return problems, nil
+}
+
+// GetUserProblems ユーザーの問題一覧を取得
+func (s *problemService) GetUserProblems(ctx context.Context, userID int64, limit, offset int) ([]*models.Problem, error) {
+	if s.problemRepo == nil {
+		return nil, fmt.Errorf("problem repository is not initialized")
+	}
+	
+	problems, err := s.problemRepo.GetByUserID(ctx, userID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user problems: %w", err)
+	}
+	
+	return problems, nil
 }

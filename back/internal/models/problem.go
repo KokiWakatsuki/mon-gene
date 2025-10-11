@@ -6,11 +6,13 @@ type Problem struct {
 	ID          int64                  `json:"id" db:"id"`
 	UserID      int64                  `json:"user_id" db:"user_id"`
 	Subject     string                 `json:"subject" db:"subject"`
-	Content     string                 `json:"content" db:"content"`
-	Solution    string                 `json:"solution,omitempty" db:"solution"`
-	ImageBase64 string                 `json:"image_base64,omitempty" db:"image_base64"`
-	Filters     map[string]interface{} `json:"filters" db:"filters"`
+	Prompt      string                 `json:"prompt" db:"prompt"`                           // 生成時のプロンプト
+	Content     string                 `json:"content" db:"content"`                         // 問題文
+	Solution    string                 `json:"solution,omitempty" db:"solution"`             // 解答
+	ImageBase64 string                 `json:"image_base64,omitempty" db:"image_base64"`     // 図
+	Filters     map[string]interface{} `json:"filters" db:"filters"`                         // 生成パラメータ
 	CreatedAt   time.Time              `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at" db:"updated_at"`
 }
 
 type GenerateProblemRequest struct {

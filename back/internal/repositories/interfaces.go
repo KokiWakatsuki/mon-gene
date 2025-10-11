@@ -16,6 +16,10 @@ type ProblemRepository interface {
 	GetByID(ctx context.Context, id int64) (*models.Problem, error)
 	GetByUserID(ctx context.Context, userID int64, limit, offset int) ([]*models.Problem, error)
 	Delete(ctx context.Context, id int64) error
+	// パラメータで検索（完全一致）
+	SearchByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error)
+	// フリーワード検索（部分一致）
+	SearchByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
 }
 
 type SessionRepository interface {

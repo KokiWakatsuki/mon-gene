@@ -9,6 +9,7 @@ import (
 	"github.com/mon-gene/back/internal/api/handlers"
 	"github.com/mon-gene/back/internal/api/routes"
 	"github.com/mon-gene/back/internal/clients"
+	"github.com/mon-gene/back/internal/config"
 	"github.com/mon-gene/back/internal/repositories"
 	"github.com/mon-gene/back/internal/services"
 )
@@ -17,6 +18,16 @@ func main() {
 	// 環境変数の読み込み
 	if err := godotenv.Load(); err != nil {
 		log.Printf("Warning: .env file not found: %v", err)
+	}
+
+	// データベース接続の初期化（リトライ機能付き）
+	dbConfig := config.LoadDatabaseConfig()
+	db, err := config.NewDatabaseWithRetry(dbConfig)
+	if err != nil {
+		log.Printf("❌ データベース接続に失敗しました: %v", err)
+		log.Printf("⚠️ メモリベースのリポジトリを使用します")
+	} else {
+		defer db.Close()
 	}
 
 	// サービスの初期化
@@ -28,17 +39,31 @@ func main() {
 	googleClient := clients.NewGoogleClient("")  // ユーザー設定に基づいて動的に作成
 	coreClient := clients.NewCoreClient()
 	
-	// メモリベースのリポジトリを初期化
-	userRepo := repositories.NewMemoryUserRepository()
-	sessionRepo := repositories.NewMemorySessionRepository()
+	// リポジトリを初期化（データベース接続が成功した場合はMySQL、失敗した場合はメモリベース）
+	var userRepo repositories.UserRepository
+	var sessionRepo repositories.SessionRepository
+	var problemRepo repositories.ProblemRepository
 	
-	log.Printf("✅ リポジトリを初期化しました（メモリベース）")
+	if db != nil {
+		// MySQLベースのリポジトリを使用
+		userRepo = repositories.NewMySQLUserRepository(db)
+		sessionRepo = repositories.NewMemorySessionRepository() // Sessionは引き続きメモリベース
+		problemRepo = repositories.NewMySQLProblemRepository(db)
+		log.Printf("✅ MySQLベースのリポジトリを初期化しました")
+	} else {
+		// メモリベースのリポジトリを使用
+		userRepo = repositories.NewMemoryUserRepository()
+		sessionRepo = repositories.NewMemorySessionRepository()
+		problemRepo = nil
+		log.Printf("✅ メモリベースのリポジトリを初期化しました")
+	}
+	
 	log.Printf("📧 seedデータ: 塾コード=00000, メール=nutfes.script@gmail.com")
 	log.Printf("🤖 AIクライアントを初期化しました（Claude, OpenAI, Google）")
 	
-	// サービスを初期化（実際のリポジトリを使用）
+	// サービスを初期化
 	authService := services.NewAuthService(userRepo, sessionRepo, emailService)
-	problemService := services.NewProblemService(claudeClient, openaiClient, googleClient, coreClient, nil, userRepo)
+	problemService := services.NewProblemService(claudeClient, openaiClient, googleClient, coreClient, problemRepo, userRepo)
 
 	// ハンドラーの初期化
 	authHandler := handlers.NewAuthHandler(authService)
@@ -62,6 +87,8 @@ func main() {
 	log.Printf("  - POST /api/logout")
 	log.Printf("  - POST /api/generate-problem")
 	log.Printf("  - POST /api/generate-pdf")
+	log.Printf("  - GET  /api/problems/search?keyword=<keyword>")
+	log.Printf("  - GET  /api/problems/history")
 	
 	if err := http.ListenAndServe(":"+port, router); err != nil {
 		log.Fatal("Server failed to start:", err)

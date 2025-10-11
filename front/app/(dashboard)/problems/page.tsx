@@ -31,6 +31,9 @@ export default function Home() {
     problem_generation_limit: number;
     problem_generation_count: number;
   } | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
 
   // ユーザー情報を取得する関数
   const fetchUserInfo = async () => {
@@ -54,6 +57,38 @@ export default function Home() {
     }
   };
 
+  // 問題履歴を取得する関数
+  const fetchProblemHistory = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:8080/api/problems/history', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const historyProblems = data.problems?.map((problem: any, index: number) => ({
+          id: problem.id || String(index + 1),
+          title: `問題 ${problem.id || index + 1}`,
+          content: problem.content || problem.problem || '',
+          imageBase64: problem.image_base64 || problem.ImageBase64,
+          solution: problem.solution || problem.Solution,
+        })) || [];
+        
+        setProblems(historyProblems);
+        setIsSearchMode(false);
+        console.log('問題履歴を取得しました:', historyProblems.length, '件');
+      }
+    } catch (error) {
+      console.error('問題履歴の取得に失敗しました:', error);
+    }
+  };
+
   // 認証チェック
   useEffect(() => {
     const checkAuth = async () => {
@@ -68,6 +103,9 @@ export default function Home() {
       
       // ユーザー情報を取得
       await fetchUserInfo();
+      
+      // 問題履歴を読み込む
+      await fetchProblemHistory();
     };
 
     checkAuth();
@@ -558,6 +596,44 @@ export default function Home() {
     return `以下の条件で${activeSubject}の問題を生成してください:\n${filterTexts.join('\n')}`;
   };
 
+  // キーワード検索する関数
+  const searchProblems = async () => {
+    if (!searchKeyword.trim()) {
+      alert('検索キーワードを入力してください');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`http://localhost:8080/api/problems/search?keyword=${encodeURIComponent(searchKeyword)}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const foundProblems = data.problems?.map((problem: any, index: number) => ({
+          id: problem.id || String(index + 1),
+          title: `検索結果 ${problem.id || index + 1}`,
+          content: problem.content || problem.problem || '',
+          imageBase64: problem.image_base64 || problem.ImageBase64,
+          solution: problem.solution || problem.Solution,
+        })) || [];
+        
+        setSearchResults(foundProblems);
+        setIsSearchMode(true);
+        console.log('検索結果:', foundProblems.length, '件');
+      }
+    } catch (error) {
+      console.error('検索に失敗しました:', error);
+      alert('検索に失敗しました');
+    }
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-mongene-bg">
       <BackgroundShapes />
@@ -577,8 +653,59 @@ export default function Home() {
           onFilterChange={handleFilterChange}
         />
         
+        {/* 検索・履歴機能UI */}
+        <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
+          <h3 className="text-lg font-bold text-mongene-ink mb-4">🔍 問題検索・履歴</h3>
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="キーワードを入力（例：図形、関数、確率...）"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border border-white/20 bg-white/10 text-mongene-ink placeholder-mongene-muted focus:outline-none focus:ring-2 focus:ring-mongene-blue"
+                onKeyDown={(e) => e.key === 'Enter' && searchProblems()}
+              />
+            </div>
+            <button
+              onClick={searchProblems}
+              className="px-4 py-2 bg-mongene-blue text-white rounded-lg hover:brightness-110 transition-all"
+            >
+              検索
+            </button>
+            <button
+              onClick={fetchProblemHistory}
+              className="px-4 py-2 bg-mongene-muted text-white rounded-lg hover:brightness-110 transition-all"
+            >
+              履歴表示
+            </button>
+          </div>
+          
+          {/* 現在の表示モード */}
+          <div className="text-sm text-mongene-muted">
+            {isSearchMode ? (
+              <div className="flex items-center gap-2">
+                <span>🔍 検索結果: "{searchKeyword}" ({searchResults.length}件)</span>
+                <button 
+                  onClick={() => {
+                    setIsSearchMode(false);
+                    setSearchKeyword('');
+                    fetchProblemHistory();
+                  }}
+                  className="text-mongene-blue hover:underline"
+                >
+                  履歴に戻る
+                </button>
+              </div>
+            ) : (
+              <span>📚 問題履歴 ({problems.length}件)</span>
+            )}
+          </div>
+        </div>
+        
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-7" aria-label="問題一覧">
-          {problems.map((problem) => (
+          {/* 検索モードの場合は検索結果を表示、そうでなければ履歴を表示 */}
+          {(isSearchMode ? searchResults : problems).map((problem) => (
             <ProblemCard
               key={problem.id}
               id={problem.id}

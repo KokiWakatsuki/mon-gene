@@ -121,3 +121,86 @@ func (h *ProblemHandler) GeneratePDF(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteJSONResponse(w, http.StatusOK, response)
 }
+
+// SearchProblems キーワードで問題を検索
+func (h *ProblemHandler) SearchProblems(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	// クエリパラメータから検索キーワードを取得
+	keyword := r.URL.Query().Get("keyword")
+	if keyword == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "検索キーワードは必須です")
+		return
+	}
+
+	// ページネーション
+	limit := 20
+	offset := 0
+
+	problems, err := h.problemService.SearchProblemsByKeyword(r.Context(), user.ID, keyword, limit, offset)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"problems": problems,
+		"count":    len(problems),
+	})
+}
+
+// GetUserProblems ユーザーの問題履歴を取得
+func (h *ProblemHandler) GetUserProblems(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	// ページネーション
+	limit := 20
+	offset := 0
+
+	problems, err := h.problemService.GetUserProblems(r.Context(), user.ID, limit, offset)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"problems": problems,
+		"count":    len(problems),
+	})
+}

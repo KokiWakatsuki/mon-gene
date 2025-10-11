@@ -59,6 +59,25 @@ func NewRouter(
 	mux.HandleFunc("/api/generate-problem", problemHandler.GenerateProblem)
 	mux.HandleFunc("/api/generate-pdf", problemHandler.GeneratePDF)
 
+	// Problem search endpoints
+	mux.HandleFunc("/api/problems/search", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET", "OPTIONS":
+			problemHandler.SearchProblems(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	mux.HandleFunc("/api/problems/history", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET", "OPTIONS":
+			problemHandler.GetUserProblems(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
 	// Apply CORS middleware to all routes
 	return middleware.CORSMiddleware(mux)
 }
