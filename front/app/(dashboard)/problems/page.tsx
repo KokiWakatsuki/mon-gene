@@ -64,7 +64,7 @@ export default function Home() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch('http://localhost:8080/api/problems/history', {
+      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/history`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -608,7 +608,7 @@ export default function Home() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`http://localhost:8080/api/problems/search?keyword=${encodeURIComponent(searchKeyword)}`, {
+      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/search?keyword=${encodeURIComponent(searchKeyword)}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -652,7 +652,7 @@ export default function Home() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch('http://localhost:8080/api/problems/search-by-filters', {
+      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/search-by-filters`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -706,7 +706,7 @@ export default function Home() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch('http://localhost:8080/api/problems/search-combined', {
+      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/search-combined`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
