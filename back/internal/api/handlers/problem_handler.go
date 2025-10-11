@@ -167,6 +167,69 @@ func (h *ProblemHandler) SearchProblems(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// SearchProblemsCombined キーワードとフィルターの組み合わせで問題を検索
+func (h *ProblemHandler) SearchProblemsCombined(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	// リクエストボディから検索条件を取得
+	var searchRequest struct {
+		Keyword   string                 `json:"keyword,omitempty"`
+		Subject   string                 `json:"subject,omitempty"`
+		Filters   map[string]interface{} `json:"filters,omitempty"`
+		MatchType string                 `json:"matchType,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&searchRequest); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// 少なくとも1つの検索条件が指定されている必要がある
+	if searchRequest.Keyword == "" && searchRequest.Subject == "" && (searchRequest.Filters == nil || len(searchRequest.Filters) == 0) {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "キーワード、科目、またはフィルター条件のいずれかを指定してください")
+		return
+	}
+
+	// ページネーション
+	limit := 20
+	offset := 0
+
+	// デフォルトは部分一致
+	matchType := searchRequest.MatchType
+	if matchType == "" {
+		matchType = "partial"
+	}
+
+	problems, err := h.problemService.SearchProblemsCombined(r.Context(), user.ID, searchRequest.Keyword, searchRequest.Subject, searchRequest.Filters, matchType, limit, offset)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"problems": problems,
+		"count":    len(problems),
+	})
+}
+
 // GetUserProblems ユーザーの問題履歴を取得
 func (h *ProblemHandler) GetUserProblems(w http.ResponseWriter, r *http.Request) {
 	// 認証トークンを取得
@@ -193,6 +256,68 @@ func (h *ProblemHandler) GetUserProblems(w http.ResponseWriter, r *http.Request)
 	offset := 0
 
 	problems, err := h.problemService.GetUserProblems(r.Context(), user.ID, limit, offset)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"problems": problems,
+		"count":    len(problems),
+	})
+}
+
+// SearchProblemsByFilters パラメータ（フィルター）で問題を検索
+func (h *ProblemHandler) SearchProblemsByFilters(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	// リクエストボディから検索条件を取得
+	var searchRequest struct {
+		Subject   string                 `json:"subject,omitempty"`
+		Filters   map[string]interface{} `json:"filters,omitempty"`
+		MatchType string                 `json:"matchType,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&searchRequest); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// 少なくとも科目またはフィルターのいずれかが指定されている必要がある
+	if searchRequest.Subject == "" && (searchRequest.Filters == nil || len(searchRequest.Filters) == 0) {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "科目またはフィルター条件を指定してください")
+		return
+	}
+
+	// ページネーション
+	limit := 20
+	offset := 0
+
+	// デフォルトは部分一致
+	matchType := searchRequest.MatchType
+	if matchType == "" {
+		matchType = "partial"
+	}
+
+	problems, err := h.problemService.SearchProblemsByFilters(r.Context(), user.ID, searchRequest.Subject, searchRequest.Filters, matchType, limit, offset)
 	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
 		return

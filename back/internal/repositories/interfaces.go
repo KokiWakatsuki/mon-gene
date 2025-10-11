@@ -18,8 +18,12 @@ type ProblemRepository interface {
 	Delete(ctx context.Context, id int64) error
 	// パラメータで検索（完全一致）
 	SearchByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error)
+	// フィルター条件で検索（科目とフィルターで柔軟に検索）
+	SearchByFilters(ctx context.Context, userID int64, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 	// フリーワード検索（部分一致）
 	SearchByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
+	// キーワードとフィルターの組み合わせ検索
+	SearchCombined(ctx context.Context, userID int64, keyword string, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 }
 
 type SessionRepository interface {

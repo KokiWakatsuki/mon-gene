@@ -16,7 +16,9 @@ type ProblemService interface {
 	GenerateProblem(ctx context.Context, req models.GenerateProblemRequest, userSchoolCode string) (*models.Problem, error)
 	GeneratePDF(ctx context.Context, req models.PDFGenerateRequest) (string, error)
 	SearchProblemsByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error)
+	SearchProblemsByFilters(ctx context.Context, userID int64, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 	SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
+	SearchProblemsCombined(ctx context.Context, userID int64, keyword string, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 	GetUserProblems(ctx context.Context, userID int64, limit, offset int) ([]*models.Problem, error)
 }
 
@@ -419,6 +421,20 @@ func (s *problemService) SearchProblemsByParameters(ctx context.Context, userID 
 	return problems, nil
 }
 
+// SearchProblemsByFilters フィルター（パラメータ）で問題を検索
+func (s *problemService) SearchProblemsByFilters(ctx context.Context, userID int64, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error) {
+	if s.problemRepo == nil {
+		return nil, fmt.Errorf("problem repository is not initialized")
+	}
+	
+	problems, err := s.problemRepo.SearchByFilters(ctx, userID, subject, filters, matchType, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search problems by filters: %w", err)
+	}
+	
+	return problems, nil
+}
+
 // SearchProblemsByKeyword キーワードで問題を検索
 func (s *problemService) SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error) {
 	if s.problemRepo == nil {
@@ -428,6 +444,20 @@ func (s *problemService) SearchProblemsByKeyword(ctx context.Context, userID int
 	problems, err := s.problemRepo.SearchByKeyword(ctx, userID, keyword, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search problems by keyword: %w", err)
+	}
+	
+	return problems, nil
+}
+
+// SearchProblemsCombined キーワードとフィルターの組み合わせで問題を検索
+func (s *problemService) SearchProblemsCombined(ctx context.Context, userID int64, keyword string, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error) {
+	if s.problemRepo == nil {
+		return nil, fmt.Errorf("problem repository is not initialized")
+	}
+	
+	problems, err := s.problemRepo.SearchCombined(ctx, userID, keyword, subject, filters, matchType, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search problems by combined conditions: %w", err)
 	}
 	
 	return problems, nil

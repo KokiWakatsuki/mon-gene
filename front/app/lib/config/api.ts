@@ -17,8 +17,13 @@ export const API_CONFIG = {
   CLAUDE_VERSION: '2023-06-01',
   
   // バックエンドサーバー経由でのAPI呼び出し設定
+  API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080',
   BACKEND_API_URL: process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8080/api/generate-problem',
   USER_INFO_API_URL: process.env.NEXT_PUBLIC_USER_INFO_API_URL || 'http://localhost:8080/api/user-info',
+  
+  // 認証関連のAPI設定
+  LOGIN_API_URL: (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080') + '/api/login',
+  FORGOT_PASSWORD_API_URL: (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080') + '/api/forgot-password',
   
   // 他のAPI設定もここに追加できます
 };

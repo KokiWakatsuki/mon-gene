@@ -69,6 +69,24 @@ func NewRouter(
 		}
 	})
 
+	mux.HandleFunc("/api/problems/search-by-filters", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST", "OPTIONS":
+			problemHandler.SearchProblemsByFilters(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	mux.HandleFunc("/api/problems/search-combined", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST", "OPTIONS":
+			problemHandler.SearchProblemsCombined(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
 	mux.HandleFunc("/api/problems/history", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET", "OPTIONS":

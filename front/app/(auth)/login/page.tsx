@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import BackgroundShapes from '../../components/layout/BackgroundShapes';
+import { API_CONFIG } from '../../lib/config/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,10 +44,10 @@ export default function LoginPage() {
     }
 
     try {
-      console.log('API URL:', process.env.NEXT_PUBLIC_API_BASE_URL);
+      console.log('API URL:', API_CONFIG.API_BASE_URL);
       console.log('Login data:', { schoolCode: formData.schoolCode, password: formData.password, remember: formData.remember });
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/login`, {
+      const response = await fetch(API_CONFIG.LOGIN_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -91,7 +92,7 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/forgot-password`, {
+      const response = await fetch(API_CONFIG.FORGOT_PASSWORD_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

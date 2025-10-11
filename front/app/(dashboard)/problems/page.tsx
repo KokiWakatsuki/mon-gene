@@ -34,6 +34,7 @@ export default function Home() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
+  const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('partial');
 
   // ユーザー情報を取得する関数
   const fetchUserInfo = async () => {
@@ -634,6 +635,114 @@ export default function Home() {
     }
   };
 
+  // パラメータ検索する関数
+  const searchProblemsByFilters = async () => {
+    // 検索条件をチェック
+    const hasSubject = activeSubject !== '';
+    const hasFilters = Object.keys(selectedFilters).some(key => 
+      selectedFilters[key] && selectedFilters[key].length > 0
+    );
+
+    if (!hasSubject && !hasFilters) {
+      alert('科目を選択するか、フィルター条件を設定してください');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:8080/api/problems/search-by-filters', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          subject: activeSubject,
+          filters: selectedFilters,
+          matchType: searchMatchType,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const foundProblems = data.problems?.map((problem: any, index: number) => ({
+          id: problem.id || String(index + 1),
+          title: `パラメータ検索結果 ${problem.id || index + 1}`,
+          content: problem.content || problem.problem || '',
+          imageBase64: problem.image_base64 || problem.ImageBase64,
+          solution: problem.solution || problem.Solution,
+        })) || [];
+        
+        setSearchResults(foundProblems);
+        setIsSearchMode(true);
+        console.log('パラメータ検索結果:', foundProblems.length, '件');
+      } else {
+        const errorData = await response.json();
+        alert(`検索に失敗しました: ${errorData.error || 'サーバーエラー'}`);
+      }
+    } catch (error) {
+      console.error('パラメータ検索に失敗しました:', error);
+      alert('パラメータ検索に失敗しました');
+    }
+  };
+
+  // キーワード + 条件の組み合わせ検索する関数
+  const searchProblemsByKeywordAndFilters = async () => {
+    // 検索条件をチェック
+    const hasKeyword = searchKeyword.trim() !== '';
+    const hasSubject = activeSubject !== '';
+    const hasFilters = Object.keys(selectedFilters).some(key => 
+      selectedFilters[key] && selectedFilters[key].length > 0
+    );
+
+    if (!hasKeyword && !hasSubject && !hasFilters) {
+      alert('キーワードを入力するか、科目・フィルター条件を設定してください');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:8080/api/problems/search-combined', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          keyword: searchKeyword.trim() || undefined,
+          subject: activeSubject || undefined,
+          filters: Object.keys(selectedFilters).length > 0 ? selectedFilters : undefined,
+          matchType: searchMatchType,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const foundProblems = data.problems?.map((problem: any, index: number) => ({
+          id: problem.id || String(index + 1),
+          title: `組み合わせ検索結果 ${problem.id || index + 1}`,
+          content: problem.content || problem.problem || '',
+          imageBase64: problem.image_base64 || problem.ImageBase64,
+          solution: problem.solution || problem.Solution,
+        })) || [];
+        
+        setSearchResults(foundProblems);
+        setIsSearchMode(true);
+        console.log('キーワード+条件検索結果:', foundProblems.length, '件');
+      } else {
+        const errorData = await response.json();
+        alert(`検索に失敗しました: ${errorData.error || 'サーバーエラー'}`);
+      }
+    } catch (error) {
+      console.error('キーワード+条件検索に失敗しました:', error);
+      alert('キーワード+条件検索に失敗しました');
+    }
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-mongene-bg">
       <BackgroundShapes />
@@ -656,6 +765,8 @@ export default function Home() {
         {/* 検索・履歴機能UI */}
         <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
           <h3 className="text-lg font-bold text-mongene-ink mb-4">🔍 問題検索・履歴</h3>
+          
+          {/* キーワード検索 */}
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <div className="flex-1">
               <input
@@ -671,13 +782,64 @@ export default function Home() {
               onClick={searchProblems}
               className="px-4 py-2 bg-mongene-blue text-white rounded-lg hover:brightness-110 transition-all"
             >
-              検索
+              キーワード検索
+            </button>
+          </div>
+
+          {/* 検索タイプ選択 */}
+          <div className="mb-3">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-mongene-ink">検索タイプ:</span>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="searchMatchType"
+                  value="partial"
+                  checked={searchMatchType === 'partial'}
+                  onChange={(e) => setSearchMatchType(e.target.value as 'exact' | 'partial')}
+                  className="text-mongene-blue"
+                />
+                <span className="text-sm text-mongene-ink">部分一致（おすすめ）</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="searchMatchType"
+                  value="exact"
+                  checked={searchMatchType === 'exact'}
+                  onChange={(e) => setSearchMatchType(e.target.value as 'exact' | 'partial')}
+                  className="text-mongene-blue"
+                />
+                <span className="text-sm text-mongene-ink">完全一致</span>
+              </label>
+            </div>
+            <div className="text-xs text-mongene-muted mt-1">
+              {searchMatchType === 'partial' 
+                ? '条件の一部でも一致すれば検索結果に表示されます' 
+                : 'すべての条件が完全に一致する場合のみ検索結果に表示されます'
+              }
+            </div>
+          </div>
+
+          {/* パラメータ検索・履歴ボタン */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <button
+              onClick={searchProblemsByFilters}
+              className="px-4 py-2 bg-mongene-green text-white rounded-lg hover:brightness-110 transition-all"
+            >
+              📊 現在の条件で検索 ({searchMatchType === 'partial' ? '部分一致' : '完全一致'})
+            </button>
+            <button
+              onClick={searchProblemsByKeywordAndFilters}
+              className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:brightness-110 transition-all"
+            >
+              🔍📊 キーワード+条件で検索
             </button>
             <button
               onClick={fetchProblemHistory}
               className="px-4 py-2 bg-mongene-muted text-white rounded-lg hover:brightness-110 transition-all"
             >
-              履歴表示
+              📚 履歴表示
             </button>
           </div>
           
