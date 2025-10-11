@@ -40,8 +40,11 @@ func WriteJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) 
 
 // EnableCORS enables CORS for the response
 func EnableCORS(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// 本番環境では具体的なオリジンを設定
+	origin := "https://mon-gene.wakatsuki.app"
+	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Max-Age", "3600")
 }
