@@ -76,8 +76,8 @@ func (r *memoryUserRepository) loadUsersFromCSV() ([]*models.User, error) {
 
 	// ヘッダー行をスキップして処理
 	for i, record := range records[1:] {
-		if len(record) < 8 {
-			log.Printf("⚠️ 行 %d: 列数が不足しています (期待値: 8, 実際: %d)", i+2, len(record))
+		if len(record) < 11 {
+			log.Printf("⚠️ 行 %d: 列数が不足しています (期待値: 11, 実際: %d)", i+2, len(record))
 			continue
 		}
 
@@ -95,6 +95,27 @@ func (r *memoryUserRepository) loadUsersFromCSV() ([]*models.User, error) {
 			continue
 		}
 
+		// 問題生成カウントを解析
+		generationCount, err := strconv.Atoi(record[5])
+		if err != nil {
+			log.Printf("⚠️ 行 %d: 問題生成カウントの解析に失敗しました: %v", i+2, err)
+			continue
+		}
+
+		// 図形再生成制限を解析
+		figureLimit, err := strconv.Atoi(record[6])
+		if err != nil {
+			log.Printf("⚠️ 行 %d: 図形再生成制限の解析に失敗しました: %v", i+2, err)
+			continue
+		}
+
+		// 図形再生成カウントを解析
+		figureCount, err := strconv.Atoi(record[7])
+		if err != nil {
+			log.Printf("⚠️ 行 %d: 図形再生成カウントの解析に失敗しました: %v", i+2, err)
+			continue
+		}
+
 		// パスワードをハッシュ化
 		passwordHash, err := utils.HashPassword(record[3])
 		if err != nil {
@@ -103,17 +124,19 @@ func (r *memoryUserRepository) loadUsersFromCSV() ([]*models.User, error) {
 		}
 
 		user := &models.User{
-			ID:                     id,
-			SchoolCode:            record[1],
-			Email:                 record[2],
-			PasswordHash:          passwordHash,
+			ID:                      id,
+			SchoolCode:             record[1],
+			Email:                  record[2],
+			PasswordHash:           passwordHash,
 			ProblemGenerationLimit: limit,
-			ProblemGenerationCount: 0,
-			Role:                  record[5],
-			PreferredAPI:          record[6],
-			PreferredModel:        record[7],
-			CreatedAt:             now,
-			UpdatedAt:             now,
+			ProblemGenerationCount: generationCount,
+			FigureRegenerationLimit: figureLimit,
+			FigureRegenerationCount: figureCount,
+			Role:                   record[8],
+			PreferredAPI:           record[9],
+			PreferredModel:         record[10],
+			CreatedAt:              now,
+			UpdatedAt:              now,
 		}
 
 		users = append(users, user)
@@ -134,17 +157,19 @@ func (r *memoryUserRepository) createDefaultUser() {
 	}
 
 	defaultUser := &models.User{
-		ID:                     1,
-		SchoolCode:            "00000",
-		Email:                 "nutfes.script@gmail.com",
-		PasswordHash:          passwordHash,
+		ID:                      1,
+		SchoolCode:             "00000",
+		Email:                  "nutfes.script@gmail.com",
+		PasswordHash:           passwordHash,
 		ProblemGenerationLimit: 3,
 		ProblemGenerationCount: 0,
-		Role:                  "teacher",
-		PreferredAPI:          "claude",
-		PreferredModel:        "claude-3-haiku",
-		CreatedAt:             now,
-		UpdatedAt:             now,
+		FigureRegenerationLimit: 2,
+		FigureRegenerationCount: 0,
+		Role:                   "teacher",
+		PreferredAPI:           "claude",
+		PreferredModel:         "claude-3-haiku",
+		CreatedAt:              now,
+		UpdatedAt:              now,
 	}
 
 	r.users[defaultUser.SchoolCode] = defaultUser
@@ -198,4 +223,19 @@ func (r *memoryUserRepository) Update(ctx context.Context, user *models.User) er
 	
 	r.users[user.SchoolCode] = user
 	return nil
+}
+
+func (r *memoryUserRepository) UpdateFigureRegenerationCount(userID int64, count int) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	
+	for _, user := range r.users {
+		if user.ID == userID {
+			user.FigureRegenerationCount = count
+			user.UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("user not found")
 }

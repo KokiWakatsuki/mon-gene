@@ -575,12 +575,18 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 		return "", fmt.Errorf("failed to get problem: %w", err)
 	}
 
-	// ユーザー情報を取得（AIクライアント選択のため）
+	// ユーザー情報を取得（制限チェックとAIクライアント選択のため）
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get user: %w", err)
 	}
 
+	// 図形再生成回数の制限をチェック
+	if user.FigureRegenerationLimit >= 0 && user.FigureRegenerationCount >= user.FigureRegenerationLimit {
+		return "", fmt.Errorf("図形再生成回数の上限（%d回）に達しました", user.FigureRegenerationLimit)
+	}
+
+	fmt.Printf("🔢 [RegenerateGeometry] User %d: %d/%d figure regenerations used\n", userID, user.FigureRegenerationCount, user.FigureRegenerationLimit)
 	fmt.Printf("🎨 [RegenerateGeometry] Starting geometry regeneration for problem ID: %d\n", req.ID)
 
 	// 使用する問題文を決定（編集後の問題文がある場合はそれを使用）
@@ -687,6 +693,16 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 	// データベースの図形を更新
 	if err := s.problemRepo.UpdateGeometry(ctx, req.ID, imageBase64); err != nil {
 		return "", fmt.Errorf("failed to update geometry in database: %w", err)
+	}
+
+	// 図形再生成成功時にユーザーのカウントを更新
+	user.FigureRegenerationCount++
+	user.UpdatedAt = time.Now()
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		// ログに記録するが、図形再生成は成功として扱う
+		fmt.Printf("⚠️ [RegenerateGeometry] Failed to update figure regeneration count: %v\n", err)
+	} else {
+		fmt.Printf("✅ [RegenerateGeometry] Updated user %d figure regeneration count to %d\n", userID, user.FigureRegenerationCount)
 	}
 
 	fmt.Printf("✅ [RegenerateGeometry] Geometry for problem %d regenerated successfully\n", req.ID)

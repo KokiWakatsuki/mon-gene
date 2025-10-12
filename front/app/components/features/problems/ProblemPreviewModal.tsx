@@ -14,6 +14,15 @@ interface ProblemPreviewModalProps {
   onUpdate?: (updatedData: { content: string; solution: string; imageBase64?: string }) => void;
 }
 
+interface UserInfo {
+  school_code: string;
+  email: string;
+  problem_generation_limit: number;
+  problem_generation_count: number;
+  figure_regeneration_limit: number;
+  figure_regeneration_count: number;
+}
+
 export default function ProblemPreviewModal({ isOpen, onClose, problemId, problemTitle, problemContent, imageBase64, solutionText, onUpdate }: ProblemPreviewModalProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
@@ -21,6 +30,45 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
   const [currentImageBase64, setCurrentImageBase64] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+
+  // ユーザー情報を取得する関数
+  const fetchUserInfo = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(API_CONFIG.USER_INFO_API_URL, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUserInfo(data);
+      }
+    } catch (error) {
+      console.error('ユーザー情報の取得に失敗しました:', error);
+    }
+  };
+
+  // 図形再生成制限チェック
+  const isFigureRegenerationLimitReached = () => {
+    if (!userInfo) return true; // ユーザー情報がない場合は安全のため制限扱い
+    if (userInfo.figure_regeneration_limit === undefined || userInfo.figure_regeneration_limit === null) return true;
+    if (userInfo.figure_regeneration_count === undefined || userInfo.figure_regeneration_count === null) return true;
+    if (userInfo.figure_regeneration_limit === -1) return false; // 制限なし
+    return userInfo.figure_regeneration_count >= userInfo.figure_regeneration_limit;
+  };
+
+  // モーダルが開かれたときにユーザー情報を取得
+  useEffect(() => {
+    if (isOpen) {
+      fetchUserInfo();
+    }
+  }, [isOpen]);
 
   // プロパティが変更されたときに編集状態をリセット
   useEffect(() => {
@@ -102,6 +150,12 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
   const handleRegenerateGeometry = async () => {
     if (!problemId) return;
 
+    // 制限チェック
+    if (isFigureRegenerationLimitReached()) {
+      alert(`図形再生成回数の上限（${userInfo?.figure_regeneration_limit}回）に達しました。これ以上図形を再生成することはできません。`);
+      return;
+    }
+
     const parsedId = parseInt(problemId);
     console.log('🔍 [DEBUG] Regenerating geometry for problem:', {
       problemId,
@@ -150,6 +204,8 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
             imageBase64: data.image_base64,
           });
         }
+        // ユーザー情報を再取得してカウントを更新
+        await fetchUserInfo();
       } else {
         throw new Error(data.error || '図形の再生成に失敗しました');
       }
@@ -214,14 +270,37 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
                     {currentImageBase64 && (
                       <div>
                         <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-lg font-semibold text-mongene-ink">図形</h3>
-                          <button
-                            onClick={handleRegenerateGeometry}
-                            disabled={isLoading}
-                            className="px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                          >
-                            {isLoading ? '再生成中...' : '図形を再生成'}
-                          </button>
+                          <div>
+                            <h3 className="text-lg font-semibold text-mongene-ink">図形</h3>
+                            {userInfo && (
+                              <div className="text-xs text-mongene-muted mt-1">
+                                図形再生成回数: {userInfo.figure_regeneration_count ?? 0}/
+                                {userInfo.figure_regeneration_limit === -1 ? '無制限' : (userInfo.figure_regeneration_limit ?? 0)}
+                                {isFigureRegenerationLimitReached() && (
+                                  <span className="text-red-600 font-bold ml-2">⚠️ 上限到達</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            {isFigureRegenerationLimitReached() && (
+                              <div className="text-xs text-red-600 font-bold">
+                                再生成上限に達しました
+                              </div>
+                            )}
+                            <button
+                              onClick={handleRegenerateGeometry}
+                              disabled={isLoading || isFigureRegenerationLimitReached()}
+                              className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                                isFigureRegenerationLimitReached()
+                                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                                  : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed'
+                              }`}
+                            >
+                              {isLoading ? '再生成中...' : 
+                               isFigureRegenerationLimitReached() ? '再生成不可' : '図形を再生成'}
+                            </button>
+                          </div>
                         </div>
                         <div className="w-80 mx-auto">
                           <img 

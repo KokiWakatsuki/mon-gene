@@ -89,58 +89,55 @@ func NewDatabaseWithRetry(config *DatabaseConfig) (*sqlx.DB, error) {
 	return nil, fmt.Errorf("データベース接続に失敗しました (最大%d回試行): %w", maxRetries, fmt.Errorf("connection timeout"))
 }
 
-// runMigrations はデータベースマイグレーションを実行します
+// runMigrations はデータベースマイグレーションファイルを実行します
 func runMigrations(db *sqlx.DB) error {
 	log.Printf("🔧 データベースマイグレーションを開始します...")
 	
-	// usersテーブルを作成
-	createUsersTableSQL := `
-	CREATE TABLE IF NOT EXISTS users (
-		id BIGINT AUTO_INCREMENT PRIMARY KEY,
-		school_code VARCHAR(10) NOT NULL UNIQUE COMMENT '塾コード',
-		email VARCHAR(255) NOT NULL COMMENT 'メールアドレス',
-		password_hash VARCHAR(255) NOT NULL COMMENT 'パスワード（ハッシュ化）',
-		problem_generation_limit INT NOT NULL DEFAULT 10 COMMENT '問題生成制限数（-1は無制限）',
-		problem_generation_count INT NOT NULL DEFAULT 0 COMMENT '現在の生成回数',
-		role ENUM('teacher', 'admin') NOT NULL DEFAULT 'teacher' COMMENT 'ユーザーロール',
-		preferred_api VARCHAR(50) NOT NULL DEFAULT 'claude' COMMENT '優先API',
-		preferred_model VARCHAR(100) NOT NULL DEFAULT 'claude-3-5-sonnet-20241022' COMMENT '優先モデル',
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		INDEX idx_school_code (school_code),
-		INDEX idx_email (email)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ユーザーテーブル'`
-	
-	if _, err := db.Exec(createUsersTableSQL); err != nil {
-		return fmt.Errorf("usersテーブルの作成に失敗: %w", err)
-	}
-	log.Printf("✅ usersテーブルを作成/確認しました")
+	return runMigrationFiles(db, "migrations")
+}
 
-	// problemsテーブルを作成
-	createProblemsTableSQL := `
-	CREATE TABLE IF NOT EXISTS problems (
-		id BIGINT AUTO_INCREMENT PRIMARY KEY,
-		user_id BIGINT NOT NULL,
-		subject VARCHAR(100) NOT NULL COMMENT '科目（数学、物理など）',
-		prompt TEXT NOT NULL COMMENT '生成時のプロンプト',
-		content TEXT NOT NULL COMMENT '問題文',
-		solution TEXT COMMENT '解答',
-		image_base64 LONGTEXT COMMENT '図（Base64エンコード）',
-		filters JSON COMMENT '生成パラメータ（フィルタ条件）',
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		INDEX idx_user_id (user_id),
-		INDEX idx_subject (subject),
-		INDEX idx_created_at (created_at),
-		FULLTEXT INDEX idx_fulltext_search (content, solution, prompt, subject),
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='問題テーブル'`
-	
-	if _, err := db.Exec(createProblemsTableSQL); err != nil {
-		return fmt.Errorf("problemsテーブルの作成に失敗: %w", err)
+// runMigrationFiles は指定されたディレクトリのマイグレーションファイルを順番に実行します
+func runMigrationFiles(db *sqlx.DB, migrationDir string) error {
+	files, err := os.ReadDir(migrationDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("⚠️ マイグレーションディレクトリが存在しません: %s", migrationDir)
+			return nil
+		}
+		return fmt.Errorf("マイグレーションディレクトリの読み込みに失敗: %w", err)
 	}
-	log.Printf("✅ problemsテーブルを作成/確認しました")
+
+	// .sqlファイルのみをフィルタリングしてソート
+	var sqlFiles []string
+	for _, file := range files {
+		if !file.IsDir() && len(file.Name()) > 4 && file.Name()[len(file.Name())-4:] == ".sql" {
+			sqlFiles = append(sqlFiles, file.Name())
+		}
+	}
+
+	if len(sqlFiles) == 0 {
+		log.Printf("⚠️ マイグレーションファイルが見つかりません")
+		return nil
+	}
+
+	// ファイルを順番に実行
+	for _, filename := range sqlFiles {
+		filepath := fmt.Sprintf("%s/%s", migrationDir, filename)
+		log.Printf("📄 マイグレーション実行: %s", filename)
+		
+		content, err := os.ReadFile(filepath)
+		if err != nil {
+			return fmt.Errorf("マイグレーションファイルの読み込みに失敗 %s: %w", filename, err)
+		}
+
+		if _, err := db.Exec(string(content)); err != nil {
+			return fmt.Errorf("マイグレーションの実行に失敗 %s: %w", filename, err)
+		}
+		
+		log.Printf("✅ マイグレーション完了: %s", filename)
+	}
 	
+	log.Printf("🎉 全マイグレーションが完了しました")
 	return nil
 }
 

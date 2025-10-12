@@ -10,6 +10,7 @@ type UserRepository interface {
 	GetBySchoolCode(ctx context.Context, schoolCode string) (*models.User, error)
 	Create(ctx context.Context, user *models.User) error
 	Update(ctx context.Context, user *models.User) error
+	UpdateFigureRegenerationCount(userID int64, count int) error
 }
 
 type ProblemRepository interface {

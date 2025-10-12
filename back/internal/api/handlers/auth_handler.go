@@ -98,14 +98,16 @@ func (h *AuthHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 
 	// ユーザー情報のレスポンス（パスワードハッシュは除外）
 	response := map[string]interface{}{
-		"success":                   true,
-		"school_code":              user.SchoolCode,
-		"email":                    user.Email,
-		"problem_generation_limit": user.ProblemGenerationLimit,
-		"problem_generation_count": user.ProblemGenerationCount,
-		"role":                     user.Role,
-		"preferred_api":            user.PreferredAPI,
-		"preferred_model":          user.PreferredModel,
+		"success":                    true,
+		"school_code":               user.SchoolCode,
+		"email":                     user.Email,
+		"problem_generation_limit":  user.ProblemGenerationLimit,
+		"problem_generation_count":  user.ProblemGenerationCount,
+		"figure_regeneration_limit": user.FigureRegenerationLimit,
+		"figure_regeneration_count": user.FigureRegenerationCount,
+		"role":                      user.Role,
+		"preferred_api":             user.PreferredAPI,
+		"preferred_model":           user.PreferredModel,
 	}
 
 	utils.WriteJSONResponse(w, http.StatusOK, response)
@@ -140,14 +142,16 @@ func (h *AuthHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 
 	// ユーザープロファイルのレスポンス
 	response := map[string]interface{}{
-		"id":                       user.ID,
-		"school_code":              user.SchoolCode,
-		"email":                    user.Email,
-		"role":                     user.Role,
-		"preferred_api":            user.PreferredAPI,
-		"preferred_model":          user.PreferredModel,
-		"problem_generation_limit": user.ProblemGenerationLimit,
-		"problem_generation_count": user.ProblemGenerationCount,
+		"id":                        user.ID,
+		"school_code":               user.SchoolCode,
+		"email":                     user.Email,
+		"role":                      user.Role,
+		"preferred_api":             user.PreferredAPI,
+		"preferred_model":           user.PreferredModel,
+		"problem_generation_limit":  user.ProblemGenerationLimit,
+		"problem_generation_count":  user.ProblemGenerationCount,
+		"figure_regeneration_limit": user.FigureRegenerationLimit,
+		"figure_regeneration_count": user.FigureRegenerationCount,
 	}
 
 	utils.WriteJSONResponse(w, http.StatusOK, response)

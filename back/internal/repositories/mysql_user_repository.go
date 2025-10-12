@@ -32,7 +32,8 @@ func (r *MySQLUserRepository) GetBySchoolCode(ctx context.Context, schoolCode st
 	user := &models.User{}
 	query := `
 		SELECT id, school_code, email, password_hash, problem_generation_limit, 
-			   problem_generation_count, role, preferred_api, preferred_model, created_at, updated_at
+			   problem_generation_count, figure_regeneration_limit, figure_regeneration_count,
+			   role, preferred_api, preferred_model, created_at, updated_at
 		FROM users WHERE school_code = ?
 	`
 	
@@ -48,7 +49,8 @@ func (r *MySQLUserRepository) GetByID(ctx context.Context, id int64) (*models.Us
 	user := &models.User{}
 	query := `
 		SELECT id, school_code, email, password_hash, problem_generation_limit, 
-			   problem_generation_count, role, preferred_api, preferred_model, created_at, updated_at
+			   problem_generation_count, figure_regeneration_limit, figure_regeneration_count,
+			   role, preferred_api, preferred_model, created_at, updated_at
 		FROM users WHERE id = ?
 	`
 	
@@ -63,13 +65,15 @@ func (r *MySQLUserRepository) GetByID(ctx context.Context, id int64) (*models.Us
 func (r *MySQLUserRepository) Create(ctx context.Context, user *models.User) error {
 	query := `
 		INSERT INTO users (school_code, email, password_hash, problem_generation_limit, 
-						  problem_generation_count, role, preferred_api, preferred_model)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+						  problem_generation_count, figure_regeneration_limit, figure_regeneration_count,
+						  role, preferred_api, preferred_model)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	
 	result, err := r.db.Exec(query, 
 		user.SchoolCode, user.Email, user.PasswordHash, user.ProblemGenerationLimit,
-		user.ProblemGenerationCount, user.Role, user.PreferredAPI, user.PreferredModel)
+		user.ProblemGenerationCount, user.FigureRegenerationLimit, user.FigureRegenerationCount,
+		user.Role, user.PreferredAPI, user.PreferredModel)
 	if err != nil {
 		return fmt.Errorf("ユーザーの作成に失敗: %w", err)
 	}
@@ -87,12 +91,14 @@ func (r *MySQLUserRepository) Update(ctx context.Context, user *models.User) err
 	query := `
 		UPDATE users 
 		SET email = ?, password_hash = ?, problem_generation_limit = ?, 
-			problem_generation_count = ?, role = ?, preferred_api = ?, preferred_model = ?
+			problem_generation_count = ?, figure_regeneration_limit = ?, figure_regeneration_count = ?,
+			role = ?, preferred_api = ?, preferred_model = ?
 		WHERE id = ?
 	`
 	
 	_, err := r.db.Exec(query, 
 		user.Email, user.PasswordHash, user.ProblemGenerationLimit, user.ProblemGenerationCount,
+		user.FigureRegenerationLimit, user.FigureRegenerationCount,
 		user.Role, user.PreferredAPI, user.PreferredModel, user.ID)
 	if err != nil {
 		return fmt.Errorf("ユーザーの更新に失敗: %w", err)
@@ -107,6 +113,17 @@ func (r *MySQLUserRepository) UpdateGenerationCount(userID int64, count int) err
 	_, err := r.db.Exec(query, count, userID)
 	if err != nil {
 		return fmt.Errorf("生成回数の更新に失敗: %w", err)
+	}
+	
+	return nil
+}
+
+func (r *MySQLUserRepository) UpdateFigureRegenerationCount(userID int64, count int) error {
+	query := `UPDATE users SET figure_regeneration_count = ? WHERE id = ?`
+	
+	_, err := r.db.Exec(query, count, userID)
+	if err != nil {
+		return fmt.Errorf("図形再生成回数の更新に失敗: %w", err)
 	}
 	
 	return nil
@@ -140,7 +157,7 @@ func (r *MySQLUserRepository) loadSeedData() error {
 
 	// ヘッダーをスキップ
 	for i, record := range records[1:] {
-		if len(record) < 8 {
+		if len(record) < 11 {
 			log.Printf("⚠️ 行%d: データが不完全です: %v", i+2, record)
 			continue
 		}
@@ -148,6 +165,24 @@ func (r *MySQLUserRepository) loadSeedData() error {
 		limit, err := strconv.Atoi(record[4])
 		if err != nil {
 			log.Printf("⚠️ 行%d: 問題生成制限数の解析に失敗: %v", i+2, err)
+			continue
+		}
+
+		generationCount, err := strconv.Atoi(record[5])
+		if err != nil {
+			log.Printf("⚠️ 行%d: 問題生成カウントの解析に失敗: %v", i+2, err)
+			continue
+		}
+
+		figureLimit, err := strconv.Atoi(record[6])
+		if err != nil {
+			log.Printf("⚠️ 行%d: 図形再生成制限数の解析に失敗: %v", i+2, err)
+			continue
+		}
+
+		figureCount, err := strconv.Atoi(record[7])
+		if err != nil {
+			log.Printf("⚠️ 行%d: 図形再生成カウントの解析に失敗: %v", i+2, err)
 			continue
 		}
 
@@ -159,13 +194,16 @@ func (r *MySQLUserRepository) loadSeedData() error {
 		}
 
 		user := &models.User{
-			SchoolCode:             record[1],
-			Email:                  record[2],
-			PasswordHash:          hashedPassword,
+			SchoolCode:              record[1],
+			Email:                   record[2],
+			PasswordHash:           hashedPassword,
 			ProblemGenerationLimit: limit,
-			Role:                  record[5],
-			PreferredAPI:          record[6],
-			PreferredModel:        record[7],
+			ProblemGenerationCount: generationCount,
+			FigureRegenerationLimit: figureLimit,
+			FigureRegenerationCount: figureCount,
+			Role:                   record[8],
+			PreferredAPI:           record[9],
+			PreferredModel:         record[10],
 		}
 
 		if err := r.Create(context.Background(), user); err != nil {
