@@ -89,6 +89,105 @@ func (r *MySQLProblemRepository) GetByID(ctx context.Context, id int64) (*models
 	return &problem, nil
 }
 
+func (r *MySQLProblemRepository) GetByIDAndUserID(ctx context.Context, id, userID int64) (*models.Problem, error) {
+	var problem models.Problem
+	var filtersJSON []byte
+
+	query := `
+		SELECT id, user_id, subject, prompt, content, solution, image_base64, filters, created_at, updated_at
+		FROM problems
+		WHERE id = ? AND user_id = ?
+	`
+
+	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(
+		&problem.ID,
+		&problem.UserID,
+		&problem.Subject,
+		&problem.Prompt,
+		&problem.Content,
+		&problem.Solution,
+		&problem.ImageBase64,
+		&filtersJSON,
+		&problem.CreatedAt,
+		&problem.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("problem not found or access denied")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get problem: %w", err)
+	}
+
+	if err := json.Unmarshal(filtersJSON, &problem.Filters); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal filters: %w", err)
+	}
+
+	return &problem, nil
+}
+
+func (r *MySQLProblemRepository) Update(ctx context.Context, problem *models.Problem) error {
+	filtersJSON, err := json.Marshal(problem.Filters)
+	if err != nil {
+		return fmt.Errorf("failed to marshal filters: %w", err)
+	}
+
+	query := `
+		UPDATE problems 
+		SET subject = ?, prompt = ?, content = ?, solution = ?, image_base64 = ?, filters = ?, updated_at = NOW()
+		WHERE id = ? AND user_id = ?
+	`
+
+	result, err := r.db.ExecContext(ctx, query,
+		problem.Subject,
+		problem.Prompt,
+		problem.Content,
+		problem.Solution,
+		problem.ImageBase64,
+		filtersJSON,
+		problem.ID,
+		problem.UserID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update problem: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("problem not found or access denied")
+	}
+
+	return nil
+}
+
+func (r *MySQLProblemRepository) UpdateGeometry(ctx context.Context, id int64, imageBase64 string) error {
+	query := `
+		UPDATE problems 
+		SET image_base64 = ?, updated_at = NOW()
+		WHERE id = ?
+	`
+
+	result, err := r.db.ExecContext(ctx, query, imageBase64, id)
+	if err != nil {
+		return fmt.Errorf("failed to update geometry: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("problem not found")
+	}
+
+	return nil
+}
+
 func (r *MySQLProblemRepository) GetByUserID(ctx context.Context, userID int64, limit, offset int) ([]*models.Problem, error) {
 	query := `
 		SELECT id, user_id, subject, prompt, content, solution, image_base64, filters, created_at, updated_at

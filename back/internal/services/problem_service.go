@@ -15,6 +15,8 @@ import (
 type ProblemService interface {
 	GenerateProblem(ctx context.Context, req models.GenerateProblemRequest, userSchoolCode string) (*models.Problem, error)
 	GeneratePDF(ctx context.Context, req models.PDFGenerateRequest) (string, error)
+	UpdateProblem(ctx context.Context, req models.UpdateProblemRequest, userID int64) (*models.Problem, error)
+	RegenerateGeometry(ctx context.Context, req models.RegenerateGeometryRequest, userID int64) (string, error)
 	SearchProblemsByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error)
 	SearchProblemsByFilters(ctx context.Context, userID int64, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 	SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
@@ -475,4 +477,100 @@ func (s *problemService) GetUserProblems(ctx context.Context, userID int64, limi
 	}
 	
 	return problems, nil
+}
+
+// UpdateProblem 問題のテキスト内容を更新
+func (s *problemService) UpdateProblem(ctx context.Context, req models.UpdateProblemRequest, userID int64) (*models.Problem, error) {
+	if s.problemRepo == nil {
+		return nil, fmt.Errorf("problem repository is not initialized")
+	}
+
+	// 問題の所有者確認
+	existingProblem, err := s.problemRepo.GetByIDAndUserID(ctx, req.ID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get problem: %w", err)
+	}
+
+	// 更新するフィールドをコピー
+	updatedProblem := *existingProblem
+	updatedProblem.Content = req.Content
+	updatedProblem.Solution = req.Solution
+	updatedProblem.UpdatedAt = time.Now()
+
+	// データベースの更新
+	if err := s.problemRepo.Update(ctx, &updatedProblem); err != nil {
+		return nil, fmt.Errorf("failed to update problem: %w", err)
+	}
+
+	fmt.Printf("✅ Problem %d updated successfully\n", req.ID)
+	return &updatedProblem, nil
+}
+
+// RegenerateGeometry 問題の図形を再生成
+func (s *problemService) RegenerateGeometry(ctx context.Context, req models.RegenerateGeometryRequest, userID int64) (string, error) {
+	if s.problemRepo == nil {
+		return "", fmt.Errorf("problem repository is not initialized")
+	}
+
+	// 問題の所有者確認
+	problem, err := s.problemRepo.GetByIDAndUserID(ctx, req.ID, userID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get problem: %w", err)
+	}
+
+	fmt.Printf("🎨 Regenerating geometry for problem ID: %d\n", req.ID)
+
+	// 使用する問題文を決定（編集後の問題文がある場合はそれを使用）
+	contentToAnalyze := problem.Content
+	if req.Content != "" {
+		contentToAnalyze = req.Content
+		fmt.Printf("🔄 Using edited content for geometry regeneration\n")
+		fmt.Printf("📝 Edited content preview: %s\n", contentToAnalyze[:min(200, len(contentToAnalyze))])
+	} else {
+		fmt.Printf("📝 Using original content for geometry regeneration\n")
+	}
+
+	var imageBase64 string
+
+	// 編集後の問題文を解析して図形を生成
+	analysis, err := s.coreClient.AnalyzeProblem(ctx, contentToAnalyze, problem.Filters)
+	if err != nil {
+		return "", fmt.Errorf("failed to analyze problem for geometry: %w", err)
+	}
+
+	fmt.Printf("📊 Analysis result - needs_geometry: %t, detected_shapes: %v\n", 
+		analysis.NeedsGeometry, analysis.DetectedShapes)
+
+	if analysis.NeedsGeometry && len(analysis.DetectedShapes) > 0 {
+		// 最初に検出された図形を描画
+		shapeType := analysis.DetectedShapes[0]
+		fmt.Printf("🎨 Generating geometry for shape: %s\n", shapeType)
+		
+		if params, exists := analysis.SuggestedParameters[shapeType]; exists {
+			imageBase64, err = s.coreClient.GenerateGeometry(ctx, shapeType, params)
+			if err != nil {
+				return "", fmt.Errorf("failed to generate geometry: %w", err)
+			}
+			fmt.Printf("✅ Geometry generated successfully for %s\n", shapeType)
+		} else {
+			return "", fmt.Errorf("no parameters found for shape: %s", shapeType)
+		}
+	} else {
+		return "", fmt.Errorf("no geometry needed for this problem")
+	}
+
+	// データベースの図形を更新
+	if err := s.problemRepo.UpdateGeometry(ctx, req.ID, imageBase64); err != nil {
+		return "", fmt.Errorf("failed to update geometry in database: %w", err)
+	}
+
+	fmt.Printf("✅ Geometry for problem %d regenerated successfully\n", req.ID)
+	return imageBase64, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

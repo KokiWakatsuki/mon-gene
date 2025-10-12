@@ -27,6 +27,9 @@ class GeometryService:
                 self._draw_circle(ax, parameters, labels)
             elif shape_type == "square":
                 self._draw_square(ax, parameters, labels)
+            elif shape_type == "cuboid":
+                # 3D図形の場合は別の処理
+                return await self._draw_cuboid_3d(parameters, labels)
             else:
                 # デフォルトは正方形
                 self._draw_square(ax, {"side": 5}, labels)
@@ -220,3 +223,99 @@ class GeometryService:
         
         ax.set_xlim(-radius-1, radius+1)
         ax.set_ylim(-radius-1, radius+1)
+    
+    async def _draw_cuboid_3d(self, parameters, labels):
+        """3D直方体を描画"""
+        try:
+            width = parameters.get("width", 6)
+            depth = parameters.get("depth", 6)
+            height = parameters.get("height", 8)
+            
+            # 3Dプロット
+            fig = plt.figure(figsize=(10, 8))
+            ax = fig.add_subplot(111, projection='3d')
+            
+            # 直方体の頂点を定義 (ABCD-EFGHの順番)
+            vertices = np.array([
+                [0, 0, 0],        # A (0,0,0)
+                [width, 0, 0],    # B (width,0,0)
+                [width, depth, 0], # C (width,depth,0)
+                [0, depth, 0],    # D (0,depth,0)
+                [0, 0, height],   # E (0,0,height)
+                [width, 0, height], # F (width,0,height)
+                [width, depth, height], # G (width,depth,height)
+                [0, depth, height]  # H (0,depth,height)
+            ])
+            
+            # 各面を定義
+            faces = [
+                [vertices[0], vertices[1], vertices[2], vertices[3]],  # 底面 ABCD
+                [vertices[4], vertices[5], vertices[6], vertices[7]],  # 上面 EFGH
+                [vertices[0], vertices[1], vertices[5], vertices[4]],  # 前面 ABFE
+                [vertices[2], vertices[3], vertices[7], vertices[6]],  # 後面 CDHG
+                [vertices[0], vertices[3], vertices[7], vertices[4]],  # 左面 ADHE
+                [vertices[1], vertices[2], vertices[6], vertices[5]]   # 右面 BCGF
+            ]
+            
+            # 面を描画（透明度を設定して内部が見えるようにする）
+            for face in faces:
+                poly = [[face[j][k] for k in range(3)] for j in range(4)]
+                ax.add_collection3d(Poly3DCollection([poly], alpha=0.1, facecolor='lightblue', edgecolor='blue', linewidth=1.5))
+            
+            # 辺を描画
+            edges = [
+                [0, 1], [1, 2], [2, 3], [3, 0],  # 底面
+                [4, 5], [5, 6], [6, 7], [7, 4],  # 上面
+                [0, 4], [1, 5], [2, 6], [3, 7]   # 縦の辺
+            ]
+            
+            for edge in edges:
+                points = vertices[edge]
+                ax.plot3D(*points.T, 'b-', linewidth=2)
+            
+            # 頂点ラベル（A,B,C,D,E,F,G,H）
+            labels_text = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+            if labels:
+                for i, (vertex, label) in enumerate(zip(vertices, labels_text)):
+                    ax.text(vertex[0], vertex[1], vertex[2], label, size=14, color='red', weight='bold')
+            
+            # 座標軸の設定
+            max_range = max(width, depth, height)
+            ax.set_xlim([-1, max_range + 1])
+            ax.set_ylim([-1, max_range + 1])
+            ax.set_zlim([-1, max_range + 1])
+            
+            # 軸ラベル
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_zlabel('Z')
+            
+            # 視点を設定
+            ax.view_init(elev=20, azim=-75)
+            
+            # グリッドを表示
+            ax.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            
+            # 画像をBase64エンコード
+            buffer = io.BytesIO()
+            plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+            buffer.seek(0)
+            image_base64 = base64.b64encode(buffer.getvalue()).decode()
+            plt.close()
+            
+            return GeometryResponse(
+                success=True,
+                image_base64=image_base64,
+                shape_type="cuboid"
+            )
+            
+        except Exception as e:
+            plt.close()
+            print(f"Error drawing 3D cuboid: {e}")
+            return GeometryResponse(
+                success=False,
+                image_base64="",
+                shape_type="cuboid"
+            )

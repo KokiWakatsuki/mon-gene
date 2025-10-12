@@ -40,3 +40,26 @@ type PDFGenerateResponse struct {
 	PDFBase64 string `json:"pdf_base64,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
+
+type UpdateProblemRequest struct {
+	ID       int64  `json:"id" validate:"required"`
+	Content  string `json:"content" validate:"required"`
+	Solution string `json:"solution,omitempty"`
+}
+
+type UpdateProblemResponse struct {
+	Success bool     `json:"success"`
+	Problem *Problem `json:"problem,omitempty"`
+	Error   string   `json:"error,omitempty"`
+}
+
+type RegenerateGeometryRequest struct {
+	ID      int64  `json:"id" validate:"required"`
+	Content string `json:"content,omitempty"`
+}
+
+type RegenerateGeometryResponse struct {
+	Success     bool   `json:"success"`
+	ImageBase64 string `json:"image_base64,omitempty"`
+	Error       string `json:"error,omitempty"`
+}

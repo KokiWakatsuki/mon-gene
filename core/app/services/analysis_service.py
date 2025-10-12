@@ -13,7 +13,13 @@ class AnalysisService:
             "グラフ", "座標", "面積", "体積", "周囲", "直線", "曲線",
             "立方体", "直方体", "円錐", "球", "角度", "辺", "頂点",
             "対角線", "半径", "直径", "高さ", "底面", "側面",
-            "三角柱", "四角柱", "円柱", "角柱", "柱", "錐", "pyramid"
+            "三角柱", "四角柱", "円柱", "角柱", "柱", "錐", "pyramid",
+            # 3D図形のキーワードを追加
+            "直方体", "立方体", "cube", "cuboid", "rectangular prism",
+            "上面", "下面", "底面", "側面", "頂点", "辺", "面",
+            "x軸", "y軸", "z軸", "座標系", "原点", "平面", "交線",
+            "断面", "切断", "立体", "空間", "3D", "三次元",
+            "ABCD-EFGH", "直方体ABCD", "頂点A", "点P", "点Q", "点R", "点S"
         ]
         
         needs_geometry = any(keyword in problem_text for keyword in geometry_keywords)
@@ -63,6 +69,35 @@ class AnalysisService:
                         suggested_parameters["circle"] = {"radius": numbers[0]}
                 else:
                     suggested_parameters["circle"] = {"radius": 3}
+            
+            # 直方体・立方体の検出
+            if any(word in problem_text for word in ["直方体", "立方体", "cuboid", "cube", "rectangular prism", "ABCD-EFGH"]):
+                detected_shapes.append("cuboid")
+                numbers = self._extract_numbers(problem_text)
+                if len(numbers) >= 3:
+                    # 3つ以上の数値がある場合は幅、奥行き、高さとして使用
+                    suggested_parameters["cuboid"] = {
+                        "width": numbers[0], 
+                        "depth": numbers[1], 
+                        "height": numbers[2]
+                    }
+                elif len(numbers) >= 2:
+                    # 2つの数値がある場合は、片方を高さとする
+                    suggested_parameters["cuboid"] = {
+                        "width": numbers[0], 
+                        "depth": numbers[0], 
+                        "height": numbers[1]
+                    }
+                elif len(numbers) >= 1:
+                    # 1つの場合は立方体として扱う
+                    suggested_parameters["cuboid"] = {
+                        "width": numbers[0], 
+                        "depth": numbers[0], 
+                        "height": numbers[0]
+                    }
+                else:
+                    # デフォルト値
+                    suggested_parameters["cuboid"] = {"width": 6, "depth": 6, "height": 8}
         
         return ProblemAnalysisResponse(
             success=True,

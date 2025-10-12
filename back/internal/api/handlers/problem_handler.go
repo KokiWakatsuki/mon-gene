@@ -268,6 +268,118 @@ func (h *ProblemHandler) GetUserProblems(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// UpdateProblem 問題の内容を更新
+func (h *ProblemHandler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.UpdateProblemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.ID <= 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題IDは必須です")
+		return
+	}
+	if req.Content == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+		return
+	}
+
+	// 問題を更新
+	updatedProblem, err := h.problemService.UpdateProblem(r.Context(), req, user.ID)
+	if err != nil {
+		if err.Error() == "problem not found or access denied" {
+			utils.WriteErrorResponse(w, http.StatusForbidden, "問題が見つからないか、アクセス権限がありません")
+			return
+		}
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := models.UpdateProblemResponse{
+		Success: true,
+		Problem: updatedProblem,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// RegenerateGeometry 問題の図形を再生成
+func (h *ProblemHandler) RegenerateGeometry(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.RegenerateGeometryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.ID <= 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題IDは必須です")
+		return
+	}
+
+	// 図形を再生成
+	imageBase64, err := h.problemService.RegenerateGeometry(r.Context(), req, user.ID)
+	if err != nil {
+		if err.Error() == "problem not found or access denied" {
+			utils.WriteErrorResponse(w, http.StatusForbidden, "問題が見つからないか、アクセス権限がありません")
+			return
+		}
+		if err.Error() == "no geometry needed for this problem" {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "この問題には図形は不要です")
+			return
+		}
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := models.RegenerateGeometryResponse{
+		Success:     true,
+		ImageBase64: imageBase64,
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
 // SearchProblemsByFilters パラメータ（フィルター）で問題を検索
 func (h *ProblemHandler) SearchProblemsByFilters(w http.ResponseWriter, r *http.Request) {
 	// 認証トークンを取得

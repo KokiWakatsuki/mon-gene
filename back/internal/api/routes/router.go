@@ -97,6 +97,25 @@ func NewRouter(
 		}
 	})
 
+	// Problem editing endpoints
+	mux.HandleFunc("/api/problems/update", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PUT", "OPTIONS":
+			problemHandler.UpdateProblem(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	mux.HandleFunc("/api/problems/regenerate-geometry", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST", "OPTIONS":
+			problemHandler.RegenerateGeometry(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
 	// Chat endpoint
 	mux.HandleFunc("/api/chat", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

@@ -935,6 +935,43 @@ export default function Home() {
         problemContent={previewModal.problemContent}
         imageBase64={previewModal.imageBase64}
         solutionText={previewModal.solutionText}
+        onUpdate={(updatedData) => {
+          // 問題リストを更新
+          setProblems(prev => prev.map(problem => 
+            problem.id === previewModal.problemId 
+              ? { 
+                  ...problem, 
+                  content: updatedData.content, 
+                  solution: updatedData.solution,
+                  imageBase64: updatedData.imageBase64 
+                }
+              : problem
+          ));
+
+          // 検索結果も更新
+          if (isSearchMode) {
+            setSearchResults(prev => prev.map(problem => 
+              problem.id === previewModal.problemId 
+                ? { 
+                    ...problem, 
+                    content: updatedData.content, 
+                    solution: updatedData.solution,
+                    imageBase64: updatedData.imageBase64 
+                  }
+                : problem
+            ));
+          }
+
+          // プレビューモーダルの状態も更新
+          setPreviewModal(prev => ({
+            ...prev,
+            problemContent: updatedData.content,
+            solutionText: updatedData.solution,
+            imageBase64: updatedData.imageBase64,
+          }));
+
+          console.log('✅ Frontend state updated with:', updatedData);
+        }}
       />
 
       <LoadingModal
