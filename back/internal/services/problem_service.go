@@ -227,6 +227,63 @@ func (s *problemService) GeneratePDF(ctx context.Context, req models.PDFGenerate
 	return pdfBase64, nil
 }
 
+// createGeometryRegenerationPrompt creates a prompt for regenerating geometry from existing problem text
+func (s *problemService) createGeometryRegenerationPrompt(problemText string) string {
+	return `あなたは日本の中学校の数学教師です。以下の問題文から、図形描画用のPythonコードを生成してください。
+
+【既存の問題文】
+` + problemText + `
+
+**出力形式**：
+図形が必要な場合は、以下の形式で図形描画用のPythonコードを出力してください：
+
+---GEOMETRY_CODE_START---
+# 図形描画コード（問題に特化した図形を描画）
+# 重要: import文は絶対に記述しないでください（事前にインポート済み）
+# 利用可能な変数: plt, patches, np, numpy, Axes3D, Poly3DCollection
+
+# 2D図形の場合
+fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+
+# 3D図形の場合は以下を使用
+# fig = plt.figure(figsize=(8, 8))
+# ax = fig.add_subplot(111, projection='3d')
+
+# ここに問題文に応じた具体的な図形描画コードを記述
+# 例：正方形ABCD、点P、Q、Rの位置、線分、座標軸など
+
+ax.set_aspect('equal')
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+---GEOMETRY_CODE_END---
+
+重要な指示：
+1. 問題文に含まれる具体的な数値や条件を図形に正確に反映してください
+2. 点の位置、線分の長さ、比率などを問題文通りに描画してください
+3. **座標軸の表示判定**：
+   - 問題文のキーワードで判定
+   - 「座標」「グラフ」「関数」「x軸」「y軸」があれば、ax.grid(True, alpha=0.3) で座標軸を表示
+   - 「体積」「面積」「角度」「長さ」「直方体」「円錐」「球」があれば、ax.axis('off') で座標軸を非表示
+4. 図形のラベルは必ずアルファベット（A、B、C、P、Q、R等）を使用してください
+5. ax.text()で日本語を使用しないでください
+6. タイトルやラベルは英語またはアルファベットのみを使用してください
+7. import文は記述しないでください（plt, np, patches, Axes3D, Poly3DCollectionは既に利用可能です）
+8. numpy関数はnp.array(), np.linspace(), np.meshgrid()等で使用してください
+9. 3D図形が必要な場合は以下を使用してください：
+   - fig = plt.figure(figsize=(8, 8))
+   - ax = fig.add_subplot(111, projection='3d')
+   - ax.plot_surface(), ax.add_collection3d(Poly3DCollection())等
+   - ax.view_init(elev=20, azim=-75)で視点を調整
+10. 切断図形や断面図が必要な場合は、切断面をPoly3DCollectionで描画してください
+11. **頂点ラベル（必須）**: 
+   - 全ての頂点にアルファベット（A、B、C、D、E、F、G、H等）を表示
+   - ax.text(x, y, z, 'A', size=16, color='black', weight='bold')
+   - 立方体: A,B,C,D（下面）、E,F,G,H（上面）
+   - 円錐: O（頂点）、A,B,C...（底面）
+
+**注意**: 問題文に図形が不要な場合は、コードブロックを出力しないでください。`
+}
+
 // enhancePromptForGeometry enhances the prompt to include geometry generation instructions
 func (s *problemService) enhancePromptForGeometry(prompt string) string {
 	return `あなたは日本の中学校の数学教師です。以下の条件に従って、日本語で数学の問題を作成してください。
@@ -518,45 +575,113 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 		return "", fmt.Errorf("failed to get problem: %w", err)
 	}
 
-	fmt.Printf("🎨 Regenerating geometry for problem ID: %d\n", req.ID)
+	// ユーザー情報を取得（AIクライアント選択のため）
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user: %w", err)
+	}
+
+	fmt.Printf("🎨 [RegenerateGeometry] Starting geometry regeneration for problem ID: %d\n", req.ID)
 
 	// 使用する問題文を決定（編集後の問題文がある場合はそれを使用）
 	contentToAnalyze := problem.Content
 	if req.Content != "" {
 		contentToAnalyze = req.Content
-		fmt.Printf("🔄 Using edited content for geometry regeneration\n")
-		fmt.Printf("📝 Edited content preview: %s\n", contentToAnalyze[:min(200, len(contentToAnalyze))])
+		fmt.Printf("🔄 [RegenerateGeometry] Using edited content for geometry regeneration\n")
+		fmt.Printf("📝 [RegenerateGeometry] Edited content preview: %s\n", contentToAnalyze[:min(200, len(contentToAnalyze))])
 	} else {
-		fmt.Printf("📝 Using original content for geometry regeneration\n")
+		fmt.Printf("📝 [RegenerateGeometry] Using original content for geometry regeneration\n")
 	}
 
 	var imageBase64 string
 
-	// 編集後の問題文を解析して図形を生成
-	analysis, err := s.coreClient.AnalyzeProblem(ctx, contentToAnalyze, problem.Filters)
+	// 問題生成時と同じフローを適用：AIで図形コード生成→実行
+	fmt.Printf("🤖 [RegenerateGeometry] Generating matplotlib code with AI\n")
+	
+	// 図形生成専用のプロンプトを構築
+	geometryPrompt := s.createGeometryRegenerationPrompt(contentToAnalyze)
+	fmt.Printf("🔍 [RegenerateGeometry] Enhanced prompt created\n")
+	
+	// ユーザーの設定に基づいてAIクライアントを選択
+	preferredAPI := user.PreferredAPI
+	preferredModel := user.PreferredModel
+	
+	if preferredAPI == "" || preferredModel == "" {
+		return "", fmt.Errorf("AI設定が不完全です。設定ページでAPIとモデルを選択してください")
+	}
+	
+	fmt.Printf("🤖 [RegenerateGeometry] Using AI - API: %s, Model: %s\n", preferredAPI, preferredModel)
+	
+	var aiResponse string
+	switch preferredAPI {
+	case "openai", "chatgpt":
+		dynamicClient := clients.NewOpenAIClient(preferredModel)
+		aiResponse, err = dynamicClient.GenerateContent(ctx, geometryPrompt)
+	case "google", "gemini":
+		dynamicClient := clients.NewGoogleClient(preferredModel)
+		aiResponse, err = dynamicClient.GenerateContent(ctx, geometryPrompt)
+	case "claude", "laboratory":
+		dynamicClient := clients.NewClaudeClient(preferredModel)
+		aiResponse, err = dynamicClient.GenerateContent(ctx, geometryPrompt)
+	default:
+		return "", fmt.Errorf("サポートされていないAPI「%s」が指定されています", preferredAPI)
+	}
+	
 	if err != nil {
-		return "", fmt.Errorf("failed to analyze problem for geometry: %w", err)
+		fmt.Printf("❌ [RegenerateGeometry] AI failed, falling back to analysis: %v\n", err)
+	} else {
+		fmt.Printf("✅ [RegenerateGeometry] AI response generated\n")
+		
+		// AIからPythonコードを抽出
+		pythonCode := s.extractPythonCode(aiResponse)
+		fmt.Printf("🐍 [RegenerateGeometry] Python code extracted: %t\n", pythonCode != "")
+		
+		if pythonCode != "" {
+			fmt.Printf("🎨 [RegenerateGeometry] Generating custom geometry with Python code\n")
+			// カスタムPythonコードで図形を生成
+			imageBase64, err = s.coreClient.GenerateCustomGeometry(ctx, pythonCode, contentToAnalyze)
+			if err != nil {
+				fmt.Printf("❌ [RegenerateGeometry] Custom geometry generation failed: %v\n", err)
+			} else {
+				fmt.Printf("✅ [RegenerateGeometry] Custom geometry generated successfully\n")
+			}
+		}
 	}
 
-	fmt.Printf("📊 Analysis result - needs_geometry: %t, detected_shapes: %v\n", 
-		analysis.NeedsGeometry, analysis.DetectedShapes)
-
-	if analysis.NeedsGeometry && len(analysis.DetectedShapes) > 0 {
-		// 最初に検出された図形を描画
-		shapeType := analysis.DetectedShapes[0]
-		fmt.Printf("🎨 Generating geometry for shape: %s\n", shapeType)
+	// AIによる図形生成が失敗した場合、従来の分析方法にフォールバック
+	if imageBase64 == "" {
+		fmt.Printf("🔍 [RegenerateGeometry] Falling back to problem analysis\n")
 		
-		if params, exists := analysis.SuggestedParameters[shapeType]; exists {
-			imageBase64, err = s.coreClient.GenerateGeometry(ctx, shapeType, params)
-			if err != nil {
-				return "", fmt.Errorf("failed to generate geometry: %w", err)
-			}
-			fmt.Printf("✅ Geometry generated successfully for %s\n", shapeType)
-		} else {
-			return "", fmt.Errorf("no parameters found for shape: %s", shapeType)
+		analysis, err := s.coreClient.AnalyzeProblem(ctx, contentToAnalyze, problem.Filters)
+		if err != nil {
+			return "", fmt.Errorf("failed to analyze problem for geometry: %w", err)
 		}
-	} else {
-		return "", fmt.Errorf("no geometry needed for this problem")
+
+		fmt.Printf("📊 [RegenerateGeometry] Analysis result - needs_geometry: %t, detected_shapes: %v\n", 
+			analysis.NeedsGeometry, analysis.DetectedShapes)
+
+		if analysis.NeedsGeometry && len(analysis.DetectedShapes) > 0 {
+			// 最初に検出された図形を描画
+			shapeType := analysis.DetectedShapes[0]
+			fmt.Printf("🎨 [RegenerateGeometry] Generating geometry for shape: %s\n", shapeType)
+			
+			if params, exists := analysis.SuggestedParameters[shapeType]; exists {
+				imageBase64, err = s.coreClient.GenerateGeometry(ctx, shapeType, params)
+				if err != nil {
+					return "", fmt.Errorf("failed to generate geometry: %w", err)
+				}
+				fmt.Printf("✅ [RegenerateGeometry] Geometry generated successfully for %s\n", shapeType)
+			} else {
+				return "", fmt.Errorf("no parameters found for shape: %s", shapeType)
+			}
+		} else {
+			return "", fmt.Errorf("no geometry needed for this problem")
+		}
+	}
+
+	// 図形が生成されなかった場合
+	if imageBase64 == "" {
+		return "", fmt.Errorf("failed to generate geometry for this problem")
 	}
 
 	// データベースの図形を更新
@@ -564,7 +689,7 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 		return "", fmt.Errorf("failed to update geometry in database: %w", err)
 	}
 
-	fmt.Printf("✅ Geometry for problem %d regenerated successfully\n", req.ID)
+	fmt.Printf("✅ [RegenerateGeometry] Geometry for problem %d regenerated successfully\n", req.ID)
 	return imageBase64, nil
 }
 

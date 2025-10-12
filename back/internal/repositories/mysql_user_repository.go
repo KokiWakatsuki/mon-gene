@@ -44,7 +44,7 @@ func (r *MySQLUserRepository) GetBySchoolCode(ctx context.Context, schoolCode st
 	return user, nil
 }
 
-func (r *MySQLUserRepository) FindByID(ctx context.Context, id int64) (*models.User, error) {
+func (r *MySQLUserRepository) GetByID(ctx context.Context, id int64) (*models.User, error) {
 	user := &models.User{}
 	query := `
 		SELECT id, school_code, email, password_hash, problem_generation_limit, 

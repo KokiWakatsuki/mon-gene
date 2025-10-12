@@ -151,6 +151,19 @@ func (r *memoryUserRepository) createDefaultUser() {
 	log.Printf("📝 デフォルトユーザーを作成しました: SchoolCode=%s", defaultUser.SchoolCode)
 }
 
+func (r *memoryUserRepository) GetByID(ctx context.Context, id int64) (*models.User, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	
+	for _, user := range r.users {
+		if user.ID == id {
+			return user, nil
+		}
+	}
+	
+	return nil, fmt.Errorf("user not found")
+}
+
 func (r *memoryUserRepository) GetBySchoolCode(ctx context.Context, schoolCode string) (*models.User, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()

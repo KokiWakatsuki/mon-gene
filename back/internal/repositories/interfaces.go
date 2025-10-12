@@ -6,6 +6,7 @@ import (
 )
 
 type UserRepository interface {
+	GetByID(ctx context.Context, id int64) (*models.User, error)
 	GetBySchoolCode(ctx context.Context, schoolCode string) (*models.User, error)
 	Create(ctx context.Context, user *models.User) error
 	Update(ctx context.Context, user *models.User) error
