@@ -49,24 +49,8 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
   const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('partial');
   
-  // 5段階生成システム用の状態
-  const [generationMode, setGenerationMode] = useState<'single' | 'two-stage' | 'five-stage'>('single');
-  const [firstStageResult, setFirstStageResult] = useState<{
-    problemText: string;
-    imageBase64?: string;
-    geometryCode?: string;
-    log: string;
-  } | null>(null);
-  const [secondStageResult, setSecondStageResult] = useState<{
-    solutionSteps: string;
-    finalSolution: string;
-    calculationResults: string;
-    calculationProgram?: string;
-    log: string;
-  } | null>(null);
-  const [generationLogs, setGenerationLogs] = useState<string>('');
-  const [showLogs, setShowLogs] = useState<boolean>(false);
-  const [isFirstStageComplete, setIsFirstStageComplete] = useState<boolean>(false);
+  // 生成システム用の状態
+  const [generationMode, setGenerationMode] = useState<'single' | 'five-stage'>('single');
   
   // 5段階生成システム専用の状態
   const [fiveStageResults, setFiveStageResults] = useState<{
@@ -471,281 +455,6 @@ export default function Home() {
     return userInfo.problem_generation_count >= userInfo.problem_generation_limit;
   };
 
-  // 2段階生成システムの関数群
-  
-  // 1回目のAPI呼び出し（問題文・図形生成）
-  const handleGenerateFirstStage = async () => {
-    // 上限チェック
-    if (isGenerationLimitReached()) {
-      alert(`問題生成回数の上限（${userInfo?.problem_generation_limit}回）に達しました。これ以上問題を生成することはできません。`);
-      return;
-    }
-
-    // 必須フィルターのチェック
-    const requiredFilters = ['学年', '単元', '難易度', '必要な公式数', '計算量', '数値の複雑性', '問題文の文章量'];
-    const missingFilters = requiredFilters.filter(filter => 
-      !selectedFilters[filter] || selectedFilters[filter].length === 0
-    );
-    
-    if (missingFilters.length > 0) {
-      alert(`以下の項目を選択してください: ${missingFilters.join(', ')}`);
-      return;
-    }
-    
-    setIsLoading(true);
-    setGenerationLogs('');
-    setFirstStageResult(null);
-    setSecondStageResult(null);
-    setIsFirstStageComplete(false);
-    
-    try {
-      const prompt = createPromptFromFilters();
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('認証トークンが見つかりません。再度ログインしてください。');
-      }
-
-      console.log('🚀 [FirstStage] 1回目のAPI呼び出しを開始');
-      
-      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-first-stage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          prompt: prompt,
-          subject: activeSubject,
-          filters: selectedFilters
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`1回目API呼び出しエラー: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || '1回目のAPI呼び出しに失敗しました');
-      }
-      
-      const result = {
-        problemText: data.problem_text || data.problemText || '',
-        imageBase64: data.image_base64 || data.imageBase64,
-        geometryCode: data.geometry_code || data.geometryCode,
-        log: data.log || ''
-      };
-      
-      setFirstStageResult(result);
-      setGenerationLogs(result.log);
-      setIsFirstStageComplete(true);
-      setIsLoading(false);
-      
-      console.log('✅ [FirstStage] 1回目のAPI呼び出し完了:', result);
-      
-    } catch (error) {
-      setIsLoading(false);
-      console.error('1回目API呼び出しエラー:', error);
-      await handleGenerationError(error);
-    }
-  };
-
-  // 2回目のAPI呼び出し（解答手順・数値計算）
-  const handleGenerateSecondStage = async () => {
-    if (!firstStageResult) {
-      alert('先に1回目の生成を完了してください');
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('認証トークンが見つかりません。再度ログインしてください。');
-      }
-
-      console.log('🚀 [SecondStage] 2回目のAPI呼び出しを開始');
-      
-      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-second-stage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          problem_text: firstStageResult.problemText,
-          geometry_code: firstStageResult.geometryCode || ''
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`2回目API呼び出しエラー: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || '2回目のAPI呼び出しに失敗しました');
-      }
-      
-      const result = {
-        solutionSteps: data.solution_steps || data.solutionSteps || '',
-        finalSolution: data.final_solution || data.finalSolution || '',
-        calculationResults: data.calculation_results || data.calculationResults || '',
-        calculationProgram: data.calculation_program || data.calculationProgram,
-        log: data.log || ''
-      };
-      
-      setSecondStageResult(result);
-      setGenerationLogs(prev => prev + '\n' + result.log);
-      setIsLoading(false);
-      
-      console.log('✅ [SecondStage] 2回目のAPI呼び出し完了:', result);
-      
-      // 完成した問題を問題リストに追加
-      const problemTitle = `2段階生成問題 ${problems.length + 1}`;
-      const newProblemId = String(problems.length + 1);
-      const finalSolution = `${result.solutionSteps}\n\n${result.finalSolution}`;
-      
-      const newProblem = {
-        id: newProblemId,
-        title: problemTitle,
-        content: firstStageResult.problemText,
-        solution: finalSolution,
-        imageBase64: firstStageResult.imageBase64,
-      };
-      
-      setProblems(prev => [...prev, newProblem]);
-      
-      // ユーザー情報を更新（生成回数をインクリメント）
-      await fetchUserInfo();
-      
-      // プレビューモーダルを表示（2段階生成の詳細データを含む）
-      setPreviewModal({
-        isOpen: true,
-        problemId: newProblemId,
-        problemTitle: problemTitle,
-        problemContent: firstStageResult.problemText,
-        imageBase64: firstStageResult.imageBase64,
-        solutionText: finalSolution, // 従来形式の互換性維持
-        // 2段階生成システム用の追加データ
-        solutionSteps: result.solutionSteps,
-        calculationProgram: result.calculationProgram,
-        calculationResults: result.calculationResults,
-        finalSolution: result.finalSolution,
-        generationLogs: firstStageResult.log + '\n' + result.log,
-      });
-      
-    } catch (error) {
-      setIsLoading(false);
-      console.error('2回目API呼び出しエラー:', error);
-      await handleGenerationError(error);
-    }
-  };
-
-  // 全体の2段階生成プロセス（一気に実行）
-  const handleGenerateTwoStage = async () => {
-    // 上限チェック
-    if (isGenerationLimitReached()) {
-      alert(`問題生成回数の上限（${userInfo?.problem_generation_limit}回）に達しました。これ以上問題を生成することはできません。`);
-      return;
-    }
-
-    // 必須フィルターのチェック
-    const requiredFilters = ['学年', '単元', '難易度', '必要な公式数', '計算量', '数値の複雑性', '問題文の文章量'];
-    const missingFilters = requiredFilters.filter(filter => 
-      !selectedFilters[filter] || selectedFilters[filter].length === 0
-    );
-    
-    if (missingFilters.length > 0) {
-      alert(`以下の項目を選択してください: ${missingFilters.join(', ')}`);
-      return;
-    }
-    
-    setIsLoading(true);
-    setGenerationLogs('');
-    setFirstStageResult(null);
-    setSecondStageResult(null);
-    setIsFirstStageComplete(false);
-    
-    try {
-      const prompt = createPromptFromFilters();
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('認証トークンが見つかりません。再度ログインしてください。');
-      }
-
-      console.log('🚀 [TwoStage] 2段階生成プロセス全体を開始');
-      
-      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-problem-two-stage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          prompt: prompt,
-          subject: activeSubject,
-          filters: selectedFilters
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`2段階生成エラー: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || '2段階生成に失敗しました');
-      }
-      
-      // ログを設定
-      const combinedLogs = (data.first_stage_log || data.firstStageLog || '') + 
-                          '\n' + 
-                          (data.second_stage_log || data.secondStageLog || '');
-      setGenerationLogs(combinedLogs);
-      
-      // 結果を問題リストに追加
-      const problemTitle = `2段階生成問題 ${problems.length + 1}`;
-      const newProblemId = String(problems.length + 1);
-      const finalSolution = `${data.solution_steps || data.solutionSteps || ''}\n\n${data.final_solution || data.finalSolution || ''}`;
-      
-      const newProblem = {
-        id: newProblemId,
-        title: problemTitle,
-        content: data.problem_text || data.problemText || '',
-        solution: finalSolution,
-        imageBase64: data.image_base64 || data.imageBase64,
-      };
-      
-      setProblems(prev => [...prev, newProblem]);
-      
-      // ユーザー情報を更新
-      await fetchUserInfo();
-      
-      setIsLoading(false);
-      
-      // プレビューモーダルを表示
-      setPreviewModal({
-        isOpen: true,
-        problemId: newProblemId,
-        problemTitle: problemTitle,
-        problemContent: newProblem.content,
-        imageBase64: newProblem.imageBase64,
-        solutionText: finalSolution,
-      });
-      
-      console.log('✅ [TwoStage] 2段階生成プロセス完了');
-      
-    } catch (error) {
-      setIsLoading(false);
-      console.error('2段階生成エラー:', error);
-      await handleGenerationError(error);
-    }
-  };
 
   // 5段階生成システムの関数（リアルタイム進捗付き）
   const handleGenerateFiveStage = async () => {
@@ -767,12 +476,9 @@ export default function Home() {
     }
     
     setIsLoading(true);
-    setGenerationLogs('');
     setFiveStageResults({});
     setCurrentStage(0);
     setStageProgress(0);
-    
-    const allLogs: string[] = [];
     
     try {
       const prompt = createPromptFromFilters();
@@ -816,8 +522,6 @@ export default function Home() {
       };
       
       setFiveStageResults(prev => ({ ...prev, stage1: stage1Result }));
-      allLogs.push(`=== Stage 1: 問題文生成 ===\n${stage1Result.log}`);
-      setGenerationLogs(allLogs.join('\n\n'));
       setStageProgress(20);
       
       console.log('✅ [Stage1] 完了');
@@ -854,8 +558,6 @@ export default function Home() {
       };
       
       setFiveStageResults(prev => ({ ...prev, stage2: stage2Result }));
-      allLogs.push(`=== Stage 2: 図形生成 ===\n${stage2Result.log}`);
-      setGenerationLogs(allLogs.join('\n\n'));
       setStageProgress(40);
       
       console.log('✅ [Stage2] 完了');
@@ -893,8 +595,6 @@ export default function Home() {
       };
       
       setFiveStageResults(prev => ({ ...prev, stage3: stage3Result }));
-      allLogs.push(`=== Stage 3: 解答手順生成 ===\n${stage3Result.log}`);
-      setGenerationLogs(allLogs.join('\n\n'));
       setStageProgress(60);
       
       console.log('✅ [Stage3] 完了');
@@ -932,8 +632,6 @@ export default function Home() {
       };
       
       setFiveStageResults(prev => ({ ...prev, stage4: stage4Result }));
-      allLogs.push(`=== Stage 4: 数値計算 ===\n${stage4Result.log}`);
-      setGenerationLogs(allLogs.join('\n\n'));
       setStageProgress(80);
       
       console.log('✅ [Stage4] 完了');
@@ -952,7 +650,14 @@ export default function Home() {
         body: JSON.stringify({
           problem_text: stage1Result.problemText,
           solution_steps: stage3Result.solutionSteps,
-          calculation_results: stage4Result.calculationResults
+          calculation_results: stage4Result.calculationResults,
+          // 5段階生成完了後のDB保存用データを追加
+          five_stage_data: {
+            prompt: prompt,
+            subject: activeSubject,
+            filters: selectedFilters,
+            image_base64: stage2Result.imageBase64 || ''
+          }
         })
       });
       
@@ -971,8 +676,6 @@ export default function Home() {
       };
       
       setFiveStageResults(prev => ({ ...prev, stage5: stage5Result }));
-      allLogs.push(`=== Stage 5: 最終解説生成 ===\n${stage5Result.log}`);
-      setGenerationLogs(allLogs.join('\n\n'));
       setStageProgress(100);
       
       console.log('✅ [Stage5] 完了');
@@ -1019,9 +722,7 @@ export default function Home() {
   };
 
   const handleGenerate = async () => {
-    if (generationMode === 'two-stage') {
-      await handleGenerateTwoStage();
-    } else if (generationMode === 'five-stage') {
+    if (generationMode === 'five-stage') {
       await handleGenerateFiveStage();
     } else {
       await handleGenerateSingle();
@@ -1514,7 +1215,7 @@ export default function Home() {
                   name="generationMode"
                   value="single"
                   checked={generationMode === 'single'}
-                  onChange={(e) => setGenerationMode(e.target.value as 'single' | 'two-stage' | 'five-stage')}
+                  onChange={(e) => setGenerationMode(e.target.value as 'single' | 'five-stage')}
                   className="text-mongene-blue"
                 />
                 <span className="text-sm font-medium text-mongene-ink">従来方式（1回のAPI呼び出し）</span>
@@ -1523,20 +1224,9 @@ export default function Home() {
                 <input
                   type="radio"
                   name="generationMode"
-                  value="two-stage"
-                  checked={generationMode === 'two-stage'}
-                  onChange={(e) => setGenerationMode(e.target.value as 'single' | 'two-stage' | 'five-stage')}
-                  className="text-mongene-blue"
-                />
-                <span className="text-sm font-medium text-mongene-ink">2段階生成（高精度）</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="generationMode"
                   value="five-stage"
                   checked={generationMode === 'five-stage'}
-                  onChange={(e) => setGenerationMode(e.target.value as 'single' | 'two-stage' | 'five-stage')}
+                  onChange={(e) => setGenerationMode(e.target.value as 'single' | 'five-stage')}
                   className="text-mongene-blue"
                 />
                 <span className="text-sm font-medium text-mongene-ink">🆕 5段階生成（最高精度）</span>
@@ -1545,106 +1235,11 @@ export default function Home() {
             <div className="text-xs text-mongene-muted">
               {generationMode === 'single' 
                 ? '問題文と解答を1回のAPI呼び出しで生成します（従来の方式）'
-                : generationMode === 'two-stage'
-                  ? '1回目で問題文・図形を生成し、2回目で解答手順・数値計算を生成します（トークン制限対応）'
-                  : '5段階に分けて最高精度で生成します：①問題文→②図形→③解答手順→④数値計算→⑤最終解説'
+                : '5段階に分けて最高精度で生成します：①問題文→②図形→③解答手順→④数値計算→⑤最終解説'
               }
             </div>
           </div>
 
-          {/* 2段階生成の場合の詳細UI */}
-          {generationMode === 'two-stage' && (
-            <div className="border-t border-white/20 pt-4">
-              <h4 className="font-bold text-mongene-ink mb-3">📋 2段階生成プロセス</h4>
-              
-              {/* 現在の状態表示 */}
-              <div className="mb-4 p-3 bg-white/5 rounded-lg">
-                <div className="flex items-center gap-4 mb-2">
-                  <div className={`flex items-center gap-2 ${isFirstStageComplete ? 'text-green-600' : 'text-mongene-muted'}`}>
-                    <span>{isFirstStageComplete ? '✅' : '⏸️'}</span>
-                    <span className="text-sm font-medium">1回目: 問題文・図形生成</span>
-                  </div>
-                  <div className={`flex items-center gap-2 ${secondStageResult ? 'text-green-600' : 'text-mongene-muted'}`}>
-                    <span>{secondStageResult ? '✅' : '⏸️'}</span>
-                    <span className="text-sm font-medium">2回目: 解答手順・数値計算</span>
-                  </div>
-                </div>
-                
-                {firstStageResult && (
-                  <div className="text-xs text-mongene-ink mb-2">
-                    📝 問題文生成済み ({firstStageResult.problemText.length}文字)
-                    {firstStageResult.imageBase64 && ' | 🖼️ 図形生成済み'}
-                    {firstStageResult.geometryCode && ' | 🐍 図形コード生成済み'}
-                  </div>
-                )}
-                
-                {secondStageResult && (
-                  <div className="text-xs text-mongene-ink">
-                    📚 解答手順生成済み ({secondStageResult.solutionSteps.length}文字)
-                    {secondStageResult.calculationProgram && ' | 🧮 計算プログラム生成済み'}
-                  </div>
-                )}
-              </div>
-
-              {/* 2段階生成の個別実行ボタン */}
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                <button
-                  onClick={handleGenerateFirstStage}
-                  disabled={isLoading || isGenerationLimitReached()}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    isLoading || isGenerationLimitReached()
-                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      : 'bg-blue-500 text-white hover:brightness-110'
-                  }`}
-                >
-                  1️⃣ 問題文・図形を生成
-                </button>
-                
-                <button
-                  onClick={handleGenerateSecondStage}
-                  disabled={!isFirstStageComplete || isLoading}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    !isFirstStageComplete || isLoading
-                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      : 'bg-purple-500 text-white hover:brightness-110'
-                  }`}
-                >
-                  2️⃣ 解答手順・計算を生成
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setFirstStageResult(null);
-                    setSecondStageResult(null);
-                    setIsFirstStageComplete(false);
-                    setGenerationLogs('');
-                  }}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:brightness-110 transition-all"
-                >
-                  🔄 リセット
-                </button>
-              </div>
-              
-              {/* ログ表示 */}
-              {generationLogs && (
-                <div className="mb-4">
-                  <button
-                    onClick={() => setShowLogs(!showLogs)}
-                    className="flex items-center gap-2 text-mongene-blue hover:underline text-sm font-medium mb-2"
-                  >
-                    <span>{showLogs ? '🔽' : '▶️'}</span>
-                    生成ログを{showLogs ? '非表示' : '表示'}
-                  </button>
-                  
-                  {showLogs && (
-                    <div className="p-3 bg-gray-900 text-green-400 rounded-lg text-xs font-mono max-h-60 overflow-y-auto">
-                      <pre className="whitespace-pre-wrap">{generationLogs}</pre>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* 5段階生成の場合の詳細UI */}
           {generationMode === 'five-stage' && (
@@ -1690,79 +1285,7 @@ export default function Home() {
                   </div>
                 </div>
                 
-                {/* 各段階の詳細情報 */}
-                {fiveStageResults.stage1 && (
-                  <div className="text-xs text-mongene-ink mb-1">
-                    📝 問題文生成完了 ({fiveStageResults.stage1.problemText.length}文字)
-                  </div>
-                )}
-                {fiveStageResults.stage2 && (
-                  <div className="text-xs text-mongene-ink mb-1">
-                    🖼️ 図形生成完了 {fiveStageResults.stage2.geometryCode && '| 🐍 図形コード生成済み'}
-                  </div>
-                )}
-                {fiveStageResults.stage3 && (
-                  <div className="text-xs text-mongene-ink mb-1">
-                    📚 解答手順生成完了 ({fiveStageResults.stage3.solutionSteps.length}文字)
-                  </div>
-                )}
-                {fiveStageResults.stage4 && (
-                  <div className="text-xs text-mongene-ink mb-1">
-                    🧮 数値計算完了 {fiveStageResults.stage4.calculationProgram && '| 🐍 計算プログラム実行済み'}
-                  </div>
-                )}
-                {fiveStageResults.stage5 && (
-                  <div className="text-xs text-mongene-ink">
-                    ✨ 最終解説生成完了 ({fiveStageResults.stage5.finalExplanation.length}文字)
-                  </div>
-                )}
               </div>
-
-              {/* 5段階生成の実行ボタン */}
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                <button
-                  onClick={() => handleGenerateFiveStage()}
-                  disabled={isLoading || isGenerationLimitReached()}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    isLoading || isGenerationLimitReached()
-                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700'
-                  }`}
-                >
-                  🔥 5段階生成を実行
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setFiveStageResults({});
-                    setCurrentStage(0);
-                    setStageProgress(0);
-                    setGenerationLogs('');
-                  }}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:brightness-110 transition-all"
-                >
-                  🔄 リセット
-                </button>
-              </div>
-              
-              {/* ログ表示 */}
-              {generationLogs && (
-                <div className="mb-4">
-                  <button
-                    onClick={() => setShowLogs(!showLogs)}
-                    className="flex items-center gap-2 text-mongene-blue hover:underline text-sm font-medium mb-2"
-                  >
-                    <span>{showLogs ? '🔽' : '▶️'}</span>
-                    5段階生成ログを{showLogs ? '非表示' : '表示'}
-                  </button>
-                  
-                  {showLogs && (
-                    <div className="p-3 bg-gray-900 text-green-400 rounded-lg text-xs font-mono max-h-80 overflow-y-auto">
-                      <pre className="whitespace-pre-wrap">{generationLogs}</pre>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -1791,11 +1314,9 @@ export default function Home() {
           >
             {isGenerationLimitReached() 
               ? '生成上限に達しました' 
-              : generationMode === 'two-stage' 
-                ? '🚀 2段階生成を実行'
-                : generationMode === 'five-stage'
-                  ? '🔥 5段階生成を実行'
-                  : '問題を新しく生成'
+              : generationMode === 'five-stage'
+                ? '🔥 5段階生成を実行'
+                : '問題を新しく生成'
             }
           </button>
         </div>
@@ -1850,19 +1371,15 @@ export default function Home() {
 
       <LoadingModal
         isOpen={isLoading}
-        message={generationMode === 'five-stage' ? '5段階生成を実行中...' : '問題を生成しています...'}
-        showProgress={generationMode === 'five-stage'}
-        currentStage={currentStage}
-        maxStages={5}
-        stageProgress={stageProgress}
-        stageMessage={
-          generationMode === 'five-stage' ? 
-            currentStage === 1 ? '📝 問題文を生成中...' :
-            currentStage === 2 ? '🖼️ 図形を生成中...' :
-            currentStage === 3 ? '📚 解答手順を生成中...' :
-            currentStage === 4 ? '🧮 数値計算を実行中...' :
-            currentStage === 5 ? '✨ 最終解説を生成中...' :
-            '' : undefined
+        message={
+          generationMode === 'five-stage' 
+            ? currentStage === 1 ? '📝 問題文を生成中...' :
+              currentStage === 2 ? '🖼️ 図形を生成中...' :
+              currentStage === 3 ? '📚 解答手順を生成中...' :
+              currentStage === 4 ? '🧮 数値計算を実行中...' :
+              currentStage === 5 ? '✨ 最終解説を生成中...' :
+              '5段階生成を実行中...' 
+            : '問題を生成しています...'
         }
       />
 

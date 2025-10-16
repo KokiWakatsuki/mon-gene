@@ -60,34 +60,6 @@ func NewRouter(
 	mux.HandleFunc("/api/generate-problem", problemHandler.GenerateProblem)
 	mux.HandleFunc("/api/generate-pdf", problemHandler.GeneratePDF)
 	
-	// 2段階生成システムのエンドポイント
-	mux.HandleFunc("/api/generate-problem-two-stage", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST", "OPTIONS":
-			problemHandler.GenerateProblemTwoStage(w, r)
-		default:
-			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	})
-	
-	mux.HandleFunc("/api/generate-first-stage", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST", "OPTIONS":
-			problemHandler.GenerateFirstStage(w, r)
-		default:
-			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	})
-	
-	mux.HandleFunc("/api/generate-second-stage", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST", "OPTIONS":
-			problemHandler.GenerateSecondStage(w, r)
-		default:
-			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
-		}
-	})
-	
 	// 5段階生成システムのエンドポイント（高精度）
 	mux.HandleFunc("/api/generate-problem-five-stage", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

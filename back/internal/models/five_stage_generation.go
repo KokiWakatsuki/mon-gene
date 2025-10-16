@@ -1,5 +1,58 @@
 package models
 
+// TwoStageGenerationRequest 2段階生成のリクエスト
+type TwoStageGenerationRequest struct {
+	Prompt  string                 `json:"prompt"`
+	Subject string                 `json:"subject"`
+	Filters map[string]interface{} `json:"filters"`
+}
+
+// TwoStageGenerationResponse 2段階生成の最終レスポンス
+type TwoStageGenerationResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+	
+	// 生成結果
+	ProblemText         string `json:"problem_text"`
+	ImageBase64         string `json:"image_base64"`
+	SolutionSteps       string `json:"solution_steps"`
+	FinalSolution       string `json:"final_solution"`
+	CalculationResults  string `json:"calculation_results"`
+	GeometryCode        string `json:"geometry_code"`
+	CalculationProgram  string `json:"calculation_program"`
+	
+	// ログ
+	FirstStageLog  string `json:"first_stage_log"`
+	SecondStageLog string `json:"second_stage_log"`
+}
+
+// FirstStageResponse 1回目API呼び出しのレスポンス
+type FirstStageResponse struct {
+	Success      bool   `json:"success"`
+	Error        string `json:"error,omitempty"`
+	ProblemText  string `json:"problem_text"`
+	GeometryCode string `json:"geometry_code"`
+	ImageBase64  string `json:"image_base64"`
+	Log          string `json:"log"`
+}
+
+// SecondStageRequest 2回目API呼び出しのリクエスト
+type SecondStageRequest struct {
+	ProblemText  string `json:"problem_text"`
+	GeometryCode string `json:"geometry_code,omitempty"`
+}
+
+// SecondStageResponse 2回目API呼び出しのレスポンス
+type SecondStageResponse struct {
+	Success             bool   `json:"success"`
+	Error               string `json:"error,omitempty"`
+	SolutionSteps       string `json:"solution_steps"`
+	CalculationProgram  string `json:"calculation_program"`
+	FinalSolution       string `json:"final_solution"`
+	CalculationResults  string `json:"calculation_results"`
+	Log                 string `json:"log"`
+}
+
 // FiveStageGenerationRequest 5段階生成のリクエスト
 type FiveStageGenerationRequest struct {
 	Prompt  string                 `json:"prompt"`
@@ -93,6 +146,17 @@ type Stage5Request struct {
 	ProblemText        string `json:"problem_text"`
 	SolutionSteps      string `json:"solution_steps"`
 	CalculationResults string `json:"calculation_results"`
+	
+	// 5段階生成完了後のDB保存用（オプション）
+	FiveStageData *FiveStageDataForSave `json:"five_stage_data,omitempty"`
+}
+
+// FiveStageDataForSave 5段階生成完了後のDB保存用データ
+type FiveStageDataForSave struct {
+	Prompt      string                 `json:"prompt"`
+	Subject     string                 `json:"subject"`
+	Filters     map[string]interface{} `json:"filters"`
+	ImageBase64 string                 `json:"image_base64,omitempty"`
 }
 
 // Stage5Response 5段階目のレスポンス（最終解説生成）

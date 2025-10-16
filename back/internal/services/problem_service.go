@@ -22,10 +22,7 @@ type ProblemService interface {
 	SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
 	SearchProblemsCombined(ctx context.Context, userID int64, keyword string, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 	GetUserProblems(ctx context.Context, userID int64, limit, offset int) ([]*models.Problem, error)
-	// 2段階生成メソッド
-	GenerateProblemTwoStage(ctx context.Context, req models.TwoStageGenerationRequest, userSchoolCode string) (*models.TwoStageGenerationResponse, error)
-	GenerateFirstStage(ctx context.Context, req models.TwoStageGenerationRequest, userSchoolCode string) (*models.FirstStageResponse, error)
-	GenerateSecondStage(ctx context.Context, req models.SecondStageRequest, userSchoolCode string) (*models.SecondStageResponse, error)
+	SaveDirectProblem(ctx context.Context, problem *models.Problem) error
 	
 	// 5段階生成メソッド（高精度）
 	GenerateProblemFiveStage(ctx context.Context, req models.FiveStageGenerationRequest, userSchoolCode string) (*models.FiveStageGenerationResponse, error)
@@ -88,6 +85,16 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 	
 	fmt.Printf("🔢 User %s: %d/%d problems generated\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit)
 	
+	// 問題生成成功時にユーザーの生成回数を更新（生成前に更新して制限をチェック）
+	user.ProblemGenerationCount++
+	user.UpdatedAt = time.Now()
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		fmt.Printf("⚠️ Failed to update user generation count: %v\n", err)
+		return nil, fmt.Errorf("問題生成カウントの更新に失敗しました: %w", err)
+	} else {
+		fmt.Printf("✅ 問題生成カウントを更新: %s = %d/%d\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit)
+	}
+
 	// ユーザーの設定に基づいてAI/モデル情報をconsoleに表示
 	preferredAPI := user.PreferredAPI
 	preferredModel := user.PreferredModel
@@ -218,17 +225,22 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 		fmt.Printf("💾 Problem saved to database with ID: %d\n", problem.ID)
 	}
 
-	// 4. 問題生成成功時にユーザーの生成回数を更新
-	user.ProblemGenerationCount++
-	user.UpdatedAt = time.Now()
-	if err := s.userRepo.Update(ctx, user); err != nil {
-		// ログに記録するが、問題生成は成功として扱う
-		fmt.Printf("⚠️ Failed to update user generation count: %v\n", err)
-	} else {
-		fmt.Printf("✅ Updated user %s generation count to %d\n", userSchoolCode, user.ProblemGenerationCount)
-	}
 
 	return problem, nil
+}
+
+// SaveDirectProblem 問題を直接データベースに保存
+func (s *problemService) SaveDirectProblem(ctx context.Context, problem *models.Problem) error {
+	if s.problemRepo == nil {
+		return fmt.Errorf("problem repository is not initialized")
+	}
+
+	if err := s.problemRepo.Create(ctx, problem); err != nil {
+		return fmt.Errorf("failed to save problem: %w", err)
+	}
+
+	fmt.Printf("💾 [SaveDirectProblem] Problem saved to database with ID: %d\n", problem.ID)
+	return nil
 }
 
 func (s *problemService) GeneratePDF(ctx context.Context, req models.PDFGenerateRequest) (string, error) {
@@ -1766,6 +1778,59 @@ import math
 // GenerateProblemFiveStage 全体の5段階生成プロセスを実行
 func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req models.FiveStageGenerationRequest, userSchoolCode string) (*models.FiveStageGenerationResponse, error) {
 	fmt.Printf("🚀 [FiveStage] Starting five-stage problem generation for user: %s\n", userSchoolCode)
+	fmt.Printf("🔍 [FiveStage] Request details: Prompt length=%d, Subject=%s, Filters=%v\n", len(req.Prompt), req.Subject, req.Filters)
+	
+	// ユーザー情報を取得して生成制限をチェック
+	fmt.Printf("📋 [FiveStage] Fetching user info for: %s\n", userSchoolCode)
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		fmt.Printf("❌ [FiveStage] Failed to get user info: %v\n", err)
+		return &models.FiveStageGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err),
+		}, nil
+	}
+	
+	fmt.Printf("👤 [FiveStage] User found: ID=%d, SchoolCode=%s, Email=%s\n", user.ID, user.SchoolCode, user.Email)
+	fmt.Printf("🔢 [FiveStage] Current generation count: %d (limit: %d)\n", user.ProblemGenerationCount, user.ProblemGenerationLimit)
+	
+	// 生成制限チェック（-1は制限なし）
+	if user.ProblemGenerationLimit >= 0 && user.ProblemGenerationCount >= user.ProblemGenerationLimit {
+		fmt.Printf("🚫 [FiveStage] Generation limit reached: %d/%d\n", user.ProblemGenerationCount, user.ProblemGenerationLimit)
+		return &models.FiveStageGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("問題生成回数の上限（%d回）に達しました", user.ProblemGenerationLimit),
+		}, nil
+	}
+	
+	fmt.Printf("🔢 [FiveStage] BEFORE UPDATE: User %s has %d/%d problems generated\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit)
+	
+	// 問題生成成功時にユーザーの生成回数を更新（処理開始前に更新）
+	oldCount := user.ProblemGenerationCount
+	user.ProblemGenerationCount++
+	user.UpdatedAt = time.Now()
+	
+	fmt.Printf("📝 [FiveStage] Attempting to update user generation count from %d to %d\n", oldCount, user.ProblemGenerationCount)
+	fmt.Printf("🕒 [FiveStage] Update timestamp: %s\n", user.UpdatedAt.Format("2006-01-02 15:04:05"))
+	
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		fmt.Printf("❌ [FiveStage] Failed to update user generation count: %v\n", err)
+		fmt.Printf("🔍 [FiveStage] User data at failure: ID=%d, Count=%d, Limit=%d\n", user.ID, user.ProblemGenerationCount, user.ProblemGenerationLimit)
+		return &models.FiveStageGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("問題生成カウントの更新に失敗しました: %w", err),
+		}, nil
+	} else {
+		fmt.Printf("✅ [FiveStage] Successfully updated generation count: %s = %d/%d (was %d)\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit, oldCount)
+		
+		// 更新後に再度ユーザー情報を取得して確認
+		verifyUser, verifyErr := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+		if verifyErr != nil {
+			fmt.Printf("⚠️ [FiveStage] Failed to verify user update: %v\n", verifyErr)
+		} else {
+			fmt.Printf("🔍 [FiveStage] VERIFICATION: User %s now has %d/%d problems generated (DB check)\n", userSchoolCode, verifyUser.ProblemGenerationCount, verifyUser.ProblemGenerationLimit)
+		}
+	}
 	
 	// 1段階目：問題文生成
 	stage1Req := models.Stage1Request{
@@ -1863,6 +1928,33 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		}, nil
 	}
 	
+	// 5段階生成完了後、問題をproblemsテーブルに保存
+	fmt.Printf("💾 [FiveStage] Saving generated problem to database\n")
+	
+	problem := &models.Problem{
+		UserID:      user.ID,
+		Subject:     req.Subject,
+		Prompt:      req.Prompt,
+		Content:     stage1Resp.ProblemText,
+		Solution:    stage5Resp.FinalExplanation,
+		ImageBase64: stage2Resp.ImageBase64,
+		Filters:     req.Filters,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	// リポジトリが実装されている場合のみ保存
+	if s.problemRepo != nil {
+		if err := s.problemRepo.Create(ctx, problem); err != nil {
+			fmt.Printf("⚠️ [FiveStage] Failed to save problem to database: %v\n", err)
+			// データベース保存に失敗してもレスポンスは成功として返す（問題生成自体は成功）
+		} else {
+			fmt.Printf("✅ [FiveStage] Problem saved to database with ID: %d\n", problem.ID)
+		}
+	} else {
+		fmt.Printf("⚠️ [FiveStage] Problem repository is not initialized, skipping database save\n")
+	}
+	
 	fmt.Printf("✅ [FiveStage] Five-stage problem generation completed successfully\n")
 	
 	return &models.FiveStageGenerationResponse{
@@ -1898,6 +1990,40 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 			Log:     logBuilder.String(),
 		}, err
 	}
+	
+	// 生成制限チェック（-1は制限なし）
+	if user.ProblemGenerationLimit >= 0 && user.ProblemGenerationCount >= user.ProblemGenerationLimit {
+		errorMsg := fmt.Sprintf("問題生成回数の上限（%d回）に達しました", user.ProblemGenerationLimit)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage1Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("🔢 [Stage1] BEFORE UPDATE: User %s has %d/%d problems generated\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit))
+	
+	// 問題生成成功時にユーザーの生成回数を更新（Stage1で1回のみ更新）
+	oldCount := user.ProblemGenerationCount
+	user.ProblemGenerationCount++
+	user.UpdatedAt = time.Now()
+	
+	logBuilder.WriteString(fmt.Sprintf("📝 [Stage1] Attempting to update user generation count from %d to %d\n", oldCount, user.ProblemGenerationCount))
+	
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		errorMsg := fmt.Sprintf("問題生成カウントの更新に失敗しました: %v", err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage1Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	} else {
+		logBuilder.WriteString(fmt.Sprintf("✅ [Stage1] Successfully updated generation count: %s = %d/%d (was %d)\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit, oldCount))
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("🔢 User %s: %d/%d problems generated\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit))
 	
 	// API設定の確認
 	if user.PreferredAPI == "" || user.PreferredModel == "" {
