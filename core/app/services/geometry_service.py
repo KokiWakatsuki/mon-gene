@@ -319,3 +319,88 @@ class GeometryService:
                 image_base64="",
                 shape_type="cuboid"
             )
+    
+    async def execute_python_code(self, python_code: str) -> dict:
+        """Pythonコードを実行して結果を返す（数値計算専用）"""
+        print(f"🔍 execute_python_code called")
+        print(f"🔍 python_code length: {len(python_code)}")
+        
+        try:
+            # stdoutをキャプチャするための設定
+            import sys
+            from io import StringIO
+            
+            # 標準出力をキャプチャ
+            old_stdout = sys.stdout
+            sys.stdout = captured_output = StringIO()
+            
+            # 安全な実行環境を準備
+            safe_globals = {
+                'np': np,
+                'numpy': np,
+                'math': __import__('math'),
+                '__builtins__': {
+                    '__import__': __import__,
+                    'len': len,
+                    'range': range,
+                    'enumerate': enumerate,
+                    'zip': zip,
+                    'map': map,
+                    'filter': filter,
+                    'list': list,
+                    'dict': dict,
+                    'tuple': tuple,
+                    'set': set,
+                    'str': str,
+                    'int': int,
+                    'float': float,
+                    'bool': bool,
+                    'min': min,
+                    'max': max,
+                    'abs': abs,
+                    'round': round,
+                    'sum': sum,
+                    'print': print,
+                    'ord': ord,
+                    'chr': chr,
+                }
+            }
+            
+            print(f"🔍 About to execute Python code for calculation")
+            print(f"🔍 Python code preview: {python_code[:200]}...")
+            
+            # Pythonコードを実行
+            exec(python_code, safe_globals)
+            
+            # 標準出力を復元
+            sys.stdout = old_stdout
+            
+            # キャプチャした出力を取得
+            output = captured_output.getvalue()
+            print(f"✅ Python code executed successfully")
+            print(f"📊 Output length: {len(output)}")
+            print(f"📊 Output preview: {output[:500]}...")
+            
+            return {
+                "success": True,
+                "output": output,
+                "error": None
+            }
+            
+        except Exception as e:
+            # 標準出力を復元（エラーの場合も必ず復元）
+            sys.stdout = old_stdout
+            
+            error_msg = str(e)
+            print(f"❌ Error in execute_python_code: {error_msg}")
+            print(f"❌ Error type: {type(e).__name__}")
+            
+            import traceback
+            traceback_str = traceback.format_exc()
+            print(f"❌ Traceback: {traceback_str}")
+            
+            return {
+                "success": False,
+                "output": "",
+                "error": f"{type(e).__name__}: {error_msg}"
+            }

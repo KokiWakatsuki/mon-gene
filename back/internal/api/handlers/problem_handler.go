@@ -167,6 +167,425 @@ func (h *ProblemHandler) SearchProblems(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// 5段階生成システムのハンドラー（高精度）
+
+// GenerateProblemFiveStage 5段階生成プロセス全体を実行
+func (h *ProblemHandler) GenerateProblemFiveStage(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.FiveStageGenerationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.Prompt == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "プロンプトは必須です")
+		return
+	}
+	if req.Subject == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "科目は必須です")
+		return
+	}
+
+	// 5段階生成プロセスを実行
+	response, err := h.problemService.GenerateProblemFiveStage(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// GenerateStage1 1段階目：問題文のみ生成
+func (h *ProblemHandler) GenerateStage1(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.Stage1Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.Prompt == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "プロンプトは必須です")
+		return
+	}
+	if req.Subject == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "科目は必須です")
+		return
+	}
+
+	// 1段階目を実行
+	response, err := h.problemService.GenerateStage1(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// GenerateStage2 2段階目：図形生成
+func (h *ProblemHandler) GenerateStage2(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.Stage2Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.ProblemText == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+		return
+	}
+
+	// 2段階目を実行
+	response, err := h.problemService.GenerateStage2(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// GenerateStage3 3段階目：解答手順生成
+func (h *ProblemHandler) GenerateStage3(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.Stage3Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.ProblemText == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+		return
+	}
+
+	// 3段階目を実行
+	response, err := h.problemService.GenerateStage3(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// GenerateStage4 4段階目：数値計算プログラム生成・実行
+func (h *ProblemHandler) GenerateStage4(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.Stage4Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.ProblemText == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+		return
+	}
+	if req.SolutionSteps == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "解答手順は必須です")
+		return
+	}
+
+	// 4段階目を実行
+	response, err := h.problemService.GenerateStage4(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// GenerateStage5 5段階目：最終解説生成
+func (h *ProblemHandler) GenerateStage5(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.Stage5Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.ProblemText == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+		return
+	}
+	if req.SolutionSteps == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "解答手順は必須です")
+		return
+	}
+	if req.CalculationResults == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "計算結果は必須です")
+		return
+	}
+
+	// 5段階目を実行
+	response, err := h.problemService.GenerateStage5(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// 2段階生成システムのハンドラー
+
+// GenerateProblemTwoStage 2段階生成プロセス全体を実行
+func (h *ProblemHandler) GenerateProblemTwoStage(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.TwoStageGenerationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.Prompt == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "プロンプトは必須です")
+		return
+	}
+	if req.Subject == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "科目は必須です")
+		return
+	}
+
+	// 2段階生成プロセスを実行
+	response, err := h.problemService.GenerateProblemTwoStage(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// GenerateFirstStage 1回目のAPI呼び出し（問題文・図形生成）
+func (h *ProblemHandler) GenerateFirstStage(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.TwoStageGenerationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.Prompt == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "プロンプトは必須です")
+		return
+	}
+	if req.Subject == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "科目は必須です")
+		return
+	}
+
+	// 1回目のAPI呼び出しを実行
+	response, err := h.problemService.GenerateFirstStage(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// GenerateSecondStage 2回目のAPI呼び出し（解答手順・数値計算）
+func (h *ProblemHandler) GenerateSecondStage(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req models.SecondStageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// バリデーション
+	if req.ProblemText == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+		return
+	}
+
+	// 2回目のAPI呼び出しを実行
+	response, err := h.problemService.GenerateSecondStage(r.Context(), req, user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
 // SearchProblemsCombined キーワードとフィルターの組み合わせで問題を検索
 func (h *ProblemHandler) SearchProblemsCombined(w http.ResponseWriter, r *http.Request) {
 	// 認証トークンを取得

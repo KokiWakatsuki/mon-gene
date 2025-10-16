@@ -29,3 +29,17 @@ async def draw_custom_geometry(request: dict):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/execute-python")
+async def execute_python(request: dict):
+    """Pythonコードを実行して結果を返す（数値計算用）"""
+    try:
+        python_code = request.get("python_code", "")
+        
+        if not python_code:
+            raise HTTPException(status_code=400, detail="python_code is required")
+        
+        result = await geometry_service.execute_python_code(python_code)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

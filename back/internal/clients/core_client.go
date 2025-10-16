@@ -221,6 +221,77 @@ func (c *coreClient) GenerateCustomGeometry(ctx context.Context, pythonCode, pro
 	return response.ImageBase64, nil
 }
 
+func (c *coreClient) ExecutePython(ctx context.Context, pythonCode string) (string, error) {
+	fmt.Printf("🔍 ExecutePython called with code length: %d\n", len(pythonCode))
+	
+	requestData := map[string]interface{}{
+		"python_code": pythonCode,
+	}
+
+	jsonData, err := json.Marshal(requestData)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	fmt.Printf("🔍 Sending Python execution request to: %s/execute-python\n", c.baseURL)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/execute-python", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	fmt.Printf("🔍 Python execution response status: %d\n", resp.StatusCode)
+	fmt.Printf("🔍 Python execution response length: %d\n", len(body))
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Python execution failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// レスポンスの構造を確認
+	var rawResponse map[string]interface{}
+	if err := json.Unmarshal(body, &rawResponse); err != nil {
+		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	fmt.Printf("🔍 Python execution response keys: %v\n", getKeys(rawResponse))
+	
+	// 実行結果を取得
+	if success, ok := rawResponse["success"].(bool); !ok || !success {
+		errorMsg := "Unknown error"
+		if errStr, exists := rawResponse["error"].(string); exists {
+			errorMsg = errStr
+		}
+		return "", fmt.Errorf("Python execution failed: %s", errorMsg)
+	}
+
+	// 実行結果（stdout）を取得
+	output := ""
+	if outputStr, exists := rawResponse["output"].(string); exists {
+		output = outputStr
+	} else if resultStr, exists := rawResponse["result"].(string); exists {
+		output = resultStr
+	} else if stdoutStr, exists := rawResponse["stdout"].(string); exists {
+		output = stdoutStr
+	}
+
+	fmt.Printf("🔍 Python execution output length: %d\n", len(output))
+	
+	return output, nil
+}
+
 func getKeys(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

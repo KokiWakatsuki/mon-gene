@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { API_CONFIG } from '@/app/lib/config/api';
+import MarkdownRenderer from '../../ui/MarkdownRenderer';
 
 interface ProblemPreviewModalProps {
   isOpen: boolean;
@@ -11,6 +12,12 @@ interface ProblemPreviewModalProps {
   problemContent?: string;
   imageBase64?: string;
   solutionText?: string;
+  // 2段階生成システム用の追加プロパティ
+  solutionSteps?: string;
+  calculationProgram?: string;
+  calculationResults?: string;
+  finalSolution?: string;
+  generationLogs?: string;
   onUpdate?: (updatedData: { content: string; solution: string; imageBase64?: string }) => void;
 }
 
@@ -23,7 +30,21 @@ interface UserInfo {
   figure_regeneration_count: number;
 }
 
-export default function ProblemPreviewModal({ isOpen, onClose, problemId, problemTitle, problemContent, imageBase64, solutionText, onUpdate }: ProblemPreviewModalProps) {
+export default function ProblemPreviewModal({ 
+  isOpen, 
+  onClose, 
+  problemId, 
+  problemTitle, 
+  problemContent, 
+  imageBase64, 
+  solutionText, 
+  solutionSteps,
+  calculationProgram,
+  calculationResults,
+  finalSolution,
+  generationLogs,
+  onUpdate 
+}: ProblemPreviewModalProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [editedSolution, setEditedSolution] = useState('');
@@ -331,8 +352,11 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
                       <h3 className="text-xl font-bold mb-4">{problemTitle}</h3>
                       {currentImageBase64 ? (
                         <div className="flex gap-6">
-                          <div className="flex-1 whitespace-pre-wrap leading-relaxed">
-                            {editedContent || problemContent}
+                          <div className="flex-1">
+                            <MarkdownRenderer 
+                              content={editedContent || problemContent || ''} 
+                              className="leading-relaxed"
+                            />
                           </div>
                           <div className="w-80 flex-shrink-0">
                             <img 
@@ -343,19 +367,132 @@ export default function ProblemPreviewModal({ isOpen, onClose, problemId, proble
                           </div>
                         </div>
                       ) : (
-                        <div className="whitespace-pre-wrap leading-relaxed">
-                          {editedContent || problemContent}
-                        </div>
+                        <MarkdownRenderer 
+                          content={editedContent || problemContent || ''} 
+                          className="leading-relaxed"
+                        />
                       )}
                     </div>
                     
-                    {/* 解答・解説ページ（改ページ） */}
-                    {(editedSolution || solutionText) && (
+                    {/* 2段階生成システムの解答表示 */}
+                    {(solutionSteps || calculationProgram || finalSolution) ? (
+                      <div className="solution-page" style={{ pageBreakBefore: 'always', marginTop: '40px', paddingTop: '40px', borderTop: '2px solid #e5e7eb' }}>
+                        <h3 className="text-xl font-bold mb-6">🚀 2段階生成システム - 解答・解説</h3>
+                        
+                        {/* 解答の手順 */}
+                        {solutionSteps && (
+                          <div className="mb-8">
+                            <h4 className="text-lg font-semibold mb-3 text-blue-600">📚 解答の手順</h4>
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                              <MarkdownRenderer 
+                                content={solutionSteps}
+                                className="text-gray-800"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 数値計算プログラム */}
+                        {calculationProgram && (
+                          <div className="mb-8">
+                            <h4 className="text-lg font-semibold mb-3 text-green-600">🧮 数値計算プログラム</h4>
+                            <div className="bg-gray-900 text-green-400 p-4 rounded-lg border">
+                              <div className="text-xs font-mono mb-2 text-gray-400">Python</div>
+                              <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed overflow-x-auto">
+{`import numpy as np
+import math
+
+${calculationProgram}`}
+                              </pre>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 計算結果 */}
+                        {calculationResults && (
+                          <div className="mb-8">
+                            <h4 className="text-lg font-semibold mb-3 text-purple-600">📊 数値計算実行結果</h4>
+                            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                              <div className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-gray-800">
+                                {calculationResults}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 最終解答 */}
+                        {finalSolution && (
+                          <div className="mb-8">
+                            <h4 className="text-lg font-semibold mb-3 text-red-600">🎯 最終解答</h4>
+                            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                              <MarkdownRenderer 
+                                content={finalSolution}
+                                className="text-gray-800 font-medium"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 生成ログ（デバッグ用、折りたたみ式） */}
+                        {generationLogs && (
+                          <div className="mb-6">
+                            <details className="group">
+                              <summary className="cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800 mb-2">
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="group-open:rotate-90 transition-transform">▶</span>
+                                  🔍 生成ログを表示（デバッグ用）
+                                </span>
+                              </summary>
+                              <div className="bg-gray-100 p-3 rounded border text-xs font-mono">
+                                <pre className="whitespace-pre-wrap overflow-x-auto text-gray-700">
+                                  {generationLogs}
+                                </pre>
+                              </div>
+                            </details>
+                          </div>
+                        )}
+
+                        {/* 完全な解答（印刷用の統合版） */}
+                        <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-300">
+                          <h4 className="text-lg font-semibold mb-4 text-yellow-800">📄 完全な解答（印刷用）</h4>
+                          <div className="space-y-4">
+                            {solutionSteps && (
+                              <div>
+                                <div className="font-medium text-gray-700 mb-2">【解答の手順】</div>
+                                <div className="whitespace-pre-wrap leading-relaxed text-gray-800 text-sm ml-4">
+                                  {solutionSteps}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {calculationResults && (
+                              <div>
+                                <div className="font-medium text-gray-700 mb-2">【数値計算結果】</div>
+                                <div className="whitespace-pre-wrap font-mono text-sm text-gray-800 ml-4 bg-white p-2 rounded border">
+                                  {calculationResults}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {finalSolution && (
+                              <div>
+                                <div className="font-medium text-gray-700 mb-2">【最終解答】</div>
+                                <div className="whitespace-pre-wrap leading-relaxed text-gray-800 text-sm ml-4 font-medium">
+                                  {finalSolution}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (editedSolution || solutionText) && (
+                      /* 従来方式の解答表示 */
                       <div className="solution-page" style={{ pageBreakBefore: 'always', marginTop: '40px', paddingTop: '40px', borderTop: '2px solid #e5e7eb' }}>
                         <h3 className="text-xl font-bold mb-4">解答・解説</h3>
-                        <div className="whitespace-pre-wrap leading-relaxed">
-                          {editedSolution || solutionText}
-                        </div>
+                        <MarkdownRenderer 
+                          content={editedSolution || solutionText || ''} 
+                          className="leading-relaxed"
+                        />
                       </div>
                     )}
                   </div>
