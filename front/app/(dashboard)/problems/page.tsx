@@ -1218,7 +1218,7 @@ export default function Home() {
                   onChange={(e) => setGenerationMode(e.target.value as 'single' | 'five-stage')}
                   className="text-mongene-blue"
                 />
-                <span className="text-sm font-medium text-mongene-ink">従来方式（1回のAPI呼び出し）</span>
+                <span className="text-sm font-medium text-mongene-ink">ワンショットモデルクエリ（簡単な問題向け）</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1229,13 +1229,13 @@ export default function Home() {
                   onChange={(e) => setGenerationMode(e.target.value as 'single' | 'five-stage')}
                   className="text-mongene-blue"
                 />
-                <span className="text-sm font-medium text-mongene-ink">🆕 5段階生成（最高精度）</span>
+                <span className="text-sm font-medium text-mongene-ink">インクリメンタルモデルクエリ（複雑な問題向け）</span>
               </label>
             </div>
             <div className="text-xs text-mongene-muted">
               {generationMode === 'single' 
-                ? '問題文と解答を1回のAPI呼び出しで生成します（従来の方式）'
-                : '5段階に分けて最高精度で生成します：①問題文→②図形→③解答手順→④数値計算→⑤最終解説'
+                ? '問題文と解答を1回のAPI呼び出しで生成します\n※計算はLLMが行います'
+                : '5段階に分けて生成します：①問題文→②図形→③解答手順→④数値計算→⑤最終解説\n※計算はプログラムで行います'
               }
             </div>
           </div>
