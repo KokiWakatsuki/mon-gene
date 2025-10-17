@@ -69,7 +69,8 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 	
 	// 2. 同じパラメータで既に生成された問題があるか検索
 	if s.problemRepo != nil {
-		existingProblems, err := s.problemRepo.SearchByParameters(ctx, user.ID, req.Subject, req.Prompt, req.Filters)
+		// 従来のfiltersベース検索は削除、基本的な検索に変更
+		existingProblems, err := s.problemRepo.SearchByParameters(ctx, user.ID, req.Subject, req.Prompt, nil)
 		if err == nil && len(existingProblems) > 0 {
 			fmt.Printf("♻️ Found existing problem with same parameters. Reusing problem ID: %d\n", existingProblems[0].ID)
 			return existingProblems[0], nil
@@ -174,7 +175,7 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 	} else {
 		fmt.Printf("🔍 Analyzing problem for geometry needs\n")
 		// 従来の方法で図形が必要かどうかを分析
-		analysis, err := s.coreClient.AnalyzeProblem(ctx, problemText, req.Filters)
+		analysis, err := s.coreClient.AnalyzeProblem(ctx, problemText, nil)
 		if err != nil {
 			fmt.Printf("❌ Error analyzing problem: %v\n", err)
 		} else {
@@ -206,15 +207,15 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 
 	// 3. 問題をデータベースに保存
 	problem := &models.Problem{
-		UserID:      user.ID,
-		Subject:     req.Subject,
-		Prompt:      req.Prompt,
-		Content:     problemText,
-		Solution:    solutionText,
-		ImageBase64: imageBase64,
-		Filters:     req.Filters,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		UserID:         user.ID,
+		Subject:        req.Subject,
+		Prompt:         req.Prompt,
+		Content:        problemText,
+		Solution:       solutionText,
+		ImageBase64:    imageBase64,
+		OpinionProfile: req.OpinionProfile,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	// リポジトリが実装されている場合のみ保存
@@ -682,7 +683,7 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 	if imageBase64 == "" {
 		fmt.Printf("🔍 [RegenerateGeometry] Falling back to problem analysis\n")
 		
-		analysis, err := s.coreClient.AnalyzeProblem(ctx, contentToAnalyze, problem.Filters)
+		analysis, err := s.coreClient.AnalyzeProblem(ctx, contentToAnalyze, nil)
 		if err != nil {
 			return "", fmt.Errorf("failed to analyze problem for geometry: %w", err)
 		}
@@ -913,7 +914,7 @@ func (s *problemService) GenerateFirstStage(ctx context.Context, req models.TwoS
 		}
 	} else {
 		logBuilder.WriteString("🔍 従来の図形分析を実行中...\n")
-		analysis, err := s.coreClient.AnalyzeProblem(ctx, problemText, req.Filters)
+		analysis, err := s.coreClient.AnalyzeProblem(ctx, problemText, nil)
 		if err != nil {
 			logBuilder.WriteString(fmt.Sprintf("⚠️ 図形分析に失敗: %v\n", err))
 		} else if analysis.NeedsGeometry && len(analysis.DetectedShapes) > 0 {
@@ -1778,7 +1779,7 @@ import math
 // GenerateProblemFiveStage 全体の5段階生成プロセスを実行
 func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req models.FiveStageGenerationRequest, userSchoolCode string) (*models.FiveStageGenerationResponse, error) {
 	fmt.Printf("🚀 [FiveStage] Starting five-stage problem generation for user: %s\n", userSchoolCode)
-	fmt.Printf("🔍 [FiveStage] Request details: Prompt length=%d, Subject=%s, Filters=%v\n", len(req.Prompt), req.Subject, req.Filters)
+	fmt.Printf("🔍 [FiveStage] Request details: Prompt length=%d, Subject=%s\n", len(req.Prompt), req.Subject)
 	
 	// ユーザー情報を取得して生成制限をチェック
 	fmt.Printf("📋 [FiveStage] Fetching user info for: %s\n", userSchoolCode)
@@ -1836,7 +1837,6 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 	stage1Req := models.Stage1Request{
 		Prompt:  req.Prompt,
 		Subject: req.Subject,
-		Filters: req.Filters,
 	}
 	stage1Resp, err := s.GenerateStage1(ctx, stage1Req, userSchoolCode)
 	if err != nil || !stage1Resp.Success {
@@ -1932,15 +1932,15 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 	fmt.Printf("💾 [FiveStage] Saving generated problem to database\n")
 	
 	problem := &models.Problem{
-		UserID:      user.ID,
-		Subject:     req.Subject,
-		Prompt:      req.Prompt,
-		Content:     stage1Resp.ProblemText,
-		Solution:    stage5Resp.FinalExplanation,
-		ImageBase64: stage2Resp.ImageBase64,
-		Filters:     req.Filters,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		UserID:         user.ID,
+		Subject:        req.Subject,
+		Prompt:         req.Prompt,
+		Content:        stage1Resp.ProblemText,
+		Solution:       stage5Resp.FinalExplanation,
+		ImageBase64:    stage2Resp.ImageBase64,
+		OpinionProfile: req.OpinionProfile,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	// リポジトリが実装されている場合のみ保存
@@ -2039,7 +2039,7 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
 	// 1段階目用のプロンプトを作成（問題文のみ生成）
-	prompt := s.createStage1Prompt(req.Prompt, req.Subject, req.Filters)
+	prompt := s.createStage1Prompt(req.Prompt, req.Subject)
 	logBuilder.WriteString("📝 1段階目用プロンプトを作成しました\n")
 	
 	// AIクライアントを選択してAPI呼び出し
@@ -2103,7 +2103,7 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 }
 
 // createStage1Prompt 1段階目用のプロンプトを作成（問題文のみ）
-func (s *problemService) createStage1Prompt(userPrompt, subject string, filters map[string]interface{}) string {
+func (s *problemService) createStage1Prompt(userPrompt, subject string) string {
 	return `あなたは日本の中学校の数学教師です。以下の条件に従って、日本語で数学の問題文のみを作成してください。
 
 ` + userPrompt + `

@@ -2,9 +2,9 @@ package models
 
 // TwoStageGenerationRequest 2段階生成のリクエスト
 type TwoStageGenerationRequest struct {
-	Prompt  string                 `json:"prompt"`
-	Subject string                 `json:"subject"`
-	Filters map[string]interface{} `json:"filters"`
+	Prompt         string          `json:"prompt"`
+	Subject        string          `json:"subject"`
+	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty"`
 }
 
 // TwoStageGenerationResponse 2段階生成の最終レスポンス
@@ -55,9 +55,9 @@ type SecondStageResponse struct {
 
 // FiveStageGenerationRequest 5段階生成のリクエスト
 type FiveStageGenerationRequest struct {
-	Prompt  string                 `json:"prompt"`
-	Subject string                 `json:"subject"`
-	Filters map[string]interface{} `json:"filters"`
+	Prompt         string          `json:"prompt"`
+	Subject        string          `json:"subject"`
+	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty"`
 }
 
 // FiveStageGenerationResponse 5段階生成の最終レスポンス
@@ -84,9 +84,8 @@ type FiveStageGenerationResponse struct {
 
 // Stage1Request 1段階目のリクエスト（問題文生成）
 type Stage1Request struct {
-	Prompt  string                 `json:"prompt"`
-	Subject string                 `json:"subject"`
-	Filters map[string]interface{} `json:"filters"`
+	Prompt  string `json:"prompt"`
+	Subject string `json:"subject"`
 }
 
 // Stage1Response 1段階目のレスポンス（問題文生成）
@@ -153,10 +152,10 @@ type Stage5Request struct {
 
 // FiveStageDataForSave 5段階生成完了後のDB保存用データ
 type FiveStageDataForSave struct {
-	Prompt      string                 `json:"prompt"`
-	Subject     string                 `json:"subject"`
-	Filters     map[string]interface{} `json:"filters"`
-	ImageBase64 string                 `json:"image_base64,omitempty"`
+	Prompt         string          `json:"prompt"`
+	Subject        string          `json:"subject"`
+	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty"`
+	ImageBase64    string          `json:"image_base64,omitempty"`
 }
 
 // Stage5Response 5段階目のレスポンス（最終解説生成）

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/layout/Header';
 import Tabs from '../../components/features/problems/Tabs';
-import Filters from '../../components/features/filters/Filters';
+import OpinionProfileSettings from '../../components/features/problems/OpinionProfileSettings';
 import ProblemCard from '../../components/features/problems/ProblemCard';
 import BackgroundShapes from '../../components/layout/BackgroundShapes';
 import ProblemPreviewModal from '../../components/features/problems/ProblemPreviewModal';
@@ -51,6 +51,20 @@ export default function Home() {
   
   // 生成システム用の状態
   const [generationMode, setGenerationMode] = useState<'single' | 'five-stage'>('single');
+  
+  // opinion.md基準での問題生成モード（常にtrue）
+  const [useOpinionCriteria] = useState<boolean>(true);
+  const [opinionProfile, setOpinionProfile] = useState<{
+    domain: number;
+    skillLevel: number;
+    structureComplexity: [number, number];
+    difficultyScore: number;
+  }>({
+    domain: 1,
+    skillLevel: 5,
+    structureComplexity: [3, 3],
+    difficultyScore: 10,
+  });
   
   // 5段階生成システム専用の状態
   const [fiveStageResults, setFiveStageResults] = useState<{
@@ -186,70 +200,152 @@ export default function Home() {
     ],
   };
 
-  const getFilterGroups = () => [
-    {
-      label: '学年',
-      options: [
-        { label: '中1', value: 'grade1' },
-        { label: '中2', value: 'grade2' },
-        { label: '中3', value: 'grade3' },
-      ],
-      allowMultiple: false,
-    },
-    {
-      label: '単元',
-      options: subjectUnits[activeSubject as keyof typeof subjectUnits] || [],
-      allowMultiple: true,
-    },
-    {
-      label: '難易度',
-      options: [
-        { label: 'Lv1', value: 'level1' },
-        { label: 'Lv2', value: 'level2' },
-        { label: 'Lv3', value: 'level3' },
-        { label: 'Lv4', value: 'level4' },
-        { label: 'Lv5', value: 'level5' },
-      ],
-      allowMultiple: false,
-    },
-    {
-      label: '必要な公式数',
-      options: [
-        { label: '1個', value: 'formula1' },
-        { label: '2個', value: 'formula2' },
-        { label: '3個', value: 'formula3' },
-        { label: '4個以上', value: 'formula4plus' },
-      ],
-      allowMultiple: false,
-    },
-    {
-      label: '計算量',
-      options: [
-        { label: '簡単', value: 'simple' },
-        { label: '普通', value: 'medium' },
-        { label: '複雑', value: 'complex' },
-      ],
-      allowMultiple: false,
-    },
-    {
-      label: '数値の複雑性',
-      options: [
-        { label: '整数のみ', value: 'integer' },
-        { label: '小数を含む', value: 'decimal' },
-        { label: '分数を含む', value: 'fraction' },
-      ],
-      allowMultiple: false,
-    },
-    {
-      label: '問題文の文章量',
-      options: [
-        { label: '短い', value: 'short' },
-        { label: '普通', value: 'medium' },
-        { label: '長い', value: 'long' },
-      ],
-      allowMultiple: false,
-    },
-  ];
+  const getFilterGroups = () => {
+    // opinion.md基準を使用する場合は異なるフィルターを表示
+    if (useOpinionCriteria) {
+      return [
+        {
+          label: '出題分野コード',
+          options: [
+            { label: '1: 関数', value: '1' },
+            { label: '2: 平面図形', value: '2' },
+            { label: '3: 空間図形', value: '3' },
+            { label: '4: 確率・統計', value: '4' },
+            { label: '5: 数と式', value: '5' },
+            { label: '6: 融合問題', value: '6' },
+          ],
+          allowMultiple: false,
+        },
+        {
+          label: 'コアスキルレベル',
+          options: [
+            { label: 'Lv1: 基本的知識', value: '1' },
+            { label: 'Lv2: 応用的知識', value: '2' },
+            { label: 'Lv3: 手順の遂行能力', value: '3' },
+            { label: 'Lv4: 計算の実行精度', value: '4' },
+            { label: 'Lv5: 標準的なモデル化能力', value: '5' },
+            { label: 'Lv6: 複雑な情報統制・モデル化能力', value: '6' },
+            { label: 'Lv7: 緻密な論理構築能力', value: '7' },
+            { label: 'Lv8: 高度な空間認識能力', value: '8' },
+            { label: 'Lv9: 独創的な着眼力', value: '9' },
+            { label: 'Lv10: 高次元の発想力', value: '10' },
+          ],
+          allowMultiple: false,
+        },
+        {
+          label: '読解・設定の複雑度',
+          options: [
+            { label: 'Lv1: 図と数式のみ', value: '1' },
+            { label: 'Lv2: 短い補足文', value: '2' },
+            { label: 'Lv3: 1段落程度の文章', value: '3' },
+            { label: 'Lv4: 複数条件の整理', value: '4' },
+            { label: 'Lv5: やや長文', value: '5' },
+            { label: 'Lv6: 会話文形式', value: '6' },
+            { label: 'Lv7: ストーリー形式', value: '7' },
+            { label: 'Lv8: 動的で複雑な設定', value: '8' },
+            { label: 'Lv9: 複雑なストーリー・独自ルール', value: '9' },
+            { label: 'Lv10: 極めて複雑な独自ルール', value: '10' },
+          ],
+          allowMultiple: false,
+        },
+        {
+          label: '設問の誘導性',
+          options: [
+            { label: 'Lv1: 完全な無誘導', value: '1' },
+            { label: 'Lv2: 関連性が薄い小問', value: '2' },
+            { label: 'Lv3: 独立した思考プロセス', value: '3' },
+            { label: 'Lv4: 状況理解の助け程度', value: '4' },
+            { label: 'Lv5: 標準的な誘導', value: '5' },
+            { label: 'Lv6: 重要な要素として機能', value: '6' },
+            { label: 'Lv7: 解法のテンプレート', value: '7' },
+            { label: 'Lv8: 直接的な利用', value: '8' },
+            { label: 'Lv9: 明確な連鎖構造', value: '9' },
+            { label: 'Lv10: 完全なレール形式', value: '10' },
+          ],
+          allowMultiple: false,
+        },
+        {
+          label: '総合難易度スコア',
+          options: [
+            { label: 'Lv1-4: 基礎応用', value: '1-4' },
+            { label: 'Lv5-8: 標準的難問', value: '5-8' },
+            { label: 'Lv9-12: 上位校レベル', value: '9-12' },
+            { label: 'Lv13-16: 最難関校レベル', value: '13-16' },
+            { label: 'Lv17-18: 超難関', value: '17-18' },
+            { label: 'Lv19: 全国レベル', value: '19' },
+            { label: 'Lv20: 捨て問', value: '20' },
+          ],
+          allowMultiple: false,
+        },
+      ];
+    }
+
+    // 従来のフィルター
+    return [
+      {
+        label: '学年',
+        options: [
+          { label: '中1', value: 'grade1' },
+          { label: '中2', value: 'grade2' },
+          { label: '中3', value: 'grade3' },
+        ],
+        allowMultiple: false,
+      },
+      {
+        label: '単元',
+        options: subjectUnits[activeSubject as keyof typeof subjectUnits] || [],
+        allowMultiple: true,
+      },
+      {
+        label: '難易度',
+        options: [
+          { label: 'Lv1', value: 'level1' },
+          { label: 'Lv2', value: 'level2' },
+          { label: 'Lv3', value: 'level3' },
+          { label: 'Lv4', value: 'level4' },
+          { label: 'Lv5', value: 'level5' },
+        ],
+        allowMultiple: false,
+      },
+      {
+        label: '必要な公式数',
+        options: [
+          { label: '1個', value: 'formula1' },
+          { label: '2個', value: 'formula2' },
+          { label: '3個', value: 'formula3' },
+          { label: '4個以上', value: 'formula4plus' },
+        ],
+        allowMultiple: false,
+      },
+      {
+        label: '計算量',
+        options: [
+          { label: '簡単', value: 'simple' },
+          { label: '普通', value: 'medium' },
+          { label: '複雑', value: 'complex' },
+        ],
+        allowMultiple: false,
+      },
+      {
+        label: '数値の複雑性',
+        options: [
+          { label: '整数のみ', value: 'integer' },
+          { label: '小数を含む', value: 'decimal' },
+          { label: '分数を含む', value: 'fraction' },
+        ],
+        allowMultiple: false,
+      },
+      {
+        label: '問題文の文章量',
+        options: [
+          { label: '短い', value: 'short' },
+          { label: '普通', value: 'medium' },
+          { label: '長い', value: 'long' },
+        ],
+        allowMultiple: false,
+      },
+    ];
+  };
 
   const handleSubjectChange = (subject: string) => {
     setActiveSubject(subject);
@@ -464,14 +560,9 @@ export default function Home() {
       return;
     }
 
-    // 必須フィルターのチェック
-    const requiredFilters = ['学年', '単元', '難易度', '必要な公式数', '計算量', '数値の複雑性', '問題文の文章量'];
-    const missingFilters = requiredFilters.filter(filter => 
-      !selectedFilters[filter] || selectedFilters[filter].length === 0
-    );
-    
-    if (missingFilters.length > 0) {
-      alert(`以下の項目を選択してください: ${missingFilters.join(', ')}`);
+    // opinion profileの必須項目チェック
+    if (opinionProfile.domain === 0 || opinionProfile.skillLevel === 0) {
+      alert('全ての評価項目を設定してください');
       return;
     }
     
@@ -651,11 +742,11 @@ export default function Home() {
           problem_text: stage1Result.problemText,
           solution_steps: stage3Result.solutionSteps,
           calculation_results: stage4Result.calculationResults,
-          // 5段階生成完了後のDB保存用データを追加
+          // 5段階生成完了後のDB保存用データを追加（OpinionProfileを含める）
           five_stage_data: {
             prompt: prompt,
             subject: activeSubject,
-            filters: selectedFilters,
+            opinion_profile: createOpinionProfileFromFilters(), // 重要：OpinionProfileを含める
             image_base64: stage2Result.imageBase64 || ''
           }
         })
@@ -737,14 +828,9 @@ export default function Home() {
       return;
     }
 
-    // 必須フィルターのチェック
-    const requiredFilters = ['学年', '単元', '難易度', '必要な公式数', '計算量', '数値の複雑性', '問題文の文章量'];
-    const missingFilters = requiredFilters.filter(filter => 
-      !selectedFilters[filter] || selectedFilters[filter].length === 0
-    );
-    
-    if (missingFilters.length > 0) {
-      alert(`以下の項目を選択してください: ${missingFilters.join(', ')}`);
+    // opinion profileの必須項目チェック
+    if (opinionProfile.domain === 0 || opinionProfile.skillLevel === 0) {
+      alert('全ての評価項目を設定してください');
       return;
     }
     
@@ -782,7 +868,8 @@ export default function Home() {
           body: JSON.stringify({
             prompt: prompt,
             subject: activeSubject,
-            filters: selectedFilters
+            filters: selectedFilters,
+            opinion_profile: createOpinionProfileFromFilters()
           })
         });
         
@@ -889,14 +976,39 @@ export default function Home() {
     const filterTexts = [];
     
     filterTexts.push(`科目: ${activeSubject}`);
+    filterTexts.push('評価基準: opinion.md Ver.4.0に基づく高校入試数学・最終問題評価基準');
     
-    Object.entries(selectedFilters).forEach(([key, values]) => {
-      if (values.length > 0) {
-        filterTexts.push(`${key}: ${values.join(', ')}`);
-      }
-    });
+    // opinionProfileから詳細プロンプトを生成
+    const domainMap: {[key: number]: string} = {
+      1: '関数（座標平面上のグラフの性質）',
+      2: '平面図形（円、三角形・四角形の相似や合同、三平方の定理）',
+      3: '空間図形（直方体、角錐、円錐、球などの立体）',
+      4: '確率・統計（複雑なルール下での確率計算、複数資料の読み取り）',
+      5: '数と式（整数問題、方程式の応用、規則性）',
+      6: '融合問題（複数分野の組み合わせ）'
+    };
+    
+    filterTexts.push(`出題分野: ${domainMap[opinionProfile.domain] || `コード${opinionProfile.domain}`}`);
+    filterTexts.push(`論理思考力レベル: ${opinionProfile.skillLevel}/10`);
+    filterTexts.push(`数学的直観力: ${opinionProfile.structureComplexity[0]}/10`);
+    filterTexts.push(`表現・解釈力: ${opinionProfile.structureComplexity[1]}/10`);
+    filterTexts.push(`問題解決力: ${opinionProfile.difficultyScore}/20`);
+    
+    filterTexts.push('');
+    filterTexts.push('※この基準に従って、高校入試数学の最終問題レベルの問題を生成してください。');
+    filterTexts.push('※opinion.md Ver.4.0の4つの評価指標に基づいています。');
     
     return `以下の条件で${activeSubject}の問題を生成してください:\n${filterTexts.join('\n')}`;
+  };
+
+  // opinionProfileからAPIリクエスト用のオブジェクトを作成
+  const createOpinionProfileFromFilters = () => {
+    return {
+      domain: opinionProfile.domain,
+      skill_level: opinionProfile.skillLevel,
+      structure_complexity: opinionProfile.structureComplexity,
+      difficulty_score: opinionProfile.difficultyScore
+    };
   };
 
   // キーワード検索する関数
@@ -937,16 +1049,36 @@ export default function Home() {
     }
   };
 
-  // パラメータ検索する関数
+  // パラメータ検索する関数（OpinionProfile基準対応）
   const searchProblemsByFilters = async () => {
+    // OpinionProfile基準での検索条件作成
+    const opinionFilters: Record<string, string[]> = {};
+    
+    // OpinionProfileから検索用フィルターを作成
+    if (opinionProfile.domain > 0) {
+      opinionFilters['出題分野コード'] = [String(opinionProfile.domain)];
+    }
+    if (opinionProfile.skillLevel > 0) {
+      opinionFilters['コアスキルレベル'] = [String(opinionProfile.skillLevel)];
+    }
+    if (opinionProfile.structureComplexity[0] > 0) {
+      opinionFilters['読解・設定の複雑度'] = [String(opinionProfile.structureComplexity[0])];
+    }
+    if (opinionProfile.structureComplexity[1] > 0) {
+      opinionFilters['設問の誘導性'] = [String(opinionProfile.structureComplexity[1])];
+    }
+    if (opinionProfile.difficultyScore > 0) {
+      opinionFilters['総合難易度スコア'] = [String(opinionProfile.difficultyScore)];
+    }
+
+    console.log('🔍 [Frontend] OpinionProfile検索フィルター:', opinionFilters);
+
     // 検索条件をチェック
     const hasSubject = activeSubject !== '';
-    const hasFilters = Object.keys(selectedFilters).some(key => 
-      selectedFilters[key] && selectedFilters[key].length > 0
-    );
+    const hasFilters = Object.keys(opinionFilters).length > 0;
 
     if (!hasSubject && !hasFilters) {
-      alert('科目を選択するか、フィルター条件を設定してください');
+      alert('科目を選択するか、OpinionProfile条件を設定してください');
       return;
     }
 
@@ -954,17 +1086,21 @@ export default function Home() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
+      const requestBody = {
+        subject: activeSubject,
+        filters: opinionFilters,
+        matchType: searchMatchType,
+      };
+
+      console.log('🔍 [Frontend] 検索リクエスト:', requestBody);
+
       const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/search-by-filters`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          subject: activeSubject,
-          filters: selectedFilters,
-          matchType: searchMatchType,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
@@ -990,17 +1126,37 @@ export default function Home() {
     }
   };
 
-  // キーワード + 条件の組み合わせ検索する関数
+  // キーワード + 条件の組み合わせ検索する関数（OpinionProfile基準対応）
   const searchProblemsByKeywordAndFilters = async () => {
+    // OpinionProfile基準での検索条件作成
+    const opinionFilters: Record<string, string[]> = {};
+    
+    // OpinionProfileから検索用フィルターを作成
+    if (opinionProfile.domain > 0) {
+      opinionFilters['出題分野コード'] = [String(opinionProfile.domain)];
+    }
+    if (opinionProfile.skillLevel > 0) {
+      opinionFilters['コアスキルレベル'] = [String(opinionProfile.skillLevel)];
+    }
+    if (opinionProfile.structureComplexity[0] > 0) {
+      opinionFilters['読解・設定の複雑度'] = [String(opinionProfile.structureComplexity[0])];
+    }
+    if (opinionProfile.structureComplexity[1] > 0) {
+      opinionFilters['設問の誘導性'] = [String(opinionProfile.structureComplexity[1])];
+    }
+    if (opinionProfile.difficultyScore > 0) {
+      opinionFilters['総合難易度スコア'] = [String(opinionProfile.difficultyScore)];
+    }
+
+    console.log('🔍 [Frontend] OpinionProfile組み合わせ検索フィルター:', opinionFilters);
+
     // 検索条件をチェック
     const hasKeyword = searchKeyword.trim() !== '';
     const hasSubject = activeSubject !== '';
-    const hasFilters = Object.keys(selectedFilters).some(key => 
-      selectedFilters[key] && selectedFilters[key].length > 0
-    );
+    const hasFilters = Object.keys(opinionFilters).length > 0;
 
     if (!hasKeyword && !hasSubject && !hasFilters) {
-      alert('キーワードを入力するか、科目・フィルター条件を設定してください');
+      alert('キーワードを入力するか、科目・OpinionProfile条件を設定してください');
       return;
     }
 
@@ -1008,18 +1164,22 @@ export default function Home() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
+      const requestBody = {
+        keyword: searchKeyword.trim() || undefined,
+        subject: activeSubject || undefined,
+        filters: Object.keys(opinionFilters).length > 0 ? opinionFilters : undefined,
+        matchType: searchMatchType,
+      };
+
+      console.log('🔍 [Frontend] 組み合わせ検索リクエスト:', requestBody);
+
       const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/search-combined`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          keyword: searchKeyword.trim() || undefined,
-          subject: activeSubject || undefined,
-          filters: Object.keys(selectedFilters).length > 0 ? selectedFilters : undefined,
-          matchType: searchMatchType,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
@@ -1058,11 +1218,25 @@ export default function Home() {
           onSubjectChange={handleSubjectChange}
         />
         
-        <Filters 
-          filterGroups={getFilterGroups()}
-          selectedFilters={selectedFilters}
-          onFilterChange={handleFilterChange}
-        />
+        {/* OpinionProfileSettings統合（Ver.4.0基準） */}
+        <div className="mb-6">
+          <OpinionProfileSettings
+            opinionProfile={{
+              domain: opinionProfile.domain,
+              skill_level: opinionProfile.skillLevel,
+              structure_complexity: opinionProfile.structureComplexity,
+              difficulty_score: opinionProfile.difficultyScore,
+            }}
+            onOpinionProfileChange={(profile) => {
+              setOpinionProfile({
+                domain: profile.domain,
+                skillLevel: profile.skill_level,
+                structureComplexity: profile.structure_complexity,
+                difficultyScore: profile.difficulty_score,
+              });
+            }}
+          />
+        </div>
         
         {/* 検索・履歴機能UI */}
         <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
@@ -1201,6 +1375,7 @@ export default function Home() {
             </div>
           </div>
         )}
+
 
         {/* 5段階生成システムの選択UI */}
         <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">

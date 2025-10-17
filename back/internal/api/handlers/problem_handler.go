@@ -58,6 +58,33 @@ func (h *ProblemHandler) GenerateProblem(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// opinion.md基準を使用している場合の追加検証
+	if req.OpinionProfile != nil {
+		if req.OpinionProfile.Domain < 1 || req.OpinionProfile.Domain > 6 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "出題分野コードは1-6の範囲で指定してください")
+			return
+		}
+		if req.OpinionProfile.SkillLevel < 1 || req.OpinionProfile.SkillLevel > 10 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "コアスキルレベルは1-10の範囲で指定してください")
+			return
+		}
+		if req.OpinionProfile.DifficultyScore < 1 || req.OpinionProfile.DifficultyScore > 20 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "総合難易度スコアは1-20の範囲で指定してください")
+			return
+		}
+		if req.OpinionProfile.StructureComplexity[0] < 1 || req.OpinionProfile.StructureComplexity[0] > 10 ||
+		   req.OpinionProfile.StructureComplexity[1] < 1 || req.OpinionProfile.StructureComplexity[1] > 10 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "問題構造評価は各軸とも1-10の範囲で指定してください")
+			return
+		}
+		
+		println("📋 [DEBUG] Opinion.md criteria detected:")
+		println("  Domain:", req.OpinionProfile.Domain)
+		println("  SkillLevel:", req.OpinionProfile.SkillLevel)
+		println("  StructureComplexity: [", req.OpinionProfile.StructureComplexity[0], ",", req.OpinionProfile.StructureComplexity[1], "]")
+		println("  DifficultyScore:", req.OpinionProfile.DifficultyScore)
+	}
+
 	// ユーザーのSchoolCodeを渡して問題を生成
 	problem, err := h.problemService.GenerateProblem(r.Context(), req, user.SchoolCode)
 	if err != nil {
@@ -457,15 +484,15 @@ func (h *ProblemHandler) GenerateStage5(w http.ResponseWriter, r *http.Request) 
 		
 		// 実際のDB保存処理を実行
 		problem := &models.Problem{
-			UserID:      user.ID,
-			Subject:     req.FiveStageData.Subject,
-			Prompt:      req.FiveStageData.Prompt,
-			Content:     req.ProblemText,
-			Solution:    response.FinalExplanation,
-			ImageBase64: req.FiveStageData.ImageBase64,
-			Filters:     req.FiveStageData.Filters,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
+			UserID:         user.ID,
+			Subject:        req.FiveStageData.Subject,
+			Prompt:         req.FiveStageData.Prompt,
+			Content:        req.ProblemText,
+			Solution:       response.FinalExplanation,
+			ImageBase64:    req.FiveStageData.ImageBase64,
+			OpinionProfile: req.FiveStageData.OpinionProfile, // filtersからopinion_profileに変更
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
 		}
 		
 		// GenerateProblemサービスのDB保存ロジックを参考に、直接リポジトリに保存

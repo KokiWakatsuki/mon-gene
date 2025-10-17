@@ -10,15 +10,24 @@ type Problem struct {
 	Content     string                 `json:"content" db:"content"`                         // 問題文
 	Solution    string                 `json:"solution,omitempty" db:"solution"`             // 解答
 	ImageBase64 string                 `json:"image_base64,omitempty" db:"image_base64"`     // 図
-	Filters     map[string]interface{} `json:"filters" db:"filters"`                         // 生成パラメータ
-	CreatedAt   time.Time              `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at" db:"updated_at"`
+	// opinion.md基準の評価データ（従来のfiltersを削除し、opinion_profileのみ使用）
+	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty" db:"opinion_profile"` // opinion.md基準のプロファイル
+	CreatedAt      time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at" db:"updated_at"`
+}
+
+// OpinionProfile は opinion.md の評価基準に基づく問題プロファイル
+type OpinionProfile struct {
+	Domain             int    `json:"domain"`               // 出題分野コード (1-6)
+	SkillLevel         int    `json:"skill_level"`          // コアスキル評価 (1-10)
+	StructureComplexity [2]int `json:"structure_complexity"` // 問題構造評価 [A, B] (各1-10)
+	DifficultyScore    int    `json:"difficulty_score"`     // 総合難易度スコア (1-20)
 }
 
 type GenerateProblemRequest struct {
-	Prompt  string                 `json:"prompt" validate:"required"`
-	Subject string                 `json:"subject" validate:"required"`
-	Filters map[string]interface{} `json:"filters"`
+	Prompt         string          `json:"prompt" validate:"required"`
+	Subject        string          `json:"subject" validate:"required"`
+	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty"` // opinion.md基準での問題生成（従来のfiltersを削除）
 }
 
 type GenerateProblemResponse struct {
