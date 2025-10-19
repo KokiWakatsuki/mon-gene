@@ -17,7 +17,6 @@ type ProblemService interface {
 	GeneratePDF(ctx context.Context, req models.PDFGenerateRequest) (string, error)
 	UpdateProblem(ctx context.Context, req models.UpdateProblemRequest, userID int64) (*models.Problem, error)
 	RegenerateGeometry(ctx context.Context, req models.RegenerateGeometryRequest, userID int64) (string, error)
-	SearchProblemsByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error)
 	SearchProblemsByFilters(ctx context.Context, userID int64, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 	SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
 	SearchProblemsCombined(ctx context.Context, userID int64, keyword string, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
@@ -67,15 +66,7 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 	
-	// 2. 同じパラメータで既に生成された問題があるか検索
-	if s.problemRepo != nil {
-		// 従来のfiltersベース検索は削除、基本的な検索に変更
-		existingProblems, err := s.problemRepo.SearchByParameters(ctx, user.ID, req.Subject, req.Prompt, nil)
-		if err == nil && len(existingProblems) > 0 {
-			fmt.Printf("♻️ Found existing problem with same parameters. Reusing problem ID: %d\n", existingProblems[0].ID)
-			return existingProblems[0], nil
-		}
-	}
+	// Note: 既存問題の重複チェック機能は削除されました（不要な複雑性のため）
 	
 	// 3. ユーザーの問題生成回数制限をチェック
 	
@@ -256,6 +247,14 @@ func (s *problemService) GeneratePDF(ctx context.Context, req models.PDFGenerate
 func (s *problemService) createGeometryRegenerationPrompt(problemText string) string {
 	return `あなたは日本の中学校の数学教師です。以下の問題文から、図形描画用のPythonコードを生成してください。
 
+**重要：中学数学の範囲内の図形のみを描画してください。高校数学の内容は使用しないでください。**
+
+**中学数学の範囲の図形**：
+- 平面図形：直線、線分、角、三角形、四角形、多角形、円、扇形
+- 空間図形：直方体、立方体、円柱、円錐、球、角錐
+- 座標平面：一次関数、二次関数y=ax²のグラフ
+- その他中学数学で扱う図形
+
 【既存の問題文】
 ` + problemText + `
 
@@ -313,6 +312,96 @@ plt.tight_layout()
 func (s *problemService) enhancePromptForGeometry(prompt string) string {
 	return `あなたは日本の中学校の数学教師です。以下の条件に従って、日本語で数学の問題を作成してください。
 
+**重要：中学数学の範囲内のみで問題を作成してください。高校数学の内容は使用しないでください。**
+
+**中学数学の範囲**：
+- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
+- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
+- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
+
+**禁止事項（高校数学の内容）**：
+- 三角比、三角関数（sin、cos、tan）
+- 指数関数、対数関数
+- 微分、積分
+- 数列、極限
+- ベクトル（外積、内積、ベクトルの大きさなど）
+- 複素数
+- 行列、行列式
+- 確率分布、統計的推定・検定
+- その他高校数学の単元
+
+**ベクトル使用の完全禁止（最重要）**：
+- 「ベクトル」「外積」「内積」「行列式」「方向ベクトル」「単位ベクトル」「位置ベクトル」は絶対に使用禁止
+- 「方向」「向き」という用語も座標計算では使用禁止
+- 座標計算では「x座標の差」「y座標の差」「座標の増減」のみ使用
+- 中学数学の範囲内の基本的な計算方法のみを使用してください
+
+**中学数学での計算手法（必須）**：
+- 三角形の面積：底辺×高さ÷2、またはヘロンの公式
+- 四面体の体積：底面積×高さ÷3（四角錐も同様）
+- 距離計算：座標では√[(x₂-x₁)² + (y₂-y₁)²]
+- 座標上の点の位置：x座標、y座標の値で直接表現
+- 線分上の点：始点から終点への座標の比例配分で表現
+- 立体図形は基本的な公式（体積、表面積）のみ使用
+
+**問題の難易度設定（柔軟なガイドライン）**：
+問題の内容や形式に応じて、以下の考え方で適切な難易度を設定してください：
+
+**【基本レベル】**：
+- 図形：長さ、角度、基本的な面積・周囲の長さ
+- 代数：基本的な計算、簡単な方程式
+- 関数：座標の読み取り、基本的なグラフの性質
+- 確率・統計：基本的な確率、簡単なデータ分析
+
+**【応用レベル】**：
+- 図形：体積、表面積、合同・相似の基本的な利用
+- 代数：連立方程式、二次方程式の解法
+- 関数：一次関数・二次関数の応用
+- 確率・統計：場合の数、やや複雑な確率
+
+**【発展レベル】**：
+- 図形：相似比、面積比、複雑な図形の性質
+- 代数：文章題、複雑な式の計算
+- 関数：関数の応用問題、グラフの解釈
+- 確率・統計：複合的な確率、標本調査
+
+**【応用発展レベル】**：
+- 図形：切断、断面、立体の複雑な計算、証明問題
+- 代数：複雑な文章題、多段階の計算
+- 関数：複数の関数の組み合わせ、実践的応用
+- 確率・統計：複雑な場合分け、データの総合的分析
+
+**柔軟なアプローチ**：
+1. **小問がある場合**：各小問の難易度を段階的に上げる
+2. **小問がない場合**：一つの問題内で基本→応用→発展の要素を含める
+3. **問題の分野に応じて**：上記のレベル分けを参考に適切な難易度を選択
+4. **基本→発展の流れ**：どのような形式でも基本から発展への流れを保つ
+
+**様々な形式の例**：
+- **小問あり**：(1)基本→(2)応用→(3)発展
+- **小問なし**：一つの問題で基本概念から発展的解法まで含む
+- **証明問題**：基本的な性質から複雑な証明へ
+- **文章題**：簡単な設定から複雑な応用まで
+
+**【最重要】会話文形式の指定条件**：
+- **必須条件**: 問題は会話文形式（登場人物2人程度）で、やり取りの中から条件を抽出する必要がある形で作成してください
+- **会話文の構造**: 
+  - 登場人物A（例：たかし、あきら、先生など）
+  - 登場人物B（例：みゆき、さとみ、友達など）
+  - 2人が数学について話し合っている場面を設定
+- **条件の設定方法**:
+  - 会話の中で図形の寸法、位置、条件などを自然に述べさせる
+  - 一方が問題を提起し、もう一方が補足情報を加える形式
+  - 「～について考えてみよう」「～の場合はどうかな」などの自然な流れ
+- **問われる内容**:
+  - 会話で示された条件を整理して数学的に解く問題
+  - 会話から読み取れる情報を元に計算や証明を行う問題
+
+**会話文形式の例**：
+たかし：「この立方体の体積を求めてみよう。1辺が6cmだったね。」
+さとみ：「そうね。でも、この立方体の中に円柱が入っているって聞いたけど、どんな円柱かしら？」
+たかし：「立方体にちょうど内接する円柱だよ。底面は立方体の底面に接していて...」
+
 ` + prompt + `
 
 **出力形式**：
@@ -324,7 +413,7 @@ func (s *problemService) enhancePromptForGeometry(prompt string) string {
 
 ---PROBLEM_START---
 【問題】
-（ここに問題文を記述）
+（会話文形式で、登場人物2人程度のやり取りの中から条件を抽出する必要がある問題文を記述）
 ---PROBLEM_END---
 
 もし問題に図形が必要な場合は、以下の形式で図形描画用のPythonコードを追加してください：
@@ -361,28 +450,32 @@ plt.tight_layout()
 ---SOLUTION_END---
 
 重要：
-1. 問題文に含まれる具体的な数値や条件を図形に正確に反映してください
-2. 点の位置、線分の長さ、比率などを問題文通りに描画してください
-3. **座標軸の表示判定**：
+1. **必ず会話文形式で問題を作成してください（最重要）**
+2. 問題文に含まれる具体的な数値や条件を図形に正確に反映してください
+3. 点の位置、線分の長さ、比率などを問題文通りに描画してください
+4. **座標軸の表示判定**：
    - 問題文のキーワードで判定
    - 「座標」「グラフ」「関数」「x軸」「y軸」があれば、ax.grid(True, alpha=0.3) で座標軸を表示
    - 「体積」「面積」「角度」「長さ」「直方体」「円錐」「球」があれば、ax.axis('off') で座標軸を非表示
-4. 図形のラベルは必ずアルファベット（A、B、C、P、Q、R等）を使用してください
-5. ax.text()で日本語を使用しないでください
-6. タイトルやラベルは英語またはアルファベットのみを使用してください
-7. import文は記述しないでください（plt, np, patches, Axes3D, Poly3DCollectionは既に利用可能です）
-8. numpy関数はnp.array(), np.linspace(), np.meshgrid()等で使用してください
-9. 3D図形が必要な場合は以下を使用してください：
-   - fig = plt.figure(figsize=(8, 8))
-   - ax = fig.add_subplot(111, projection='3d')
-   - ax.plot_surface(), ax.add_collection3d(Poly3DCollection())等
-   - ax.view_init(elev=20, azim=-75)で視点を調整
-10. 切断図形や断面図が必要な場合は、切断面をPoly3DCollectionで描画してください
-11. **頂点ラベル（必須）**: 
-   - 全ての頂点にアルファベット（A、B、C、D、E、F、G、H等）を表示
-   - ax.text(x, y, z, 'A', size=16, color='black', weight='bold')
-   - 立方体: A,B,C,D（下面）、E,F,G,H（上面）
-   - 円錐: O（頂点）、A,B,C...（底面）`
+5. 図形のラベルは必ずアルファベット（A、B、C、P、Q、R等）を使用してください
+6. ax.text()で日本語を使用しないでください
+7. タイトルやラベルは英語またはアルファベットのみを使用してください
+8. import文は記述しないでください（plt, np, patches, Axes3D, Poly3DCollectionは既に利用可能です）
+9. numpy関数はnp.array(), np.linspace(), np.meshgrid()等で使用してください
+10. 3D図形が必要な場合は以下を使用してください：
+    - fig = plt.figure(figsize=(8, 8))
+    - ax = fig.add_subplot(111, projection='3d')
+    - ax.plot_surface(), ax.add_collection3d(Poly3DCollection())等
+    - ax.view_init(elev=20, azim=-75)で視点を調整
+11. 切断図形や断面図が必要な場合は、切断面をPoly3DCollectionで描画してください
+12. **頂点ラベル（必須）**: 
+    - 全ての頂点にアルファベット（A、B、C、D、E、F、G、H等）を表示
+    - ax.text(x, y, z, 'A', size=16, color='black', weight='bold')
+    - 立方体: A,B,C,D（下面）、E,F,G,H（上面）
+    - 円錐: O（頂点）、A,B,C...（底面）
+13. 会話の中で具体的な数値や条件を自然に含めてください
+14. 登場人物の名前は親しみやすい日本人の名前を使用してください
+15. 会話から条件を読み取って数学的に解く問題であることを明確にしてください`
 }
 
 // extractProblemText extracts problem text from the content
@@ -491,19 +584,6 @@ func (s *problemService) removeSolutionText(content string) string {
 	return strings.TrimSpace(re.ReplaceAllString(content, ""))
 }
 
-// SearchProblemsByParameters パラメータで問題を検索
-func (s *problemService) SearchProblemsByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error) {
-	if s.problemRepo == nil {
-		return nil, fmt.Errorf("problem repository is not initialized")
-	}
-	
-	problems, err := s.problemRepo.SearchByParameters(ctx, userID, subject, prompt, filters)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search problems by parameters: %w", err)
-	}
-	
-	return problems, nil
-}
 
 // SearchProblemsByFilters フィルター（パラメータ）で問題を検索
 func (s *problemService) SearchProblemsByFilters(ctx context.Context, userID int64, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error) {
@@ -741,569 +821,8 @@ func min(a, b int) int {
 	return b
 }
 
-// 2段階生成システムの実装
+// 5段階生成システムの実装（高精度）
 
-// GenerateProblemTwoStage 全体の2段階生成プロセスを実行
-func (s *problemService) GenerateProblemTwoStage(ctx context.Context, req models.TwoStageGenerationRequest, userSchoolCode string) (*models.TwoStageGenerationResponse, error) {
-	fmt.Printf("🚀 [TwoStage] Starting two-stage problem generation for user: %s\n", userSchoolCode)
-	
-	// 1回目のAPI呼び出し
-	firstStageResp, err := s.GenerateFirstStage(ctx, req, userSchoolCode)
-	if err != nil {
-		return &models.TwoStageGenerationResponse{
-			Success:       false,
-			Error:         fmt.Sprintf("1回目のAPI呼び出しに失敗しました: %v", err),
-			FirstStageLog: firstStageResp.Log,
-		}, nil
-	}
-	
-	if !firstStageResp.Success {
-		return &models.TwoStageGenerationResponse{
-			Success:       false,
-			Error:         "1回目のAPI呼び出しが失敗しました",
-			FirstStageLog: firstStageResp.Log,
-		}, nil
-	}
-	
-	// 2回目のAPI呼び出し
-	secondStageReq := models.SecondStageRequest{
-		ProblemText:  firstStageResp.ProblemText,
-		GeometryCode: firstStageResp.GeometryCode,
-	}
-	
-	secondStageResp, err := s.GenerateSecondStage(ctx, secondStageReq, userSchoolCode)
-	if err != nil {
-		return &models.TwoStageGenerationResponse{
-			Success:        false,
-			Error:          fmt.Sprintf("2回目のAPI呼び出しに失敗しました: %v", err),
-			ProblemText:    firstStageResp.ProblemText,
-			ImageBase64:    firstStageResp.ImageBase64,
-			GeometryCode:   firstStageResp.GeometryCode,
-			FirstStageLog:  firstStageResp.Log,
-			SecondStageLog: secondStageResp.Log,
-		}, nil
-	}
-	
-	fmt.Printf("✅ [TwoStage] Two-stage problem generation completed successfully\n")
-	
-	return &models.TwoStageGenerationResponse{
-		Success:             true,
-		ProblemText:         firstStageResp.ProblemText,
-		ImageBase64:         firstStageResp.ImageBase64,
-		SolutionSteps:       secondStageResp.SolutionSteps,
-		FinalSolution:       secondStageResp.FinalSolution,
-		CalculationResults:  secondStageResp.CalculationResults,
-		FirstStageLog:       firstStageResp.Log,
-		SecondStageLog:      secondStageResp.Log,
-		GeometryCode:        firstStageResp.GeometryCode,
-		CalculationProgram:  secondStageResp.CalculationProgram,
-	}, nil
-}
-
-// GenerateFirstStage 1回目のAPI呼び出し（問題文・図形生成）
-func (s *problemService) GenerateFirstStage(ctx context.Context, req models.TwoStageGenerationRequest, userSchoolCode string) (*models.FirstStageResponse, error) {
-	logBuilder := strings.Builder{}
-	logBuilder.WriteString(fmt.Sprintf("⭐ [FirstStage] 1回目のAPI呼び出しを開始 (ユーザー: %s)\n", userSchoolCode))
-	
-	// ユーザー情報を取得
-	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
-	if err != nil {
-		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.FirstStageResponse{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, err
-	}
-	
-	// API設定の確認
-	if user.PreferredAPI == "" || user.PreferredModel == "" {
-		errorMsg := fmt.Sprintf("AI設定が不完全です。設定ページでAPIとモデルを選択してください。現在の設定: API=%s, モデル=%s", user.PreferredAPI, user.PreferredModel)
-		logBuilder.WriteString(fmt.Sprintf("⚠️ %s\n", errorMsg))
-		return &models.FirstStageResponse{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
-	
-	// 1回目用のプロンプトを作成
-	prompt := s.createFirstStagePrompt(req.Prompt)
-	logBuilder.WriteString("📝 1回目用プロンプトを作成しました\n")
-	
-	// AIクライアントを選択してAPI呼び出し
-	var content string
-	switch user.PreferredAPI {
-	case "openai", "chatgpt":
-		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-		if err != nil {
-			errorMsg := fmt.Sprintf("OpenAI APIでの問題生成に失敗しました: %v", err)
-			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-			return &models.FirstStageResponse{
-				Success: false,
-				Error:   errorMsg,
-				Log:     logBuilder.String(),
-			}, err
-		}
-	case "google", "gemini":
-		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-		if err != nil {
-			errorMsg := fmt.Sprintf("Google APIでの問題生成に失敗しました: %v", err)
-			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-			return &models.FirstStageResponse{
-				Success: false,
-				Error:   errorMsg,
-				Log:     logBuilder.String(),
-			}, err
-		}
-	case "claude", "laboratory":
-		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-		if err != nil {
-			errorMsg := fmt.Sprintf("Claude APIでの問題生成に失敗しました: %v", err)
-			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-			return &models.FirstStageResponse{
-				Success: false,
-				Error:   errorMsg,
-				Log:     logBuilder.String(),
-			}, err
-		}
-	default:
-		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.FirstStageResponse{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
-	
-	// 問題文とPythonコードを抽出
-	problemText := s.extractProblemText(content)
-	pythonCode := s.extractPythonCode(content)
-	
-	if problemText == "" {
-		errorMsg := "問題文の抽出に失敗しました"
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.FirstStageResponse{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("📝 問題文を抽出しました (長さ: %d文字)\n", len(problemText)))
-	logBuilder.WriteString(fmt.Sprintf("🐍 図形コードの抽出: %t\n", pythonCode != ""))
-	
-	// 図形生成
-	var imageBase64 string
-	if pythonCode != "" {
-		logBuilder.WriteString("🎨 カスタム図形を生成中...\n")
-		imageBase64, err = s.coreClient.GenerateCustomGeometry(ctx, pythonCode, problemText)
-		if err != nil {
-			logBuilder.WriteString(fmt.Sprintf("⚠️ カスタム図形生成に失敗: %v\n", err))
-		} else {
-			logBuilder.WriteString("✅ カスタム図形を生成しました\n")
-		}
-	} else {
-		logBuilder.WriteString("🔍 従来の図形分析を実行中...\n")
-		analysis, err := s.coreClient.AnalyzeProblem(ctx, problemText, nil)
-		if err != nil {
-			logBuilder.WriteString(fmt.Sprintf("⚠️ 図形分析に失敗: %v\n", err))
-		} else if analysis.NeedsGeometry && len(analysis.DetectedShapes) > 0 {
-			shapeType := analysis.DetectedShapes[0]
-			logBuilder.WriteString(fmt.Sprintf("🎨 %s図形を生成中...\n", shapeType))
-			if params, exists := analysis.SuggestedParameters[shapeType]; exists {
-				imageBase64, err = s.coreClient.GenerateGeometry(ctx, shapeType, params)
-				if err != nil {
-					logBuilder.WriteString(fmt.Sprintf("⚠️ 図形生成に失敗: %v\n", err))
-				} else {
-					logBuilder.WriteString(fmt.Sprintf("✅ %s図形を生成しました\n", shapeType))
-				}
-			}
-		} else {
-			logBuilder.WriteString("ℹ️ この問題には図形は必要ありません\n")
-		}
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("🖼️ 最終的な図形データの長さ: %d\n", len(imageBase64)))
-	logBuilder.WriteString("✅ [FirstStage] 1回目のAPI呼び出しが完了しました\n")
-	
-	return &models.FirstStageResponse{
-		Success:      true,
-		ProblemText:  problemText,
-		GeometryCode: pythonCode,
-		ImageBase64:  imageBase64,
-		Log:          logBuilder.String(),
-	}, nil
-}
-
-// GenerateSecondStage 2回目のAPI呼び出し（解答手順・数値計算プログラム生成・実行）
-func (s *problemService) GenerateSecondStage(ctx context.Context, req models.SecondStageRequest, userSchoolCode string) (*models.SecondStageResponse, error) {
-	logBuilder := strings.Builder{}
-	logBuilder.WriteString(fmt.Sprintf("⭐ [SecondStage] 2回目のAPI呼び出しを開始 (ユーザー: %s)\n", userSchoolCode))
-	
-	// ユーザー情報を取得
-	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
-	if err != nil {
-		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.SecondStageResponse{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, err
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
-	
-	// 2回目用のプロンプトを作成（解答手順・数値計算プログラム生成のみ）
-	prompt := s.createSecondStagePrompt(req.ProblemText, req.GeometryCode)
-	logBuilder.WriteString("📝 2回目用プロンプトを作成しました\n")
-	
-	// AIクライアントを選択してAPI呼び出し
-	var content string
-	switch user.PreferredAPI {
-	case "openai", "chatgpt":
-		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-		if err != nil {
-			errorMsg := fmt.Sprintf("OpenAI APIでの解答生成に失敗しました: %v", err)
-			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-			return &models.SecondStageResponse{
-				Success: false,
-				Error:   errorMsg,
-				Log:     logBuilder.String(),
-			}, err
-		}
-	case "google", "gemini":
-		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-		if err != nil {
-			errorMsg := fmt.Sprintf("Google APIでの解答生成に失敗しました: %v", err)
-			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-			return &models.SecondStageResponse{
-				Success: false,
-				Error:   errorMsg,
-				Log:     logBuilder.String(),
-			}, err
-		}
-	case "claude", "laboratory":
-		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-		if err != nil {
-			errorMsg := fmt.Sprintf("Claude APIでの解答生成に失敗しました: %v", err)
-			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-			return &models.SecondStageResponse{
-				Success: false,
-				Error:   errorMsg,
-				Log:     logBuilder.String(),
-			}, err
-		}
-	default:
-		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.SecondStageResponse{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
-	
-	// 解答手順と数値計算プログラムを抽出
-	solutionSteps := s.extractSolutionSteps(content)
-	calculationProgram := s.extractCalculationProgram(content)
-	
-	logBuilder.WriteString(fmt.Sprintf("📚 解答手順の抽出: %t (長さ: %d文字)\n", solutionSteps != "", len(solutionSteps)))
-	logBuilder.WriteString(fmt.Sprintf("🧮 計算プログラムの抽出: %t (長さ: %d文字)\n", calculationProgram != "", len(calculationProgram)))
-	
-	// 計算プログラムの内容をログに表示
-	if calculationProgram != "" {
-		logBuilder.WriteString(strings.Repeat("=", 50) + "\n")
-		logBuilder.WriteString("🧮 [生成された数値計算プログラム]\n")
-		logBuilder.WriteString(strings.Repeat("=", 50) + "\n")
-		logBuilder.WriteString(calculationProgram + "\n")
-		logBuilder.WriteString(strings.Repeat("=", 50) + "\n")
-	}
-	
-	// 数値計算プログラムを実行
-	var calculationResults string
-	if calculationProgram != "" {
-		logBuilder.WriteString("🧮 数値計算プログラムを実行中...\n")
-		calculationResults, err = s.executeCalculationProgram(ctx, calculationProgram)
-		if err != nil {
-			logBuilder.WriteString(fmt.Sprintf("⚠️ 数値計算の実行に失敗: %v\n", err))
-			calculationResults = fmt.Sprintf("計算実行エラー: %v", err)
-		} else {
-			logBuilder.WriteString("✅ 数値計算を実行しました\n")
-		}
-	}
-	
-	// 3回目のAPI呼び出し：解答手順と計算結果を統合して最終解説文を生成
-	var finalSolution string
-	if solutionSteps != "" && calculationResults != "" {
-		logBuilder.WriteString("⭐ [ThirdStage] 3回目のAPI呼び出しを開始：解答手順と計算結果の統合\n")
-		
-		finalPrompt := s.createThirdStagePrompt(req.ProblemText, solutionSteps, calculationResults)
-		logBuilder.WriteString("📝 3回目用プロンプトを作成しました\n")
-		
-		// 同じAIクライアントで最終解説文を生成
-		switch user.PreferredAPI {
-		case "openai", "chatgpt":
-			dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
-			finalContent, err := dynamicClient.GenerateContent(ctx, finalPrompt)
-			if err != nil {
-				logBuilder.WriteString(fmt.Sprintf("⚠️ 3回目のAPI呼び出しに失敗: %v\n", err))
-				finalSolution = solutionSteps // フォールバック：解答手順をそのまま使用
-			} else {
-				finalSolution = s.extractFinalSolution(finalContent)
-				if finalSolution == "" {
-					finalSolution = finalContent // マーカーがない場合は全体を使用
-				}
-				logBuilder.WriteString("✅ 3回目のAPI呼び出しで最終解説文を生成しました\n")
-			}
-		case "google", "gemini":
-			dynamicClient := clients.NewGoogleClient(user.PreferredModel)
-			finalContent, err := dynamicClient.GenerateContent(ctx, finalPrompt)
-			if err != nil {
-				logBuilder.WriteString(fmt.Sprintf("⚠️ 3回目のAPI呼び出しに失敗: %v\n", err))
-				finalSolution = solutionSteps
-			} else {
-				finalSolution = s.extractFinalSolution(finalContent)
-				if finalSolution == "" {
-					finalSolution = finalContent
-				}
-				logBuilder.WriteString("✅ 3回目のAPI呼び出しで最終解説文を生成しました\n")
-			}
-		case "claude", "laboratory":
-			dynamicClient := clients.NewClaudeClient(user.PreferredModel)
-			finalContent, err := dynamicClient.GenerateContent(ctx, finalPrompt)
-			if err != nil {
-				logBuilder.WriteString(fmt.Sprintf("⚠️ 3回目のAPI呼び出しに失敗: %v\n", err))
-				finalSolution = solutionSteps
-			} else {
-				finalSolution = s.extractFinalSolution(finalContent)
-				if finalSolution == "" {
-					finalSolution = finalContent
-				}
-				logBuilder.WriteString("✅ 3回目のAPI呼び出しで最終解説文を生成しました\n")
-			}
-		}
-	} else {
-		finalSolution = solutionSteps // 計算結果がない場合は解答手順をそのまま使用
-	}
-	
-	logBuilder.WriteString("✅ [SecondStage] 2回目のAPI呼び出しが完了しました（3回目含む）\n")
-	
-	return &models.SecondStageResponse{
-		Success:             true,
-		SolutionSteps:       solutionSteps,
-		CalculationProgram:  calculationProgram,
-		FinalSolution:       finalSolution,
-		CalculationResults:  calculationResults,
-		Log:                 logBuilder.String(),
-	}, nil
-}
-
-// createFirstStagePrompt 1回目API呼び出し用のプロンプトを作成
-func (s *problemService) createFirstStagePrompt(userPrompt string) string {
-	return `あなたは日本の中学校の数学教師です。以下の条件に従って、日本語で数学の問題を作成してください。
-
-` + userPrompt + `
-
-**重要：この段階では問題文と図形のみを生成し、解答・解説は生成しないでください。**
-
-**出力形式**：
-
----PROBLEM_START---
-【問題】
-（ここに問題文を記述）
----PROBLEM_END---
-
-もし問題に図形が必要な場合は、以下の形式で図形描画用のPythonコードを追加してください：
-
----GEOMETRY_CODE_START---
-# 図形描画コード（問題に特化した図形を描画）
-# 重要: import文は絶対に記述しないでください（事前にインポート済み）
-# 利用可能な変数: plt, patches, np, numpy, Axes3D, Poly3DCollection
-
-# 2D図形の場合
-fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-
-# 3D図形の場合は以下を使用
-# fig = plt.figure(figsize=(8, 8))
-# ax = fig.add_subplot(111, projection='3d')
-
-# ここに問題に応じた具体的な図形描画コードを記述
-ax.set_aspect('equal')
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
----GEOMETRY_CODE_END---
-
-**注意事項**：
-1. 解答・解説は絶対に含めないでください
-2. 問題文は完全で自己完結的にしてください
-3. 図形が必要な場合は、問題文の内容に正確に対応した図形コードを作成してください
-4. import文は記述しないでください
-5. 図形のラベルはアルファベット（A、B、C等）を使用してください`
-}
-
-// createSecondStagePrompt 2回目API呼び出し用のプロンプトを作成
-func (s *problemService) createSecondStagePrompt(problemText, geometryCode string) string {
-	prompt := `以下の問題について、詳細な解答の手順と数値計算を行うPythonプログラムを必ず作成してください。
-
-【問題文】
-` + problemText
-
-	if geometryCode != "" {
-		prompt += `
-
-【図形描画コード】
-` + geometryCode
-	}
-
-	prompt += `
-
-**必須出力形式**：以下の3つのセクションを必ず全て含めて出力してください。
-
----SOLUTION_STEPS_START---
-【解答の手順】
-1. （手順1の詳細説明）
-2. （手順2の詳細説明） 
-3. （手順3の詳細説明）
-...
-（問題で問われている各小問について、段階的に解法を説明）
----SOLUTION_STEPS_END---
-
----CALCULATION_PROGRAM_START---
-# 数値計算プログラム（Python）
-# この問題の解答に必要な全ての数値計算を実行するプログラムです
-# import文は使用しないでください（numpy は np として、math は math として利用可能）
-
-print("=== 数値計算結果 ===")
-
-# **必須**: 問題文の各小問に対応する具体的な数値計算を以下に記述してください
-
-# 【重要】以下は計算例です。実際の問題に合わせて具体的な計算を実装してください：
-
-# ===== 計算例1: 連立方程式を解く =====
-# 例：3点を通る2次関数 y = ax² + bx + c を求める
-# 点A(1,8), B(3,2), C(-1,18) を通る場合
-# A = np.array([[1, 1, 1], [9, 3, 1], [1, -1, 1]])
-# B = np.array([8, 2, 18])
-# solution = np.linalg.solve(A, B)
-# a, b, c = solution
-# print(f"係数: a={a}, b={b}, c={c}")
-# print(f"2次関数: y = {a}x² + ({b})x + {c}")
-
-# ===== 計算例2: 2次関数の最大値・最小値 =====
-# 例：f(x) = -2x² + 80x + 1000 の最大値
-# a, b, c = -2, 80, 1000
-# vertex_x = -b / (2*a)
-# vertex_y = a * vertex_x**2 + b * vertex_x + c
-# print(f"最大値: x={vertex_x}で y={vertex_y}")
-
-# ===== 計算例3: 関数値の範囲計算 =====
-# 例：区間[1,30]での関数値を計算
-# for x_val in range(1, 31):
-#     y_val = -2 * x_val**2 + 80 * x_val + 1000
-#     print(f"x={x_val}: y={y_val}")
-
-# ===== 計算例4: 方程式を解く =====
-# 例：y = 3000 - 25x = 0 を解く
-# x_solution = 3000 / 25
-# print(f"販売終了日: {x_solution}日後")
-
-# ===== 計算例5: 利益計算（複雑な場合） =====
-# 例：価格変動による利益計算
-# price_per_day = []
-# for day in range(1, 121):
-#     if 1 <= day <= 30:
-#         price = -2 * day**2 + 80 * day + 1000
-#     elif 31 <= day <= 60:
-#         price = -day**2 + 20 * day + 2400
-#     else:
-#         price = 3000 - 25 * day
-#     
-#     if price <= 0:
-#         break
-#     
-#     cost = 800
-#     quantity = (price - 500) / 50
-#     daily_profit = (price - cost) * quantity - 15000
-#     
-#     # 広告費を考慮
-#     if day == 20 or day == 40:
-#         daily_profit -= 50000
-#     
-#     print(f"日{day}: 価格{price}円, 利益{daily_profit}円")
-
-# ===== 計算例6: 積分計算（総利益など） =====
-# 例：総利益を数値的に計算
-# total_profit = 0
-# for day in range(1, 121):
-#     # 日毎の利益を計算して累積
-#     daily_profit = calculate_daily_profit(day)  # 関数定義が必要
-#     total_profit += daily_profit
-# print(f"総利益: {total_profit}円")
-
-# ===== 計算例7: 最適化問題 =====
-# 例：利益が最大となる日を探索
-# max_profit = -float('inf')
-# best_day = 0
-# for day in range(1, 121):
-#     profit = calculate_profit(day)
-#     if profit > max_profit:
-#         max_profit = profit
-#         best_day = day
-# print(f"最大利益: {best_day}日目で {max_profit}円")
-
-# **実装必須**: 上記の例を参考に、実際の問題の各小問に対応する計算を以下に記述：
-
-# 小問(1)の計算:
-# （ここに1番目の小問に対する具体的な計算を記述）
-
-# 小問(2)の計算:
-# （ここに2番目の小問に対する具体的な計算を記述）
-
-# 小問(3)の計算:
-# （ここに3番目の小問に対する具体的な計算を記述）
-
-# 小問(4)の計算:
-# （ここに4番目の小問に対する具体的な計算を記述）
-
-# さらに小問がある場合は継続して記述してください
----CALCULATION_PROGRAM_END---
-
----FINAL_SOLUTION_START---
-【最終解答】
-（問題の各小問に対する具体的な数値を含む最終的な答え）
-
-例：
-(1) y = 2x² - 5x + 11
-(2) x = 3のとき、y = 14
-(3) ...
----FINAL_SOLUTION_END---
-
-**重要な指示**：
-1. 解答の手順では、数学的な解法を段階的に説明してください
-2. **数値計算プログラムは必須です**。問題に含まれる全ての数値計算を実行可能なPythonコードで記述してください
-3. 連立方程式、2次方程式、関数の値計算など、問題に応じた適切な計算方法を使用してください
-4. numpy（np）、math ライブラリは利用可能ですが、import文は記述しないでください
-5. print文で計算結果を必ず出力してください
-6. 最終解答には問題の各小問に対する具体的な数値を含めてください`
-
-	return prompt
-}
 
 // GenerateStage4 4段階目：数値計算プログラム生成・実行
 func (s *problemService) GenerateStage4(ctx context.Context, req models.Stage4Request, userSchoolCode string) (*models.Stage4Response, error) {
@@ -1404,7 +923,38 @@ func (s *problemService) GenerateStage4(ctx context.Context, req models.Stage4Re
 
 // createStage4Prompt 4段階目用のプロンプト（数値計算プログラム生成）
 func (s *problemService) createStage4Prompt(problemText, solutionSteps string) string {
-	return `以下の問題と解答手順について、全ての計算をPythonで実行する数値計算プログラムを作成してください。
+	return `以下の問題と解答手順について、中学数学の計算プログラムを作成してください。
+
+**重要：中学数学の範囲内のみで計算プログラムを作成してください。高校数学の内容は使用しないでください。**
+
+**中学数学の範囲**：
+- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
+- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
+- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
+
+**禁止事項（高校数学の内容）**：
+- 三角比、三角関数（sin、cos、tan）
+- 指数関数、対数関数
+- 微分、積分
+- 数列、極限
+- ベクトル（外積、内積、ベクトルの大きさなど）
+- 複素数
+- 行列、行列式
+- 確率分布、統計的推定・検定
+- その他高校数学の単元
+
+**厳重警告**：
+- 「ベクトル」「外積」「内積」「行列式」という用語は絶対に使用しないでください
+- 中学数学の範囲内の基本的な計算方法のみを使用してください
+- 複雑すぎる問題は中学数学の範囲で解ける問題に簡素化してください
+
+**中学数学での計算手法（必須）**：
+- 三角形の面積：底辺×高さ÷2、またはヘロンの公式
+- 四面体の体積：底面積×高さ÷3（四角錐も同様）
+- 距離計算：座標では√[(x₂-x₁)² + (y₂-y₁)²]
+- 立体図形は基本的な公式（体積、表面積）のみ使用
+- 座標系での計算は中学範囲の基本公式のみ
+- ベクトルの代わりに座標の差分を直接計算
 
 【問題文】
 ` + problemText + `
@@ -1412,36 +962,44 @@ func (s *problemService) createStage4Prompt(problemText, solutionSteps string) s
 【解答の手順】
 ` + solutionSteps + `
 
-**重要：全ての数値計算はPythonで実行し、推測や手計算の結果を直接書き込まないでください。**
+**重要：中学数学なので、ルート（√）やパイ（π）は数値で計算せず、そのまま表記してください。**
 
 **必須出力形式**：
 
 ---CALCULATION_PROGRAM_START---
 # 数値計算プログラム（Python）
-# この問題の解答に必要な全ての数値計算を実行するプログラムです
+# 中学数学向け：ルートやπはそのまま表記、簡単化のみ実行
 # import文は使用しないでください（numpy は np として、math は math として利用可能）
 
 print("=== 数値計算結果 ===")
 
-# **絶対に守るべきルール**：
-# 1. print文で計算結果の数値を直接書かないでください
-# 2. 全ての計算はPythonの変数と演算で行ってください  
-# 3. math.sqrt(), np.sqrt(), **, +, -, *, / を使って正確に計算してください
+# **中学数学における計算ルール**：
+# 1. √ は簡単化するが、小数の近似値は求めない
+# 2. π は小数の近似値は求めず、そのまま π として表記
+# 3. 分数は通分・約分するが、小数には変換しない
+# 4. 計算過程を段階的に表示する
+# 5. 中学数学の範囲内の公式や定理のみを使用する
 
-# **悪い例（絶対にやってはいけません）**：
-# print(f"= √(144 + 144 + 81)")  # 数値を直接書いている
-# print(f"= √369")              # 計算結果を推測している  
-# print(f"= 19.2 cm")           # 最終結果を推測している
-
-# **良い例（必ずこの方法で書いてください）**：
+# **良い例（中学数学の解答形式）**：
 # a = 6 - (-6)
 # b = 6 - (-6) 
 # c = 9 - 0
-# result = math.sqrt(a**2 + b**2 + c**2)
+# # ルートの中身を計算（三平方の定理など）
+# inside_root = a**2 + b**2 + c**2
 # print(f"= √({a}² + {b}² + {c}²)")
 # print(f"= √({a**2} + {b**2} + {c**2})")
-# print(f"= √{a**2 + b**2 + c**2}")
-# print(f"= {result:.1f} cm")
+# print(f"= √{inside_root}")
+# # √の簡単化（可能であれば）
+# import math
+# if inside_root == int(math.sqrt(inside_root))**2:
+#     print(f"= {int(math.sqrt(inside_root))}")
+# else:
+#     print(f"= √{inside_root}")  # そのまま表記
+
+# **悪い例（中学数学では避ける）**：
+# print(f"= 19.2 cm")           # 小数で表記（NG）
+# print(f"= 3.14...")           # πを小数で表記（NG）
+# sin(30°) = 0.5               # 三角比は高校数学（NG）
 
 # 以下に問題に応じた具体的な計算を記述してください：
 
@@ -1466,14 +1024,15 @@ print("\n5. 小問(4)の計算")
 print("\n=== 計算完了 ===")
 ---CALCULATION_PROGRAM_END---
 
-**厳格な指示**：
-1. **計算結果を推測しないでください** - 全ての数値はPythonで計算してください
-2. **print文で数値を直接書かないでください** - 変数の値を表示してください
-3. **math.sqrt(), **, +, -, *, / を使用してください** - 電卓的な推測は禁止です
-4. **変数を使って段階的に計算してください** - 一度に複雑な式を書かないでください
+**厳格な指示（中学数学対応）**：
+1. **ルート（√）は簡単化しますが、小数の近似値は求めないでください**
+2. **π（パイ）は小数に変換せず、πのまま表記してください**
+3. **分数は約分・通分しますが、小数には変換しないでください**
+4. **計算過程を段階的に表示し、最終答えは正確な形で表記してください**
 5. **各小問について具体的な計算コードを記述してください**
-6. **座標、距離、面積、体積など、問題に応じた適切な計算を実装してください**
-7. **計算過程も含めて、全てをPythonの演算で実行してください**`
+6. **座標、距離、面積、体積など、中学数学の範囲内で適切な計算を実装してください**
+7. **中学数学の解答として適切な形式で表記してください**
+8. **三角比や微分積分など、高校数学の内容は絶対に使用しないでください**`
 }
 
 // GenerateStage5 5段階目：最終解説生成
@@ -1698,7 +1257,25 @@ func (s *problemService) extractFinalSolution(content string) string {
 
 // createThirdStagePrompt 3回目API呼び出し用のプロンプトを作成（解答手順と計算結果の統合）
 func (s *problemService) createThirdStagePrompt(problemText, solutionSteps, calculationResults string) string {
-	return `以下の問題について、解答手順と数値計算結果を統合して、完全で理解しやすい解説文を作成してください。
+	return `以下の問題について、解答手順と数値計算結果を統合して、中学数学に適した完全で理解しやすい解説文を作成してください。
+
+**重要：中学数学の範囲内のみで解説を作成してください。高校数学の内容は使用しないでください。**
+
+**中学数学の範囲**：
+- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
+- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
+- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
+
+**禁止事項（高校数学の内容）**：
+- 三角比、三角関数（sin、cos、tan）
+- 指数関数、対数関数
+- 微分、積分
+- 数列、極限
+- ベクトル
+- 複素数
+- 行列
+- 確率分布、統計的推定・検定
+- その他高校数学の単元
 
 【問題文】
 ` + problemText + `
@@ -1709,6 +1286,8 @@ func (s *problemService) createThirdStagePrompt(problemText, solutionSteps, calc
 【数値計算の実行結果】
 ` + calculationResults + `
 
+**重要：中学数学なので、ルート（√）やパイ（π）は数値で計算せず、そのまま表記してください。**
+
 **出力形式**：
 
 ---FINAL_SOLUTION_START---
@@ -1717,22 +1296,25 @@ func (s *problemService) createThirdStagePrompt(problemText, solutionSteps, calc
 （解答手順と計算結果を統合し、以下の構成で記述してください）
 
 【解法】
-（数学的な解法手順を、計算結果の具体的な数値を交えながら詳しく説明）
+（数学的な解法手順を、中学数学に適した形で詳しく説明）
 
 【計算過程】
-（重要な計算過程を、実際の数値を使って示す）
+（重要な計算過程を、ルートやπをそのまま使って示す）
 
 【解答】
-（問題の各小問に対する最終的な答えを具体的な数値で記述）
+（問題の各小問に対する最終的な答えを中学数学の形式で記述）
 
 ---FINAL_SOLUTION_END---
 
-**重要な指示**：
+**重要な指示（中学数学対応）**：
 1. 解答手順で述べた数学的な方法と、実際の計算結果を自然に統合してください
-2. 抽象的な説明ではなく、具体的な数値を使った説明を心がけてください
-3. 読み手が理解しやすいよう、計算過程と結果を明確に示してください
-4. 問題の各小問について、明確で具体的な答えを提示してください
-5. 数値の間違いがないよう、計算結果をそのまま活用してください`
+2. ルート（√）は簡単化しますが、小数の近似値は表記しないでください
+3. π（パイ）は小数に変換せず、πのまま表記してください
+4. 分数は約分・通分しますが、小数には変換しないでください
+5. 読み手が理解しやすいよう、計算過程と結果を明確に示してください
+6. 問題の各小問について、中学数学として適切な形式で答えを提示してください
+7. 最終答えは正確な数学的表記（√や分数、π使用）で示してください
+8. 中学数学の範囲内の公式や定理のみを使用し、高校数学の内容は絶対に使用しないでください`
 }
 
 // executeCalculationProgram 数値計算プログラムを実行
@@ -2106,6 +1688,88 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 func (s *problemService) createStage1Prompt(userPrompt, subject string) string {
 	return `あなたは日本の中学校の数学教師です。以下の条件に従って、日本語で数学の問題文のみを作成してください。
 
+**重要：中学数学の範囲内のみで問題を作成してください。高校数学の内容は使用しないでください。**
+
+**中学数学の範囲**：
+- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
+- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
+- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
+
+**禁止事項（高校数学の内容）**：
+- 三角比、三角関数（sin、cos、tan）
+- 指数関数、対数関数
+- 微分、積分
+- 数列、極限
+- ベクトル（外積、内積、ベクトルの大きさなど）
+- 複素数
+- 行列、行列式
+- 確率分布、統計的推定・検定
+- その他高校数学の単元
+
+**ベクトル使用の完全禁止（最重要）**：
+- 「ベクトル」「外積」「内積」「行列式」「方向ベクトル」「単位ベクトル」「位置ベクトル」は絶対に使用禁止
+- 「方向」「向き」という用語も座標計算では使用禁止
+- 座標計算では「x座標の差」「y座標の差」「座標の増減」のみ使用
+- 中学数学の範囲内の基本的な計算方法のみを使用してください
+
+**問題の難易度設定（柔軟なガイドライン）**：
+問題の内容や形式に応じて、以下の考え方で適切な難易度を設定してください：
+
+**【基本レベル】**：
+- 図形：長さ、角度、基本的な面積・周囲の長さ
+- 代数：基本的な計算、簡単な方程式
+- 関数：座標の読み取り、基本的なグラフの性質
+- 確率・統計：基本的な確率、簡単なデータ分析
+
+**【応用レベル】**：
+- 図形：体積、表面積、合同・相似の基本的な利用
+- 代数：連立方程式、二次方程式の解法
+- 関数：一次関数・二次関数の応用
+- 確率・統計：場合の数、やや複雑な確率
+
+**【発展レベル】**：
+- 図形：相似比、面積比、複雑な図形の性質
+- 代数：文章題、複雑な式の計算
+- 関数：関数の応用問題、グラフの解釈
+- 確率・統計：複合的な確率、標本調査
+
+**【応用発展レベル】**：
+- 図形：切断、断面、立体の複雑な計算、証明問題
+- 代数：複雑な文章題、多段階の計算
+- 関数：複数の関数の組み合わせ、実践的応用
+- 確率・統計：複雑な場合分け、データの総合的分析
+
+**柔軟なアプローチ**：
+1. **小問がある場合**：各小問の難易度を段階的に上げる
+2. **小問がない場合**：一つの問題内で基本→応用→発展の要素を含める
+3. **問題の分野に応じて**：上記のレベル分けを参考に適切な難易度を選択
+4. **基本→発展の流れ**：どのような形式でも基本から発展への流れを保つ
+
+**様々な形式の例**：
+- **小問あり**：(1)基本→(2)応用→(3)発展
+- **小問なし**：一つの問題で基本概念から発展的解法まで含む
+- **証明問題**：基本的な性質から複雑な証明へ
+- **文章題**：簡単な設定から複雑な応用まで
+
+**【最重要】会話文形式の指定条件**：
+- **必須条件**: 問題は会話文形式（登場人物2人程度）で、やり取りの中から条件を抽出する必要がある形で作成してください
+- **会話文の構造**: 
+  - 登場人物A（例：たかし、あきら、先生など）
+  - 登場人物B（例：みゆき、さとみ、友達など）
+  - 2人が数学について話し合っている場面を設定
+- **条件の設定方法**:
+  - 会話の中で図形の寸法、位置、条件などを自然に述べさせる
+  - 一方が問題を提起し、もう一方が補足情報を加える形式
+  - 「～について考えてみよう」「～の場合はどうかな」などの自然な流れ
+- **問われる内容**:
+  - 会話で示された条件を整理して数学的に解く問題
+  - 会話から読み取れる情報を元に計算や証明を行う問題
+
+**会話文形式の例**：
+たかし：「この立方体の体積を求めてみよう。1辺が6cmだったね。」
+さとみ：「そうね。でも、この立方体の中に円柱が入っているって聞いたけど、どんな円柱かしら？」
+たかし：「立方体にちょうど内接する円柱だよ。底面は立方体の底面に接していて...」
+
 ` + userPrompt + `
 
 **重要：この段階では問題文のみを生成し、図形・解答・解説は一切含めないでください。**
@@ -2114,15 +1778,16 @@ func (s *problemService) createStage1Prompt(userPrompt, subject string) string {
 
 ---PROBLEM_START---
 【問題】
-（ここに完全で自己完結的な問題文を記述）
+（会話文形式で、登場人物2人程度のやり取りの中から条件を抽出する必要がある問題文を記述）
 ---PROBLEM_END---
 
 **注意事項**：
-1. 図形描画コード、解答、解説は絶対に含めないでください
-2. 問題文は完全で自己完結的にしてください
-3. 具体的な数値や条件を含む詳細な問題文を作成してください
-4. 図形が必要な問題でも、この段階では図形は生成しません
-5. 問題文だけで読者が何を求められているかが明確に分かるようにしてください`
+1. **必ず会話文形式で問題を作成してください（最重要）**
+2. 図形描画コード、解答、解説は絶対に含めないでください
+3. 問題文は完全で自己完結的にしてください
+4. 会話の中で具体的な数値や条件を自然に含めてください
+5. 登場人物の名前は親しみやすい日本人の名前を使用してください
+6. 会話から条件を読み取って数学的に解く問題であることを明確にしてください`
 }
 
 // GenerateStage2 2段階目：問題文から図形生成
@@ -2307,6 +1972,29 @@ func (s *problemService) GenerateStage3(ctx context.Context, req models.Stage3Re
 func (s *problemService) createStage3Prompt(problemText, geometryCode string) string {
 	prompt := `以下の問題について、詳細な解答の手順のみを作成してください。数値計算は行わず、解法の流れのみを説明してください。
 
+**重要：中学数学の範囲内のみで解答手順を作成してください。高校数学の内容は使用しないでください。**
+
+**中学数学の範囲**：
+- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
+- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
+- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
+
+**禁止事項（高校数学の内容）**：
+- 三角比、三角関数（sin、cos、tan）
+- 指数関数、対数関数
+- 微分、積分
+- 数列、極限
+- ベクトル（外積、内積、ベクトルの大きさなど）
+- 複素数
+- 行列、行列式
+- 確率分布、統計的推定・検定
+- その他高校数学の単元
+
+**厳重警告**：
+- 「ベクトル」「外積」「内積」「行列式」という用語は絶対に使用しないでください
+- 中学数学の範囲内の基本的な計算方法のみを使用してください
+- 複雑すぎる問題は中学数学の範囲で解ける問題に簡素化してください
+
 【問題文】
 ` + problemText
 
@@ -2335,7 +2023,7 @@ func (s *problemService) createStage3Prompt(problemText, geometryCode string) st
 
 **注意事項**：
 1. 具体的な数値での計算は行わず、解法の手順のみを説明してください
-2. 使用する公式や定理を明記してください
+2. 中学数学の範囲内の公式や定理のみを使用してください
 3. 各小問について、どのような流れで解答するかを詳しく説明してください
 4. 数値計算プログラムや最終的な答えは含めないでください
 5. 読み手が解法の流れを理解できるような詳細な手順を記述してください`
