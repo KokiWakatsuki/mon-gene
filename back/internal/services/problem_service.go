@@ -10,6 +10,7 @@ import (
 	"github.com/mon-gene/back/internal/clients"
 	"github.com/mon-gene/back/internal/models"
 	"github.com/mon-gene/back/internal/repositories"
+	"github.com/mon-gene/back/internal/utils"
 )
 
 type ProblemService interface {
@@ -33,12 +34,13 @@ type ProblemService interface {
 }
 
 type problemService struct {
-	claudeClient clients.ClaudeClient
-	openaiClient clients.OpenAIClient
-	googleClient clients.GoogleClient
-	coreClient   clients.CoreClient
-	problemRepo  repositories.ProblemRepository
-	userRepo     repositories.UserRepository
+	claudeClient  clients.ClaudeClient
+	openaiClient  clients.OpenAIClient
+	googleClient  clients.GoogleClient
+	coreClient    clients.CoreClient
+	problemRepo   repositories.ProblemRepository
+	userRepo      repositories.UserRepository
+	promptLoader  *utils.PromptLoader
 }
 
 func NewProblemService(
@@ -49,13 +51,17 @@ func NewProblemService(
 	problemRepo repositories.ProblemRepository,
 	userRepo repositories.UserRepository,
 ) ProblemService {
+	// promptsディレクトリのパスを設定
+	promptLoader := utils.NewPromptLoader("prompts")
+	
 	return &problemService{
-		claudeClient: claudeClient,
-		openaiClient: openaiClient,
-		googleClient: googleClient,
-		coreClient:   coreClient,
-		problemRepo:  problemRepo,
-		userRepo:     userRepo,
+		claudeClient:  claudeClient,
+		openaiClient:  openaiClient,
+		googleClient:  googleClient,
+		coreClient:    coreClient,
+		problemRepo:   problemRepo,
+		userRepo:      userRepo,
+		promptLoader:  promptLoader,
 	}
 }
 
@@ -245,67 +251,13 @@ func (s *problemService) GeneratePDF(ctx context.Context, req models.PDFGenerate
 
 // createGeometryRegenerationPrompt creates a prompt for regenerating geometry from existing problem text
 func (s *problemService) createGeometryRegenerationPrompt(problemText string) string {
-	return `あなたは日本の中学校の数学教師です。以下の問題文から、図形描画用のPythonコードを生成してください。
-
-**重要：中学数学の範囲内の図形のみを描画してください。高校数学の内容は使用しないでください。**
-
-**中学数学の範囲の図形**：
-- 平面図形：直線、線分、角、三角形、四角形、多角形、円、扇形
-- 空間図形：直方体、立方体、円柱、円錐、球、角錐
-- 座標平面：一次関数、二次関数y=ax²のグラフ
-- その他中学数学で扱う図形
-
-【既存の問題文】
-` + problemText + `
-
-**出力形式**：
-図形が必要な場合は、以下の形式で図形描画用のPythonコードを出力してください：
-
----GEOMETRY_CODE_START---
-# 図形描画コード（問題に特化した図形を描画）
-# 重要: import文は絶対に記述しないでください（事前にインポート済み）
-# 利用可能な変数: plt, patches, np, numpy, Axes3D, Poly3DCollection
-
-# 2D図形の場合
-fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-
-# 3D図形の場合は以下を使用
-# fig = plt.figure(figsize=(8, 8))
-# ax = fig.add_subplot(111, projection='3d')
-
-# ここに問題文に応じた具体的な図形描画コードを記述
-# 例：正方形ABCD、点P、Q、Rの位置、線分、座標軸など
-
-ax.set_aspect('equal')
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
----GEOMETRY_CODE_END---
-
-重要な指示：
-1. 問題文に含まれる具体的な数値や条件を図形に正確に反映してください
-2. 点の位置、線分の長さ、比率などを問題文通りに描画してください
-3. **座標軸の表示判定**：
-   - 問題文のキーワードで判定
-   - 「座標」「グラフ」「関数」「x軸」「y軸」があれば、ax.grid(True, alpha=0.3) で座標軸を表示
-   - 「体積」「面積」「角度」「長さ」「直方体」「円錐」「球」があれば、ax.axis('off') で座標軸を非表示
-4. 図形のラベルは必ずアルファベット（A、B、C、P、Q、R等）を使用してください
-5. ax.text()で日本語を使用しないでください
-6. タイトルやラベルは英語またはアルファベットのみを使用してください
-7. import文は記述しないでください（plt, np, patches, Axes3D, Poly3DCollectionは既に利用可能です）
-8. numpy関数はnp.array(), np.linspace(), np.meshgrid()等で使用してください
-9. 3D図形が必要な場合は以下を使用してください：
-   - fig = plt.figure(figsize=(8, 8))
-   - ax = fig.add_subplot(111, projection='3d')
-   - ax.plot_surface(), ax.add_collection3d(Poly3DCollection())等
-   - ax.view_init(elev=20, azim=-75)で視点を調整
-10. 切断図形や断面図が必要な場合は、切断面をPoly3DCollectionで描画してください
-11. **頂点ラベル（必須）**: 
-   - 全ての頂点にアルファベット（A、B、C、D、E、F、G、H等）を表示
-   - ax.text(x, y, z, 'A', size=16, color='black', weight='bold')
-   - 立方体: A,B,C,D（下面）、E,F,G,H（上面）
-   - 円錐: O（頂点）、A,B,C...（底面）
-
-**注意**: 問題文に図形が不要な場合は、コードブロックを出力しないでください。`
+	prompt, err := s.promptLoader.LoadGeometryRegenerationPrompt(problemText)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load geometry regeneration prompt: %v\n", err)
+		// フォールバック：エラー時は基本プロンプトを返す
+		return "図形生成プロンプトの読み込みに失敗しました: " + err.Error()
+	}
+	return prompt
 }
 
 // enhancePromptForGeometry enhances the prompt to include geometry generation instructions
@@ -341,321 +293,68 @@ func (s *problemService) isConversationFormatRequested(prompt string) bool {
 
 // createConversationPrompt 会話文形式の問題生成プロンプトを作成
 func (s *problemService) createConversationPrompt(prompt string) string {
-	return `あなたは日本の中学校の数学教師です。以下の条件に従って、日本語で数学の問題を作成してください。
-
-**重要：中学数学の範囲内のみで問題を作成してください。高校数学の内容は使用しないでください。**
-
-**中学数学の範囲**：
-- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
-- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
-- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
-
-**禁止事項（高校数学の内容）**：
-- 三角比、三角関数（sin、cos、tan）
-- 指数関数、対数関数
-- 微分、積分
-- 数列、極限
-- ベクトル（外積、内積、ベクトルの大きさなど）
-- 複素数
-- 行列、行列式
-- 確率分布、統計的推定・検定
-- その他高校数学の単元
-
-**ベクトル使用の完全禁止（最重要）**：
-- 「ベクトル」「外積」「内積」「行列式」「方向ベクトル」「単位ベクトル」「位置ベクトル」は絶対に使用禁止
-- 「方向」「向き」という用語も座標計算では使用禁止
-- 座標計算では「x座標の差」「y座標の差」「座標の増減」のみ使用
-- 中学数学の範囲内の基本的な計算方法のみを使用してください
-
-**中学数学での計算手法（必須）**：
-- 三角形の面積：底辺×高さ÷2、またはヘロンの公式
-- 四面体の体積：底面積×高さ÷3（四角錐も同様）
-- 距離計算：座標では√[(x₂-x₁)² + (y₂-y₁)²]
-- 座標上の点の位置：x座標、y座標の値で直接表現
-- 線分上の点：始点から終点への座標の比例配分で表現
-- 立体図形は基本的な公式（体積、表面積）のみ使用
-
-**問題の難易度設定（柔軟なガイドライン）**：
-問題の内容や形式に応じて、以下の考え方で適切な難易度を設定してください：
-
-**【基本レベル】**：
-- 図形：長さ、角度、基本的な面積・周囲の長さ
-- 代数：基本的な計算、簡単な方程式
-- 関数：座標の読み取り、基本的なグラフの性質
-- 確率・統計：基本的な確率、簡単なデータ分析
-
-**【応用レベル】**：
-- 図形：体積、表面積、合同・相似の基本的な利用
-- 代数：連立方程式、二次方程式の解法
-- 関数：一次関数・二次関数の応用
-- 確率・統計：場合の数、やや複雑な確率
-
-**【発展レベル】**：
-- 図形：相似比、面積比、複雑な図形の性質
-- 代数：文章題、複雑な式の計算
-- 関数：関数の応用問題、グラフの解釈
-- 確率・統計：複合的な確率、標本調査
-
-**【応用発展レベル】**：
-- 図形：切断、断面、立体の複雑な計算、証明問題
-- 代数：複雑な文章題、多段階の計算
-- 関数：複数の関数の組み合わせ、実践的応用
-- 確率・統計：複雑な場合分け、データの総合的分析
-
-**柔軟なアプローチ**：
-1. **小問がある場合**：各小問の難易度を段階的に上げる
-2. **小問がない場合**：一つの問題内で基本→応用→発展の要素を含める
-3. **問題の分野に応じて**：上記のレベル分けを参考に適切な難易度を選択
-4. **基本→発展の流れ**：どのような形式でも基本から発展への流れを保つ
-
-**様々な形式の例**：
-- **小問あり**：(1)基本→(2)応用→(3)発展
-- **小問なし**：一つの問題で基本概念から発展的解法まで含む
-- **証明問題**：基本的な性質から複雑な証明へ
-- **文章題**：簡単な設定から複雑な応用まで
-
-**【最重要】会話文形式の指定条件**：
-- **必須条件**: 問題は会話文形式（登場人物2人程度）で、やり取りの中から条件を抽出する必要がある形で作成してください
-- **会話文の構造**: 
-  - 登場人物A（例：たかし、あきら、先生など）
-  - 登場人物B（例：みゆき、さとみ、友達など）
-  - 2人が数学について話し合っている場面を設定
-- **条件の設定方法**:
-  - 会話の中で図形の寸法、位置、条件などを自然に述べさせる
-  - 一方が問題を提起し、もう一方が補足情報を加える形式
-  - 「～について考えてみよう」「～の場合はどうかな」などの自然な流れ
-- **問われる内容**:
-  - 会話で示された条件を整理して数学的に解く問題
-  - 会話から読み取れる情報を元に計算や証明を行う問題
-
-**会話文形式の例**：
-たかし：「この立方体の体積を求めてみよう。1辺が6cmだったね。」
-さとみ：「そうね。でも、この立方体の中に円柱が入っているって聞いたけど、どんな円柱かしら？」
-たかし：「立方体にちょうど内接する円柱だよ。底面は立方体の底面に接していて...」
-
-` + prompt + `
-
-**出力形式**：
-1. 問題文（会話文形式）
-2. 図形描画コード（必要な場合）
-3. 解答・解説（別ページ用）
-
-以下の形式で出力してください：
-
----PROBLEM_START---
-【問題】
-（会話文形式で、登場人物2人程度のやり取りの中から条件を抽出する必要がある問題文を記述）
----PROBLEM_END---
-
-もし問題に図形が必要な場合は、以下の形式で図形描画用のPythonコードを追加してください：
-
----GEOMETRY_CODE_START---
-# 図形描画コード（問題に特化した図形を描画）
-# 重要: import文は絶対に記述しないでください（事前にインポート済み）
-# 利用可能な変数: plt, patches, np, numpy, Axes3D, Poly3DCollection
-
-# 2D図形の場合
-fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-
-# 3D図形の場合は以下を使用
-# fig = plt.figure(figsize=(8, 8))
-# ax = fig.add_subplot(111, projection='3d')
-
-# ここに問題に応じた具体的な図形描画コードを記述
-# 例：正方形ABCD、点P、Q、Rの位置、線分、座標軸など
-
-ax.set_aspect('equal')
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
----GEOMETRY_CODE_END---
-
----SOLUTION_START---
-【解答・解説】
-（ここに詳しい解答と解説を記述）
-
-【解答】
-（最終的な答え）
-
-【解説】
-（解法の手順と考え方を詳しく説明）
----SOLUTION_END---
-
-重要：
-1. **必ず会話文形式で問題を作成してください（最重要）**
-2. 問題文に含まれる具体的な数値や条件を図形に正確に反映してください
-3. 点の位置、線分の長さ、比率などを問題文通りに描画してください
-4. **座標軸の表示判定**：
-   - 問題文のキーワードで判定
-   - 「座標」「グラフ」「関数」「x軸」「y軸」があれば、ax.grid(True, alpha=0.3) で座標軸を表示
-   - 「体積」「面積」「角度」「長さ」「直方体」「円錐」「球」があれば、ax.axis('off') で座標軸を非表示
-5. 図形のラベルは必ずアルファベット（A、B、C、P、Q、R等）を使用してください
-6. ax.text()で日本語を使用しないでください
-7. タイトルやラベルは英語またはアルファベットのみを使用してください
-8. import文は記述しないでください（plt, np, patches, Axes3D, Poly3DCollectionは既に利用可能です）
-9. numpy関数はnp.array(), np.linspace(), np.meshgrid()等で使用してください
-10. 3D図形が必要な場合は以下を使用してください：
-    - fig = plt.figure(figsize=(8, 8))
-    - ax = fig.add_subplot(111, projection='3d')
-    - ax.plot_surface(), ax.add_collection3d(Poly3DCollection())等
-    - ax.view_init(elev=20, azim=-75)で視点を調整
-11. 切断図形や断面図が必要な場合は、切断面をPoly3DCollectionで描画してください
-12. **頂点ラベル（必須）**: 
-    - 全ての頂点にアルファベット（A、B、C、D、E、F、G、H等）を表示
-    - ax.text(x, y, z, 'A', size=16, color='black', weight='bold')
-    - 立方体: A,B,C,D（下面）、E,F,G,H（上面）
-    - 円錐: O（頂点）、A,B,C...（底面）
-13. 会話の中で具体的な数値や条件を自然に含めてください
-14. 登場人物の名前は親しみやすい日本人の名前を使用してください
-15. 会話から条件を読み取って数学的に解く問題であることを明確にしてください`
+	promptText, err := s.promptLoader.LoadConversationFormatPrompt(prompt)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load conversation format prompt: %v\n", err)
+		// フォールバック：エラー時は基本プロンプトを返す
+		return "会話形式プロンプトの読み込みに失敗しました: " + err.Error()
+	}
+	return promptText
 }
 
 // createStandardPrompt 通常の問題生成プロンプトを作成
 func (s *problemService) createStandardPrompt(prompt string) string {
-	return `あなたは日本の中学校の数学教師です。以下の条件に従って、日本語で数学の問題を作成してください。
-
-**重要：中学数学の範囲内のみで問題を作成してください。高校数学の内容は使用しないでください。**
-
-**中学数学の範囲**：
-- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
-- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
-- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
-
-**禁止事項（高校数学の内容）**：
-- 三角比、三角関数（sin、cos、tan）
-- 指数関数、対数関数
-- 微分、積分
-- 数列、極限
-- ベクトル（外積、内積、ベクトルの大きさなど）
-- 複素数
-- 行列、行列式
-- 確率分布、統計的推定・検定
-- その他高校数学の単元
-
-**ベクトル使用の完全禁止（最重要）**：
-- 「ベクトル」「外積」「内積」「行列式」「方向ベクトル」「単位ベクトル」「位置ベクトル」は絶対に使用禁止
-- 「方向」「向き」という用語も座標計算では使用禁止
-- 座標計算では「x座標の差」「y座標の差」「座標の増減」のみ使用
-- 中学数学の範囲内の基本的な計算方法のみを使用してください
-
-**中学数学での計算手法（必須）**：
-- 三角形の面積：底辺×高さ÷2、またはヘロンの公式
-- 四面体の体積：底面積×高さ÷3（四角錐も同様）
-- 距離計算：座標では√[(x₂-x₁)² + (y₂-y₁)²]
-- 座標上の点の位置：x座標、y座標の値で直接表現
-- 線分上の点：始点から終点への座標の比例配分で表現
-- 立体図形は基本的な公式（体積、表面積）のみ使用
-
-**問題の難易度設定（柔軟なガイドライン）**：
-問題の内容や形式に応じて、以下の考え方で適切な難易度を設定してください：
-
-**【基本レベル】**：
-- 図形：長さ、角度、基本的な面積・周囲の長さ
-- 代数：基本的な計算、簡単な方程式
-- 関数：座標の読み取り、基本的なグラフの性質
-- 確率・統計：基本的な確率、簡単なデータ分析
-
-**【応用レベル】**：
-- 図形：体積、表面積、合同・相似の基本的な利用
-- 代数：連立方程式、二次方程式の解法
-- 関数：一次関数・二次関数の応用
-- 確率・統計：場合の数、やや複雑な確率
-
-**【発展レベル】**：
-- 図形：相似比、面積比、複雑な図形の性質
-- 代数：文章題、複雑な式の計算
-- 関数：関数の応用問題、グラフの解釈
-- 確率・統計：複合的な確率、標本調査
-
-**【応用発展レベル】**：
-- 図形：切断、断面、立体の複雑な計算、証明問題
-- 代数：複雑な文章題、多段階の計算
-- 関数：複数の関数の組み合わせ、実践的応用
-- 確率・統計：複雑な場合分け、データの総合的分析
-
-**柔軟なアプローチ**：
-1. **小問がある場合**：各小問の難易度を段階的に上げる
-2. **小問がない場合**：一つの問題内で基本→応用→発展の要素を含める
-3. **問題の分野に応じて**：上記のレベル分けを参考に適切な難易度を選択
-4. **基本→発展の流れ**：どのような形式でも基本から発展への流れを保つ
-
-**様々な形式の例**：
-- **小問あり**：(1)基本→(2)応用→(3)発展
-- **小問なし**：一つの問題で基本概念から発展的解法まで含む
-- **証明問題**：基本的な性質から複雑な証明へ
-- **文章題**：簡単な設定から複雑な応用まで
-
-` + prompt + `
-
-**出力形式**：
-1. 問題文（通常の数学問題形式）
-2. 図形描画コード（必要な場合）
-3. 解答・解説（別ページ用）
-
-以下の形式で出力してください：
-
----PROBLEM_START---
-【問題】
-（中学数学の範囲内で、適切な難易度の問題文を記述）
----PROBLEM_END---
-
-もし問題に図形が必要な場合は、以下の形式で図形描画用のPythonコードを追加してください：
-
----GEOMETRY_CODE_START---
-# 図形描画コード（問題に特化した図形を描画）
-# 重要: import文は絶対に記述しないでください（事前にインポート済み）
-# 利用可能な変数: plt, patches, np, numpy, Axes3D, Poly3DCollection
-
-# 2D図形の場合
-fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-
-# 3D図形の場合は以下を使用
-# fig = plt.figure(figsize=(8, 8))
-# ax = fig.add_subplot(111, projection='3d')
-
-# ここに問題に応じた具体的な図形描画コードを記述
-# 例：正方形ABCD、点P、Q、Rの位置、線分、座標軸など
-
-ax.set_aspect('equal')
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
----GEOMETRY_CODE_END---
-
----SOLUTION_START---
-【解答・解説】
-（ここに詳しい解答と解説を記述）
-
-【解答】
-（最終的な答え）
-
-【解説】
-（解法の手順と考え方を詳しく説明）
----SOLUTION_END---
-
-重要：
-1. 問題文は通常の数学問題形式で作成してください
-2. 問題文に含まれる具体的な数値や条件を図形に正確に反映してください
-3. 点の位置、線分の長さ、比率などを問題文通りに描画してください
-4. **座標軸の表示判定**：
-   - 問題文のキーワードで判定
-   - 「座標」「グラフ」「関数」「x軸」「y軸」があれば、ax.grid(True, alpha=0.3) で座標軸を表示
-   - 「体積」「面積」「角度」「長さ」「直方体」「円錐」「球」があれば、ax.axis('off') で座標軸を非表示
-5. 図形のラベルは必ずアルファベット（A、B、C、P、Q、R等）を使用してください
-6. ax.text()で日本語を使用しないでください
-7. タイトルやラベルは英語またはアルファベットのみを使用してください
-8. import文は記述しないでください（plt, np, patches, Axes3D, Poly3DCollectionは既に利用可能です）
-9. numpy関数はnp.array(), np.linspace(), np.meshgrid()等で使用してください
-10. 3D図形が必要な場合は以下を使用してください：
-    - fig = plt.figure(figsize=(8, 8))
-    - ax = fig.add_subplot(111, projection='3d')
-    - ax.plot_surface(), ax.add_collection3d(Poly3DCollection())等
-    - ax.view_init(elev=20, azim=-75)で視点を調整
-11. 切断図形や断面図が必要な場合は、切断面をPoly3DCollectionで描画してください
-12. **頂点ラベル（必須）**: 
-    - 全ての頂点にアルファベット（A、B、C、D、E、F、G、H等）を表示
-    - ax.text(x, y, z, 'A', size=16, color='black', weight='bold')
-    - 立方体: A,B,C,D（下面）、E,F,G,H（上面）
-    - 円錐: O（頂点）、A,B,C...（底面）`
+	promptText, err := s.promptLoader.LoadStandardFormatPrompt(prompt)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load standard format prompt: %v\n", err)
+		// フォールバック：エラー時は基本プロンプトを返す
+		return "標準形式プロンプトの読み込みに失敗しました: " + err.Error()
+	}
+	return promptText
 }
+
+// createStage1Prompt 1段階目用のプロンプトを作成（問題文のみ）
+func (s *problemService) createStage1Prompt(userPrompt, subject string) string {
+	promptText, err := s.promptLoader.LoadStage1Prompt(userPrompt, subject)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load stage1 prompt: %v\n", err)
+		return "1段階目プロンプトの読み込みに失敗しました: " + err.Error()
+	}
+	return promptText
+}
+
+// createStage3Prompt 3段階目用のプロンプト（解答手順のみ）
+func (s *problemService) createStage3Prompt(problemText, geometryCode string) string {
+	promptText, err := s.promptLoader.LoadStage3Prompt(problemText, geometryCode)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load stage3 prompt: %v\n", err)
+		return "3段階目プロンプトの読み込みに失敗しました: " + err.Error()
+	}
+	return promptText
+}
+
+// createStage4Prompt 4段階目用のプロンプト（数値計算プログラム生成）
+func (s *problemService) createStage4Prompt(problemText, solutionSteps string) string {
+	promptText, err := s.promptLoader.LoadStage4Prompt(problemText, solutionSteps)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load stage4 prompt: %v\n", err)
+		return "4段階目プロンプトの読み込みに失敗しました: " + err.Error()
+	}
+	return promptText
+}
+
+// createStage5Prompt 5段階目用のプロンプト（最終解説生成）
+func (s *problemService) createStage5Prompt(problemText, solutionSteps, calculationResults string) string {
+	promptText, err := s.promptLoader.LoadStage5Prompt(problemText, solutionSteps, calculationResults)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load stage5 prompt: %v\n", err)
+		return "5段階目プロンプトの読み込みに失敗しました: " + err.Error()
+	}
+	return promptText
+}
+
+// DEPRECATED: 古いプロンプトメソッドは削除済み（プロンプトファイルに移行）
+
 
 // extractProblemText extracts problem text from the content
 func (s *problemService) extractProblemText(content string) string {
@@ -1100,119 +799,6 @@ func (s *problemService) GenerateStage4(ctx context.Context, req models.Stage4Re
 	}, nil
 }
 
-// createStage4Prompt 4段階目用のプロンプト（数値計算プログラム生成）
-func (s *problemService) createStage4Prompt(problemText, solutionSteps string) string {
-	return `以下の問題と解答手順について、中学数学の計算プログラムを作成してください。
-
-**重要：中学数学の範囲内のみで計算プログラムを作成してください。高校数学の内容は使用しないでください。**
-
-**中学数学の範囲**：
-- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
-- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
-- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
-
-**禁止事項（高校数学の内容）**：
-- 三角比、三角関数（sin、cos、tan）
-- 指数関数、対数関数
-- 微分、積分
-- 数列、極限
-- ベクトル（外積、内積、ベクトルの大きさなど）
-- 複素数
-- 行列、行列式
-- 確率分布、統計的推定・検定
-- その他高校数学の単元
-
-**厳重警告**：
-- 「ベクトル」「外積」「内積」「行列式」という用語は絶対に使用しないでください
-- 中学数学の範囲内の基本的な計算方法のみを使用してください
-- 複雑すぎる問題は中学数学の範囲で解ける問題に簡素化してください
-
-**中学数学での計算手法（必須）**：
-- 三角形の面積：底辺×高さ÷2、またはヘロンの公式
-- 四面体の体積：底面積×高さ÷3（四角錐も同様）
-- 距離計算：座標では√[(x₂-x₁)² + (y₂-y₁)²]
-- 立体図形は基本的な公式（体積、表面積）のみ使用
-- 座標系での計算は中学範囲の基本公式のみ
-- ベクトルの代わりに座標の差分を直接計算
-
-【問題文】
-` + problemText + `
-
-【解答の手順】
-` + solutionSteps + `
-
-**重要：中学数学なので、ルート（√）やパイ（π）は数値で計算せず、そのまま表記してください。**
-
-**必須出力形式**：
-
----CALCULATION_PROGRAM_START---
-# 数値計算プログラム（Python）
-# 中学数学向け：ルートやπはそのまま表記、簡単化のみ実行
-# import文は使用しないでください（numpy は np として、math は math として利用可能）
-
-print("=== 数値計算結果 ===")
-
-# **中学数学における計算ルール**：
-# 1. √ は簡単化するが、小数の近似値は求めない
-# 2. π は小数の近似値は求めず、そのまま π として表記
-# 3. 分数は通分・約分するが、小数には変換しない
-# 4. 計算過程を段階的に表示する
-# 5. 中学数学の範囲内の公式や定理のみを使用する
-
-# **良い例（中学数学の解答形式）**：
-# a = 6 - (-6)
-# b = 6 - (-6) 
-# c = 9 - 0
-# # ルートの中身を計算（三平方の定理など）
-# inside_root = a**2 + b**2 + c**2
-# print(f"= √({a}² + {b}² + {c}²)")
-# print(f"= √({a**2} + {b**2} + {c**2})")
-# print(f"= √{inside_root}")
-# # √の簡単化（可能であれば）
-# import math
-# if inside_root == int(math.sqrt(inside_root))**2:
-#     print(f"= {int(math.sqrt(inside_root))}")
-# else:
-#     print(f"= √{inside_root}")  # そのまま表記
-
-# **悪い例（中学数学では避ける）**：
-# print(f"= 19.2 cm")           # 小数で表記（NG）
-# print(f"= 3.14...")           # πを小数で表記（NG）
-# sin(30°) = 0.5               # 三角比は高校数学（NG）
-
-# 以下に問題に応じた具体的な計算を記述してください：
-
-# 座標系の設定（問題文に応じて調整）
-print("1. 座標系の設定")
-
-# 小問ごとの計算を実装してください
-# 小問(1)の計算:
-print("\n2. 小問(1)の計算")
-
-# 小問(2)の計算:  
-print("\n3. 小問(2)の計算")
-
-# 小問(3)の計算:
-print("\n4. 小問(3)の計算")
-
-# 小問(4)の計算:
-print("\n5. 小問(4)の計算")
-
-# さらに小問がある場合は継続
-
-print("\n=== 計算完了 ===")
----CALCULATION_PROGRAM_END---
-
-**厳格な指示（中学数学対応）**：
-1. **ルート（√）は簡単化しますが、小数の近似値は求めないでください**
-2. **π（パイ）は小数に変換せず、πのまま表記してください**
-3. **分数は約分・通分しますが、小数には変換しないでください**
-4. **計算過程を段階的に表示し、最終答えは正確な形で表記してください**
-5. **各小問について具体的な計算コードを記述してください**
-6. **座標、距離、面積、体積など、中学数学の範囲内で適切な計算を実装してください**
-7. **中学数学の解答として適切な形式で表記してください**
-8. **三角比や微分積分など、高校数学の内容は絶対に使用しないでください**`
-}
 
 // GenerateStage5 5段階目：最終解説生成
 func (s *problemService) GenerateStage5(ctx context.Context, req models.Stage5Request, userSchoolCode string) (*models.Stage5Response, error) {
@@ -1297,10 +883,6 @@ func (s *problemService) GenerateStage5(ctx context.Context, req models.Stage5Re
 	}, nil
 }
 
-// createStage5Prompt 5段階目用のプロンプト（最終解説生成）
-func (s *problemService) createStage5Prompt(problemText, solutionSteps, calculationResults string) string {
-	return s.createThirdStagePrompt(problemText, solutionSteps, calculationResults) // 既存の統合ロジックを再利用
-}
 
 // extractSolutionSteps 解答手順を抽出
 func (s *problemService) extractSolutionSteps(content string) string {
@@ -1436,64 +1018,12 @@ func (s *problemService) extractFinalSolution(content string) string {
 
 // createThirdStagePrompt 3回目API呼び出し用のプロンプトを作成（解答手順と計算結果の統合）
 func (s *problemService) createThirdStagePrompt(problemText, solutionSteps, calculationResults string) string {
-	return `以下の問題について、解答手順と数値計算結果を統合して、中学数学に適した完全で理解しやすい解説文を作成してください。
-
-**重要：中学数学の範囲内のみで解説を作成してください。高校数学の内容は使用しないでください。**
-
-**中学数学の範囲**：
-- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
-- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
-- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
-
-**禁止事項（高校数学の内容）**：
-- 三角比、三角関数（sin、cos、tan）
-- 指数関数、対数関数
-- 微分、積分
-- 数列、極限
-- ベクトル
-- 複素数
-- 行列
-- 確率分布、統計的推定・検定
-- その他高校数学の単元
-
-【問題文】
-` + problemText + `
-
-【生成された解答手順】
-` + solutionSteps + `
-
-【数値計算の実行結果】
-` + calculationResults + `
-
-**重要：中学数学なので、ルート（√）やパイ（π）は数値で計算せず、そのまま表記してください。**
-
-**出力形式**：
-
----FINAL_SOLUTION_START---
-【完全な解答・解説】
-
-（解答手順と計算結果を統合し、以下の構成で記述してください）
-
-【解法】
-（数学的な解法手順を、中学数学に適した形で詳しく説明）
-
-【計算過程】
-（重要な計算過程を、ルートやπをそのまま使って示す）
-
-【解答】
-（問題の各小問に対する最終的な答えを中学数学の形式で記述）
-
----FINAL_SOLUTION_END---
-
-**重要な指示（中学数学対応）**：
-1. 解答手順で述べた数学的な方法と、実際の計算結果を自然に統合してください
-2. ルート（√）は簡単化しますが、小数の近似値は表記しないでください
-3. π（パイ）は小数に変換せず、πのまま表記してください
-4. 分数は約分・通分しますが、小数には変換しないでください
-5. 読み手が理解しやすいよう、計算過程と結果を明確に示してください
-6. 問題の各小問について、中学数学として適切な形式で答えを提示してください
-7. 最終答えは正確な数学的表記（√や分数、π使用）で示してください
-8. 中学数学の範囲内の公式や定理のみを使用し、高校数学の内容は絶対に使用しないでください`
+	promptText, err := s.promptLoader.LoadStage5Prompt(problemText, solutionSteps, calculationResults)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load third stage prompt: %v\n", err)
+		return "統合解説プロンプトの読み込みに失敗しました: " + err.Error()
+	}
+	return promptText
 }
 
 // executeCalculationProgram 数値計算プログラムを実行
@@ -1863,91 +1393,6 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 	}, nil
 }
 
-// createStage1Prompt 1段階目用のプロンプトを作成（問題文のみ）
-func (s *problemService) createStage1Prompt(userPrompt, subject string) string {
-	return `あなたは日本の中学校の数学教師です。以下の条件に従って、日本語で数学の問題文のみを作成してください。
-
-**重要：中学数学の範囲内のみで問題を作成してください。高校数学の内容は使用しないでください。**
-
-**中学数学の範囲**：
-- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
-- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
-- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
-
-**禁止事項（高校数学の内容）**：
-- 三角比、三角関数（sin、cos、tan）
-- 指数関数、対数関数
-- 微分、積分
-- 数列、極限
-- ベクトル（外積、内積、ベクトルの大きさなど）
-- 複素数
-- 行列、行列式
-- 確率分布、統計的推定・検定
-- その他高校数学の単元
-
-**ベクトル使用の完全禁止（最重要）**：
-- 「ベクトル」「外積」「内積」「行列式」「方向ベクトル」「単位ベクトル」「位置ベクトル」は絶対に使用禁止
-- 「方向」「向き」という用語も座標計算では使用禁止
-- 座標計算では「x座標の差」「y座標の差」「座標の増減」のみ使用
-- 中学数学の範囲内の基本的な計算方法のみを使用してください
-
-**問題の難易度設定（柔軟なガイドライン）**：
-問題の内容や形式に応じて、以下の考え方で適切な難易度を設定してください：
-
-**【基本レベル】**：
-- 図形：長さ、角度、基本的な面積・周囲の長さ
-- 代数：基本的な計算、簡単な方程式
-- 関数：座標の読み取り、基本的なグラフの性質
-- 確率・統計：基本的な確率、簡単なデータ分析
-
-**【応用レベル】**：
-- 図形：体積、表面積、合同・相似の基本的な利用
-- 代数：連立方程式、二次方程式の解法
-- 関数：一次関数・二次関数の応用
-- 確率・統計：場合の数、やや複雑な確率
-
-**【発展レベル】**：
-- 図形：相似比、面積比、複雑な図形の性質
-- 代数：文章題、複雑な式の計算
-- 関数：関数の応用問題、グラフの解釈
-- 確率・統計：複合的な確率、標本調査
-
-**【応用発展レベル】**：
-- 図形：切断、断面、立体の複雑な計算、証明問題
-- 代数：複雑な文章題、多段階の計算
-- 関数：複数の関数の組み合わせ、実践的応用
-- 確率・統計：複雑な場合分け、データの総合的分析
-
-**柔軟なアプローチ**：
-1. **小問がある場合**：各小問の難易度を段階的に上げる
-2. **小問がない場合**：一つの問題内で基本→応用→発展の要素を含める
-3. **問題の分野に応じて**：上記のレベル分けを参考に適切な難易度を選択
-4. **基本→発展の流れ**：どのような形式でも基本から発展への流れを保つ
-
-**様々な形式の例**：
-- **小問あり**：(1)基本→(2)応用→(3)発展
-- **小問なし**：一つの問題で基本概念から発展的解法まで含む
-- **証明問題**：基本的な性質から複雑な証明へ
-- **文章題**：簡単な設定から複雑な応用まで
-
-` + userPrompt + `
-
-**重要：この段階では問題文のみを生成し、図形・解答・解説は一切含めないでください。**
-
-**出力形式**：
-
----PROBLEM_START---
-【問題】
-（中学数学の範囲内で、適切な難易度の問題文を記述）
----PROBLEM_END---
-
-**注意事項**：
-1. 図形描画コード、解答、解説は絶対に含めないでください
-2. 問題文は完全で自己完結的にしてください
-3. 具体的な数値や条件を含む詳細な問題文を作成してください
-4. 図形が必要な問題でも、この段階では図形は生成しません
-5. 問題文だけで読者が何を求められているかが明確に分かるようにしてください`
-}
 
 // GenerateStage2 2段階目：問題文から図形生成
 func (s *problemService) GenerateStage2(ctx context.Context, req models.Stage2Request, userSchoolCode string) (*models.Stage2Response, error) {
@@ -2125,67 +1570,4 @@ func (s *problemService) GenerateStage3(ctx context.Context, req models.Stage3Re
 		SolutionSteps: solutionSteps,
 		Log:           logBuilder.String(),
 	}, nil
-}
-
-// createStage3Prompt 3段階目用のプロンプト（解答手順のみ）
-func (s *problemService) createStage3Prompt(problemText, geometryCode string) string {
-	prompt := `以下の問題について、詳細な解答の手順のみを作成してください。数値計算は行わず、解法の流れのみを説明してください。
-
-**重要：中学数学の範囲内のみで解答手順を作成してください。高校数学の内容は使用しないでください。**
-
-**中学数学の範囲**：
-- 中学1年：正の数・負の数、文字と式、方程式、比例と反比例、平面図形、空間図形、データの活用
-- 中学2年：式と計算、連立方程式、一次関数、図形の性質と合同、三角形と四角形、確率
-- 中学3年：式の展開と因数分解、平方根、二次方程式、関数y=ax²、図形と相似、円、三平方の定理、標本調査
-
-**禁止事項（高校数学の内容）**：
-- 三角比、三角関数（sin、cos、tan）
-- 指数関数、対数関数
-- 微分、積分
-- 数列、極限
-- ベクトル（外積、内積、ベクトルの大きさなど）
-- 複素数
-- 行列、行列式
-- 確率分布、統計的推定・検定
-- その他高校数学の単元
-
-**厳重警告**：
-- 「ベクトル」「外積」「内積」「行列式」という用語は絶対に使用しないでください
-- 中学数学の範囲内の基本的な計算方法のみを使用してください
-- 複雑すぎる問題は中学数学の範囲で解ける問題に簡素化してください
-
-【問題文】
-` + problemText
-
-	if geometryCode != "" {
-		prompt += `
-
-【図形描画コード】
-` + geometryCode
-	}
-
-	prompt += `
-
-**重要：この段階では解答の手順のみを生成し、具体的な数値計算は行わないでください。**
-
-**出力形式**：
-
----SOLUTION_STEPS_START---
-【解答の手順】
-1. （手順1：どのような考え方で解くか）
-2. （手順2：どのような公式や定理を使うか）
-3. （手順3：計算の流れはどうなるか）
-4. （手順4：最終的に何を求めるか）
-...
-（問題で問われている各小問について、段階的に解法の手順を説明）
----SOLUTION_STEPS_END---
-
-**注意事項**：
-1. 具体的な数値での計算は行わず、解法の手順のみを説明してください
-2. 中学数学の範囲内の公式や定理のみを使用してください
-3. 各小問について、どのような流れで解答するかを詳しく説明してください
-4. 数値計算プログラムや最終的な答えは含めないでください
-5. 読み手が解法の流れを理解できるような詳細な手順を記述してください`
-
-	return prompt
 }
