@@ -93,3 +93,5 @@ go.work
 
 cloudflare/staging/cert.pem
 cloudflare/staging/*.json
+
+sample/sample_prompt.txt
