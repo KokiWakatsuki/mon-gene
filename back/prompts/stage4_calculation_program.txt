@@ -29,6 +29,8 @@
   <solution_steps>{SOLUTION_STEPS}</solution_steps>
 </input_data>
 
+{FEW_SHOT_SAMPLES}
+
 <process_steps>
   <step1>提供された問題文と解答手順を分析し、以下の項目を明確に特定してください：
     - 各小問で実行すべき計算内容

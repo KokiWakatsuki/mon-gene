@@ -34,6 +34,8 @@
   <user_prompt>{USER_PROMPT}</user_prompt>
 </input_data>
 
+{FEW_SHOT_SAMPLES}
+
 <process_steps>
   <step1>提供されたUSER_PROMPTを分析し、以下の項目を決定してください：
     - 適切な数学分野（代数/幾何/関数/確率・統計）

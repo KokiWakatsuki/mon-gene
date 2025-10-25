@@ -251,11 +251,14 @@ func (s *problemService) GeneratePDF(ctx context.Context, req models.PDFGenerate
 
 // createGeometryRegenerationPrompt creates a prompt for regenerating geometry from existing problem text
 func (s *problemService) createGeometryRegenerationPrompt(problemText string) string {
-	prompt, err := s.promptLoader.LoadGeometryRegenerationPrompt(problemText)
+	prompt, err := s.promptLoader.LoadGeometryRegenerationPromptWithSamples(problemText)
 	if err != nil {
-		fmt.Printf("⚠️ Failed to load geometry regeneration prompt: %v\n", err)
-		// フォールバック：エラー時は基本プロンプトを返す
-		return "図形生成プロンプトの読み込みに失敗しました: " + err.Error()
+		fmt.Printf("⚠️ Failed to load geometry regeneration prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		prompt, err = s.promptLoader.LoadGeometryRegenerationPrompt(problemText)
+		if err != nil {
+			return "図形生成プロンプトの読み込みに失敗しました: " + err.Error()
+		}
 	}
 	return prompt
 }
@@ -315,40 +318,56 @@ func (s *problemService) createStandardPrompt(prompt string) string {
 
 // createStage1Prompt 1段階目用のプロンプトを作成（問題文のみ）
 func (s *problemService) createStage1Prompt(userPrompt, subject string) string {
-	promptText, err := s.promptLoader.LoadStage1Prompt(userPrompt, subject)
+	promptText, err := s.promptLoader.LoadStage1PromptWithSamples(userPrompt, subject)
 	if err != nil {
-		fmt.Printf("⚠️ Failed to load stage1 prompt: %v\n", err)
-		return "1段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		fmt.Printf("⚠️ Failed to load stage1 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadStage1Prompt(userPrompt, subject)
+		if err != nil {
+			return "1段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
 	}
 	return promptText
 }
 
 // createStage3Prompt 3段階目用のプロンプト（解答手順のみ）
 func (s *problemService) createStage3Prompt(problemText, geometryCode string) string {
-	promptText, err := s.promptLoader.LoadStage3Prompt(problemText, geometryCode)
+	promptText, err := s.promptLoader.LoadStage3PromptWithSamples(problemText, geometryCode)
 	if err != nil {
-		fmt.Printf("⚠️ Failed to load stage3 prompt: %v\n", err)
-		return "3段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		fmt.Printf("⚠️ Failed to load stage3 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadStage3Prompt(problemText, geometryCode)
+		if err != nil {
+			return "3段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
 	}
 	return promptText
 }
 
 // createStage4Prompt 4段階目用のプロンプト（数値計算プログラム生成）
 func (s *problemService) createStage4Prompt(problemText, solutionSteps string) string {
-	promptText, err := s.promptLoader.LoadStage4Prompt(problemText, solutionSteps)
+	promptText, err := s.promptLoader.LoadStage4PromptWithSamples(problemText, solutionSteps)
 	if err != nil {
-		fmt.Printf("⚠️ Failed to load stage4 prompt: %v\n", err)
-		return "4段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		fmt.Printf("⚠️ Failed to load stage4 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadStage4Prompt(problemText, solutionSteps)
+		if err != nil {
+			return "4段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
 	}
 	return promptText
 }
 
 // createStage5Prompt 5段階目用のプロンプト（最終解説生成）
 func (s *problemService) createStage5Prompt(problemText, solutionSteps, calculationResults string) string {
-	promptText, err := s.promptLoader.LoadStage5Prompt(problemText, solutionSteps, calculationResults)
+	promptText, err := s.promptLoader.LoadStage5PromptWithSamples(problemText, solutionSteps, calculationResults)
 	if err != nil {
-		fmt.Printf("⚠️ Failed to load stage5 prompt: %v\n", err)
-		return "5段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		fmt.Printf("⚠️ Failed to load stage5 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadStage5Prompt(problemText, solutionSteps, calculationResults)
+		if err != nil {
+			return "5段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
 	}
 	return promptText
 }

@@ -27,6 +27,8 @@
   <geometry_section>{GEOMETRY_CODE_SECTION}</geometry_section>
 </input_data>
 
+{FEW_SHOT_SAMPLES}
+
 <process_steps>
   <step1>提供された問題文を詳細に分析し、以下の項目を明確に特定してください：
     - 問題で求められている内容（各小問について）

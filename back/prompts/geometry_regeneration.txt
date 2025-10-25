@@ -23,6 +23,8 @@
   <problem_text>{PROBLEM_TEXT}</problem_text>
 </input_data>
 
+{FEW_SHOT_SAMPLES}
+
 <process_steps>
   <step1>提供された問題文を詳細に分析し、以下の項目を明確に特定してください：
     - 描画が必要な図形の種類（平面図形/空間図形）

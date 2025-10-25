@@ -32,6 +32,8 @@
   <calculation_results>{CALCULATION_RESULTS}</calculation_results>
 </input_data>
 
+{FEW_SHOT_SAMPLES}
+
 <process_steps>
   <step1>提供された材料を詳細に分析し、以下の項目を明確に特定してください：
     - 問題で求められている各小問の内容
