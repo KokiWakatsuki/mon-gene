@@ -8,6 +8,31 @@ interface MarkdownRendererProps {
 }
 
 export default function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
+  // 解答・解説部分のみを抽出する関数
+  const extractFinalSolution = (text: string): string => {
+    if (!text) return '';
+    
+    // ---FINAL_SOLUTION_START--- マーカーを探す
+    const finalSolutionMarker = '---FINAL_SOLUTION_START---';
+    const markerIndex = text.indexOf(finalSolutionMarker);
+    
+    if (markerIndex !== -1) {
+      // マーカー以降の部分を抽出
+      return text.substring(markerIndex + finalSolutionMarker.length).trim();
+    }
+    
+    // マーカーが見つからない場合は、【完全な解答・解説】以降を抽出
+    const solutionHeaderPattern = /【完全な解答・解説】/;
+    const match = text.match(solutionHeaderPattern);
+    
+    if (match && match.index !== undefined) {
+      return text.substring(match.index).trim();
+    }
+    
+    // どちらも見つからない場合は元のテキストをそのまま返す
+    return text;
+  };
+
   // 高度な数学記号の変換を行う関数（HTML版）
   const renderAdvancedMathSymbols = (text: string): string => {
     if (!text) return '';
@@ -127,7 +152,9 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       .replace(/\n/g, '<br />');
   };
 
-  const processedContent = renderBasicMarkdown(renderAdvancedMathSymbols(content));
+  // まず解答・解説部分のみを抽出してから処理
+  const extractedContent = extractFinalSolution(content);
+  const processedContent = renderBasicMarkdown(renderAdvancedMathSymbols(extractedContent));
 
   return (
     <>
