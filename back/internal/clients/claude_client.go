@@ -92,7 +92,7 @@ func (c *claudeClient) GenerateContent(ctx context.Context, prompt string) (stri
 
 	request := ClaudeRequest{
 		Model:     c.model,
-		MaxTokens: 2000,
+		MaxTokens: 5000,
 		Messages: []Message{
 			{
 				Role:    "user",
@@ -226,7 +226,7 @@ func (c *claudeClient) GenerateMultimodalContent(ctx context.Context, prompt str
 
 	request := ClaudeRequest{
 		Model:     c.model,
-		MaxTokens: 2000,
+		MaxTokens: 5000,
 		Messages: []Message{
 			{
 				Role:    "user",

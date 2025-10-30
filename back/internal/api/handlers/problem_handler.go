@@ -244,7 +244,7 @@ func (h *ProblemHandler) GenerateProblemFiveStage(w http.ResponseWriter, r *http
 	utils.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-// GenerateStage1 1段階目：問題文のみ生成
+// GenerateStage1 1段階目：小問構成と解答プロセス生成（新しいプロセス）
 func (h *ProblemHandler) GenerateStage1(w http.ResponseWriter, r *http.Request) {
 	// 認証トークンを取得
 	token := r.Header.Get("Authorization")
@@ -281,7 +281,7 @@ func (h *ProblemHandler) GenerateStage1(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 1段階目を実行
+	// 1段階目を実行（小問構成と解答プロセス生成）
 	response, err := h.problemService.GenerateStage1(r.Context(), req, user.SchoolCode)
 	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
@@ -291,7 +291,7 @@ func (h *ProblemHandler) GenerateStage1(w http.ResponseWriter, r *http.Request) 
 	utils.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-// GenerateStage2 2段階目：図形生成
+// GenerateStage2 2段階目：完全な問題生成（新しいプロセス）
 func (h *ProblemHandler) GenerateStage2(w http.ResponseWriter, r *http.Request) {
 	// 認証トークンを取得
 	token := r.Header.Get("Authorization")
@@ -319,12 +319,12 @@ func (h *ProblemHandler) GenerateStage2(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// バリデーション
-	if req.ProblemText == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+	if req.SubProblemsAndProcess == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "小問構成と解答プロセスは必須です")
 		return
 	}
 
-	// 2段階目を実行
+	// 2段階目を実行（完全な問題生成）
 	response, err := h.problemService.GenerateStage2(r.Context(), req, user.SchoolCode)
 	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
@@ -334,7 +334,7 @@ func (h *ProblemHandler) GenerateStage2(w http.ResponseWriter, r *http.Request) 
 	utils.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-// GenerateStage3 3段階目：解答手順生成
+// GenerateStage3 3段階目：数値計算プログラム生成・実行（新しいプロセス）
 func (h *ProblemHandler) GenerateStage3(w http.ResponseWriter, r *http.Request) {
 	// 認証トークンを取得
 	token := r.Header.Get("Authorization")
@@ -362,12 +362,16 @@ func (h *ProblemHandler) GenerateStage3(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// バリデーション
-	if req.ProblemText == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+	if req.SubProblemsAndProcess == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "小問構成と解答プロセスは必須です")
+		return
+	}
+	if req.CompleteProblem == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "完全な問題は必須です")
 		return
 	}
 
-	// 3段階目を実行
+	// 3段階目を実行（数値計算プログラム生成・実行）
 	response, err := h.problemService.GenerateStage3(r.Context(), req, user.SchoolCode)
 	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
@@ -377,7 +381,7 @@ func (h *ProblemHandler) GenerateStage3(w http.ResponseWriter, r *http.Request) 
 	utils.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-// GenerateStage4 4段階目：数値計算プログラム生成・実行
+// GenerateStage4 4段階目：完全な解答・解説生成（新しいプロセス）
 func (h *ProblemHandler) GenerateStage4(w http.ResponseWriter, r *http.Request) {
 	// 認証トークンを取得
 	token := r.Header.Get("Authorization")
@@ -405,16 +409,20 @@ func (h *ProblemHandler) GenerateStage4(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// バリデーション
-	if req.ProblemText == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
+	if req.SubProblemsAndProcess == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "小問構成と解答プロセスは必須です")
 		return
 	}
-	if req.SolutionSteps == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "解答手順は必須です")
+	if req.CompleteProblem == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "完全な問題は必須です")
+		return
+	}
+	if req.CalculationResults == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "計算結果は必須です")
 		return
 	}
 
-	// 4段階目を実行
+	// 4段階目を実行（完全な解答・解説生成）
 	response, err := h.problemService.GenerateStage4(r.Context(), req, user.SchoolCode)
 	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
@@ -424,7 +432,7 @@ func (h *ProblemHandler) GenerateStage4(w http.ResponseWriter, r *http.Request) 
 	utils.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-// GenerateStage5 5段階目：最終解説生成
+// GenerateStage5 5段階目：図形描画プログラム生成（新しいプロセス）
 func (h *ProblemHandler) GenerateStage5(w http.ResponseWriter, r *http.Request) {
 	// 認証トークンを取得
 	token := r.Header.Get("Authorization")
@@ -452,20 +460,12 @@ func (h *ProblemHandler) GenerateStage5(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// バリデーション
-	if req.ProblemText == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題文は必須です")
-		return
-	}
-	if req.SolutionSteps == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "解答手順は必須です")
-		return
-	}
-	if req.CalculationResults == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "計算結果は必須です")
+	if req.CompleteProblem == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "完全な問題は必須です")
 		return
 	}
 
-	// 5段階目を実行
+	// 5段階目を実行（図形描画プログラム生成）
 	response, err := h.problemService.GenerateStage5(r.Context(), req, user.SchoolCode)
 	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
@@ -478,19 +478,19 @@ func (h *ProblemHandler) GenerateStage5(w http.ResponseWriter, r *http.Request) 
 		println("💾 [Stage5Handler] Attempting to save complete 5-stage problem to database")
 		println("🔍 [Stage5Handler] Problem data prepared:")
 		println("  Subject:", req.FiveStageData.Subject)
-		println("  Content length:", len(req.ProblemText))
-		println("  Solution length:", len(response.FinalExplanation))
-		println("  Has image:", len(req.FiveStageData.ImageBase64) > 0)
+		println("  Content length:", len(req.CompleteProblem))
+		println("  Solution length:", len(response.GeometryCode))
+		println("  Has image:", len(response.ImageBase64) > 0)
 		
 		// 実際のDB保存処理を実行
 		problem := &models.Problem{
 			UserID:         user.ID,
 			Subject:        req.FiveStageData.Subject,
 			Prompt:         req.FiveStageData.Prompt,
-			Content:        req.ProblemText,
-			Solution:       response.FinalExplanation,
-			ImageBase64:    req.FiveStageData.ImageBase64,
-			OpinionProfile: req.FiveStageData.OpinionProfile, // filtersからopinion_profileに変更
+			Content:        req.CompleteProblem,
+			Solution:       "", // 新しいプロセスでは解答は別の段階で生成済み
+			ImageBase64:    response.ImageBase64,
+			OpinionProfile: req.FiveStageData.OpinionProfile,
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}

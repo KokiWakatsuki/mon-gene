@@ -372,6 +372,90 @@ func (s *problemService) createStage5Prompt(problemText, solutionSteps, calculat
 	return promptText
 }
 
+// createNewStage1Prompt 新しい1段階目用のプロンプト（解答プロセス生成）
+func (s *problemService) createNewStage1Prompt(userPrompt, subject string) string {
+	promptText, err := s.promptLoader.LoadNewStage1PromptWithSamples(userPrompt, subject)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load new stage1 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadNewStage1Prompt(userPrompt, subject)
+		if err != nil {
+			return "新しい1段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
+	}
+	return promptText
+}
+
+// createNewStage2Prompt 新しい2段階目用のプロンプト（完全な問題生成）
+func (s *problemService) createNewStage2Prompt(subProblemsAndProcess string) string {
+	promptText, err := s.promptLoader.LoadNewStage2PromptWithSamples(subProblemsAndProcess)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load new stage2 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadNewStage2Prompt(subProblemsAndProcess)
+		if err != nil {
+			return "新しい2段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
+	}
+	return promptText
+}
+
+// createNewStage3Prompt 新しい3段階目用のプロンプト（数値計算プログラム生成）
+func (s *problemService) createNewStage3Prompt(solutionProcess string) string {
+	promptText, err := s.promptLoader.LoadNewStage3PromptWithSamples(solutionProcess)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load new stage3 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadNewStage3Prompt(solutionProcess)
+		if err != nil {
+			return "新しい3段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
+	}
+	return promptText
+}
+
+// createNewStage4Prompt 新しい4段階目用のプロンプト（問題文生成）
+func (s *problemService) createNewStage4Prompt(solutionProcess string) string {
+	promptText, err := s.promptLoader.LoadNewStage4PromptWithSamples(solutionProcess)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load new stage4 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadNewStage4Prompt(solutionProcess)
+		if err != nil {
+			return "新しい4段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
+	}
+	return promptText
+}
+
+// createNewStage5Prompt 新しい5段階目用のプロンプト（完全な解答・解説生成）
+func (s *problemService) createNewStage5Prompt(solutionProcess, calculationResults string) string {
+	promptText, err := s.promptLoader.LoadNewStage5PromptWithSamples(solutionProcess, calculationResults)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load new stage5 prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadNewStage5Prompt(solutionProcess, calculationResults)
+		if err != nil {
+			return "新しい5段階目プロンプトの読み込みに失敗しました: " + err.Error()
+		}
+	}
+	return promptText
+}
+
+// createGeometryPromptWithSamples 図形描画プロンプト（新Stage5用）
+func (s *problemService) createGeometryPromptWithSamples(problemText string) string {
+	promptText, err := s.promptLoader.LoadGeometryPromptWithSamples(problemText)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load geometry prompt with samples: %v\n", err)
+		// フォールバック：サンプルなしでプロンプトを読み込み
+		promptText, err = s.promptLoader.LoadGeometryRegenerationPrompt(problemText)
+		if err != nil {
+			return "図形描画プロンプトの読み込みに失敗しました: " + err.Error()
+		}
+	}
+	return promptText
+}
+
 // DEPRECATED: 古いプロンプトメソッドは削除済み（プロンプトファイルに移行）
 
 
@@ -607,7 +691,7 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 	fmt.Printf("🤖 [RegenerateGeometry] Generating matplotlib code with AI\n")
 	
 	// 図形生成専用のプロンプトを構築
-	geometryPrompt := s.createGeometryRegenerationPrompt(contentToAnalyze)
+	geometryPrompt := s.createGeometryPromptWithSamples(contentToAnalyze)
 	fmt.Printf("🔍 [RegenerateGeometry] Enhanced prompt created\n")
 	
 	// ユーザーの設定に基づいてAIクライアントを選択
@@ -721,10 +805,10 @@ func min(a, b int) int {
 // 5段階生成システムの実装（高精度）
 
 
-// GenerateStage4 4段階目：数値計算プログラム生成・実行
+// GenerateStage4 4段階目：完全な解答・解説生成（新しいプロセス）
 func (s *problemService) GenerateStage4(ctx context.Context, req models.Stage4Request, userSchoolCode string) (*models.Stage4Response, error) {
 	logBuilder := strings.Builder{}
-	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage4] 4段階目を開始：数値計算プログラム生成・実行 (ユーザー: %s)\n", userSchoolCode))
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage4] 4段階目を開始：完全な解答・解説生成 (ユーザー: %s)\n", userSchoolCode))
 	
 	// ユーザー情報を取得
 	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
@@ -740,9 +824,9 @@ func (s *problemService) GenerateStage4(ctx context.Context, req models.Stage4Re
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 4段階目用のプロンプトを作成（数値計算プログラム生成）
-	prompt := s.createStage4Prompt(req.ProblemText, req.SolutionSteps)
-	logBuilder.WriteString("📝 4段階目用プロンプトを作成しました\n")
+	// 4段階目用のプロンプトを作成（完全な解答・解説生成）
+	prompt := s.createNewStage5Prompt(req.SubProblemsAndProcess, req.CalculationResults)
+	logBuilder.WriteString("📝 4段階目用プロンプト（完全な解答・解説生成）を作成しました\n")
 	
 	// AIクライアントを選択してAPI呼び出し
 	var content string
@@ -767,7 +851,7 @@ func (s *problemService) GenerateStage4(ctx context.Context, req models.Stage4Re
 	}
 	
 	if err != nil {
-		errorMsg := fmt.Sprintf("%s APIでの数値計算プログラム生成に失敗しました: %v", user.PreferredAPI, err)
+		errorMsg := fmt.Sprintf("%s APIでの完全な解答・解説生成に失敗しました: %v", user.PreferredAPI, err)
 		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
 		return &models.Stage4Response{
 			Success: false,
@@ -778,51 +862,37 @@ func (s *problemService) GenerateStage4(ctx context.Context, req models.Stage4Re
 	
 	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
 	
-	// 数値計算プログラムを抽出
-	calculationProgram := s.extractCalculationProgram(content)
-	if calculationProgram == "" {
-		calculationProgram = strings.TrimSpace(content) // フォールバック：全体をプログラムとして使用
+	// 完全な解答を抽出
+	completeAnswer := s.extractFinalSolution(content)
+	if completeAnswer == "" {
+		completeAnswer = strings.TrimSpace(content) // フォールバック：全体を完全な解答として使用
 	}
 	
-	logBuilder.WriteString(fmt.Sprintf("🧮 計算プログラムの抽出: %t (長さ: %d文字)\n", calculationProgram != "", len(calculationProgram)))
-	
-	// 計算プログラムの内容をログに表示
-	if calculationProgram != "" {
-		logBuilder.WriteString(strings.Repeat("=", 50) + "\n")
-		logBuilder.WriteString("🧮 [生成された数値計算プログラム]\n")
-		logBuilder.WriteString(strings.Repeat("=", 50) + "\n")
-		logBuilder.WriteString(calculationProgram + "\n")
-		logBuilder.WriteString(strings.Repeat("=", 50) + "\n")
+	if completeAnswer == "" {
+		errorMsg := "完全な解答・解説の抽出に失敗しました"
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage4Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
 	}
 	
-	// 数値計算プログラムを実行
-	var calculationResults string
-	if calculationProgram != "" {
-		logBuilder.WriteString("🧮 数値計算プログラムを実行中...\n")
-		calculationResults, err = s.executeCalculationProgram(ctx, calculationProgram)
-		if err != nil {
-			logBuilder.WriteString(fmt.Sprintf("⚠️ 数値計算の実行に失敗: %v\n", err))
-			calculationResults = fmt.Sprintf("計算実行エラー: %v", err)
-		} else {
-			logBuilder.WriteString("✅ 数値計算を実行しました\n")
-		}
-	}
-	
-	logBuilder.WriteString("✅ [Stage4] 4段階目が完了しました\n")
+	logBuilder.WriteString(fmt.Sprintf("📚 完全な解答・解説を抽出しました (長さ: %d文字)\n", len(completeAnswer)))
+	logBuilder.WriteString("✅ [Stage4] 4段階目（完全な解答・解説生成）が完了しました\n")
 	
 	return &models.Stage4Response{
-		Success:            true,
-		CalculationProgram: calculationProgram,
-		CalculationResults: calculationResults,
-		Log:                logBuilder.String(),
+		Success:        true,
+		FinalExplanation: completeAnswer,
+		Log:            logBuilder.String(),
 	}, nil
 }
 
 
-// GenerateStage5 5段階目：最終解説生成
+// GenerateStage5 5段階目：図形描画プログラム生成（新しいプロセス）
 func (s *problemService) GenerateStage5(ctx context.Context, req models.Stage5Request, userSchoolCode string) (*models.Stage5Response, error) {
 	logBuilder := strings.Builder{}
-	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage5] 5段階目を開始：最終解説生成 (ユーザー: %s)\n", userSchoolCode))
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage5] 5段階目を開始：図形描画プログラム生成 (ユーザー: %s)\n", userSchoolCode))
 	
 	// ユーザー情報を取得
 	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
@@ -838,9 +908,9 @@ func (s *problemService) GenerateStage5(ctx context.Context, req models.Stage5Re
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 5段階目用のプロンプトを作成（最終解説生成）
-	prompt := s.createStage5Prompt(req.ProblemText, req.SolutionSteps, req.CalculationResults)
-	logBuilder.WriteString("📝 5段階目用プロンプトを作成しました\n")
+	// 5段階目用のプロンプトを作成（図形描画プログラム生成）
+	prompt := s.createGeometryPromptWithSamples(req.CompleteProblem)
+	logBuilder.WriteString("📝 5段階目用プロンプト（図形描画プログラム生成）を作成しました\n")
 	
 	// AIクライアントを選択してAPI呼び出し
 	var content string
@@ -865,40 +935,47 @@ func (s *problemService) GenerateStage5(ctx context.Context, req models.Stage5Re
 	}
 	
 	if err != nil {
-		errorMsg := fmt.Sprintf("%s APIでの最終解説生成に失敗しました: %v", user.PreferredAPI, err)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		logBuilder.WriteString(fmt.Sprintf("⚠️ AIによる図形コード生成に失敗: %v\n", err))
+		// フォールバックとして図形なしで続行
+		logBuilder.WriteString("ℹ️ この問題は図形なしで続行します\n")
+		logBuilder.WriteString("✅ [Stage5] 5段階目が完了しました（図形なし）\n")
+		
 		return &models.Stage5Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, err
+			Success:      true,
+			GeometryCode: "",
+			ImageBase64:  "",
+			Log:          logBuilder.String(),
+		}, nil
 	}
 	
 	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
 	
-	// 最終解説を抽出
-	finalExplanation := s.extractFinalSolution(content)
-	if finalExplanation == "" {
-		finalExplanation = strings.TrimSpace(content) // フォールバック：全体を解説として使用
+	// 図形コードを抽出
+	geometryCode := s.extractPythonCode(content)
+	logBuilder.WriteString(fmt.Sprintf("🐍 図形コードの抽出: %t (長さ: %d文字)\n", geometryCode != "", len(geometryCode)))
+	
+	// 図形を実際に生成
+	var imageBase64 string
+	if geometryCode != "" {
+		logBuilder.WriteString("🎨 図形を生成中...\n")
+		imageBase64, err = s.coreClient.GenerateCustomGeometry(ctx, geometryCode, req.CompleteProblem)
+		if err != nil {
+			logBuilder.WriteString(fmt.Sprintf("⚠️ 図形生成に失敗: %v\n", err))
+		} else {
+			logBuilder.WriteString("✅ 図形を生成しました\n")
+		}
+	} else {
+		logBuilder.WriteString("ℹ️ この問題には図形は必要ありません\n")
 	}
 	
-	if finalExplanation == "" {
-		errorMsg := "最終解説の抽出に失敗しました"
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage5Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("📝 最終解説を抽出しました (長さ: %d文字)\n", len(finalExplanation)))
-	logBuilder.WriteString("✅ [Stage5] 5段階目が完了しました\n")
+	logBuilder.WriteString(fmt.Sprintf("🖼️ 最終的な図形データの長さ: %d\n", len(imageBase64)))
+	logBuilder.WriteString("✅ [Stage5] 5段階目（図形描画）が完了しました\n")
 	
 	return &models.Stage5Response{
-		Success:          true,
-		FinalExplanation: finalExplanation,
-		Log:              logBuilder.String(),
+		Success:      true,
+		GeometryCode: geometryCode,
+		ImageBase64:  imageBase64,
+		Log:          logBuilder.String(),
 	}, nil
 }
 
@@ -913,6 +990,60 @@ func (s *problemService) extractSolutionSteps(content string) string {
 	
 	// フォールバック：【解答の手順】を探す
 	re = regexp.MustCompile(`(?s)【解答の手順】(.*?)(?:---|\n\n|\z)`)
+	matches = re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	return ""
+}
+
+// extractSolutionProcess 解答プロセスを抽出
+func (s *problemService) extractSolutionProcess(content string) string {
+	re := regexp.MustCompile(`(?s)---SOLUTION_PROCESS_START---(.*?)---SOLUTION_PROCESS_END---`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	// フォールバック：【解答プロセス】を探す
+	re = regexp.MustCompile(`(?s)【解答プロセス】(.*?)(?:---|\n\n|\z)`)
+	matches = re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	return ""
+}
+
+// extractSubProblemsAndProcess 小問構成と解答プロセスを抽出
+func (s *problemService) extractSubProblemsAndProcess(content string) string {
+	re := regexp.MustCompile(`(?s)---SUB_PROBLEMS_AND_PROCESS_START---(.*?)---SUB_PROBLEMS_AND_PROCESS_END---`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	// フォールバック：【小問構成と解答プロセス】を探す
+	re = regexp.MustCompile(`(?s)【小問構成と解答プロセス】(.*?)(?:---|\n\n|\z)`)
+	matches = re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	return ""
+}
+
+// extractCompleteProblem 完全な問題を抽出
+func (s *problemService) extractCompleteProblem(content string) string {
+	re := regexp.MustCompile(`(?s)---COMPLETE_PROBLEM_START---(.*?)---COMPLETE_PROBLEM_END---`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	// フォールバック：【完全な問題】を探す
+	re = regexp.MustCompile(`(?s)【完全な問題】(.*?)(?:---|\n\n|\z)`)
 	matches = re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
@@ -1084,11 +1215,11 @@ import math
 	return formattedResults, nil
 }
 
-// 5段階生成システムの実装
+// 5段階生成システムの実装（新しいプロセス）
 
-// GenerateProblemFiveStage 全体の5段階生成プロセスを実行
+// GenerateProblemFiveStage 全体の5段階生成プロセスを実行（新しい順序）
 func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req models.FiveStageGenerationRequest, userSchoolCode string) (*models.FiveStageGenerationResponse, error) {
-	fmt.Printf("🚀 [FiveStage] Starting five-stage problem generation for user: %s\n", userSchoolCode)
+	fmt.Printf("🚀 [FiveStage] Starting NEW five-stage problem generation for user: %s\n", userSchoolCode)
 	fmt.Printf("🔍 [FiveStage] Request details: Prompt length=%d, Subject=%s\n", len(req.Prompt), req.Subject)
 	
 	// ユーザー情報を取得して生成制限をチェック
@@ -1143,7 +1274,7 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		}
 	}
 	
-	// 1段階目：問題文生成
+	// 新しいプロセス：1段階目：小問構成と解答プロセス生成
 	stage1Req := models.Stage1Request{
 		Prompt:  req.Prompt,
 		Subject: req.Subject,
@@ -1152,89 +1283,85 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 	if err != nil || !stage1Resp.Success {
 		return &models.FiveStageGenerationResponse{
 			Success:   false,
-			Error:     fmt.Sprintf("1段階目に失敗しました: %v", err),
+			Error:     fmt.Sprintf("1段階目（小問構成と解答プロセス生成）に失敗しました: %v", err),
 			Stage1Log: stage1Resp.Log,
 		}, nil
 	}
 	
-	// 2段階目：図形生成
+	// 新しいプロセス：2段階目：完全な問題生成
 	stage2Req := models.Stage2Request{
-		ProblemText: stage1Resp.ProblemText,
+		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
 	}
 	stage2Resp, err := s.GenerateStage2(ctx, stage2Req, userSchoolCode)
 	if err != nil || !stage2Resp.Success {
 		return &models.FiveStageGenerationResponse{
-			Success:     false,
-			Error:       fmt.Sprintf("2段階目に失敗しました: %v", err),
-			ProblemText: stage1Resp.ProblemText,
-			Stage1Log:   stage1Resp.Log,
-			Stage2Log:   stage2Resp.Log,
+			Success:               false,
+			Error:                 fmt.Sprintf("2段階目（完全な問題生成）に失敗しました: %v", err),
+			SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
+			Stage1Log:             stage1Resp.Log,
+			Stage2Log:             stage2Resp.Log,
 		}, nil
 	}
 	
-	// 3段階目：解答手順生成
+	// 新しいプロセス：3段階目：数値計算プログラム生成・実行
 	stage3Req := models.Stage3Request{
-		ProblemText:  stage1Resp.ProblemText,
-		GeometryCode: stage2Resp.GeometryCode,
-		ImageBase64:  stage2Resp.ImageBase64,
+		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
+		CompleteProblem:       stage2Resp.CompleteProblem,
 	}
 	stage3Resp, err := s.GenerateStage3(ctx, stage3Req, userSchoolCode)
 	if err != nil || !stage3Resp.Success {
 		return &models.FiveStageGenerationResponse{
-			Success:      false,
-			Error:        fmt.Sprintf("3段階目に失敗しました: %v", err),
-			ProblemText:  stage1Resp.ProblemText,
-			GeometryCode: stage2Resp.GeometryCode,
-			ImageBase64:  stage2Resp.ImageBase64,
-			Stage1Log:    stage1Resp.Log,
-			Stage2Log:    stage2Resp.Log,
-			Stage3Log:    stage3Resp.Log,
+			Success:               false,
+			Error:                 fmt.Sprintf("3段階目（数値計算プログラム生成・実行）に失敗しました: %v", err),
+			SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
+			CompleteProblem:       stage2Resp.CompleteProblem,
+			Stage1Log:             stage1Resp.Log,
+			Stage2Log:             stage2Resp.Log,
+			Stage3Log:             stage3Resp.Log,
 		}, nil
 	}
 	
-	// 4段階目：数値計算プログラム生成・実行
+	// 新しいプロセス：4段階目：完全な解答・解説生成
 	stage4Req := models.Stage4Request{
-		ProblemText:   stage1Resp.ProblemText,
-		SolutionSteps: stage3Resp.SolutionSteps,
+		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
+		CompleteProblem:       stage2Resp.CompleteProblem,
+		CalculationResults:    stage3Resp.CalculationResults,
 	}
 	stage4Resp, err := s.GenerateStage4(ctx, stage4Req, userSchoolCode)
 	if err != nil || !stage4Resp.Success {
 		return &models.FiveStageGenerationResponse{
-			Success:        false,
-			Error:          fmt.Sprintf("4段階目に失敗しました: %v", err),
-			ProblemText:    stage1Resp.ProblemText,
-			GeometryCode:   stage2Resp.GeometryCode,
-			ImageBase64:    stage2Resp.ImageBase64,
-			SolutionSteps:  stage3Resp.SolutionSteps,
-			Stage1Log:      stage1Resp.Log,
-			Stage2Log:      stage2Resp.Log,
-			Stage3Log:      stage3Resp.Log,
-			Stage4Log:      stage4Resp.Log,
+			Success:               false,
+			Error:                 fmt.Sprintf("4段階目（完全な解答・解説生成）に失敗しました: %v", err),
+			SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
+			CompleteProblem:       stage2Resp.CompleteProblem,
+			CalculationProgram:    stage3Resp.CalculationProgram,
+			CalculationResults:    stage3Resp.CalculationResults,
+			Stage1Log:             stage1Resp.Log,
+			Stage2Log:             stage2Resp.Log,
+			Stage3Log:             stage3Resp.Log,
+			Stage4Log:             stage4Resp.Log,
 		}, nil
 	}
 	
-	// 5段階目：最終解説生成
+	// 新しいプロセス：5段階目：図形描画プログラム生成
 	stage5Req := models.Stage5Request{
-		ProblemText:        stage1Resp.ProblemText,
-		SolutionSteps:      stage3Resp.SolutionSteps,
-		CalculationResults: stage4Resp.CalculationResults,
+		CompleteProblem: stage2Resp.CompleteProblem,
 	}
 	stage5Resp, err := s.GenerateStage5(ctx, stage5Req, userSchoolCode)
 	if err != nil || !stage5Resp.Success {
 		return &models.FiveStageGenerationResponse{
-			Success:            false,
-			Error:              fmt.Sprintf("5段階目に失敗しました: %v", err),
-			ProblemText:        stage1Resp.ProblemText,
-			GeometryCode:       stage2Resp.GeometryCode,
-			ImageBase64:        stage2Resp.ImageBase64,
-			SolutionSteps:      stage3Resp.SolutionSteps,
-			CalculationProgram: stage4Resp.CalculationProgram,
-			CalculationResults: stage4Resp.CalculationResults,
-			Stage1Log:          stage1Resp.Log,
-			Stage2Log:          stage2Resp.Log,
-			Stage3Log:          stage3Resp.Log,
-			Stage4Log:          stage4Resp.Log,
-			Stage5Log:          stage5Resp.Log,
+			Success:               false,
+			Error:                 fmt.Sprintf("5段階目（図形描画）に失敗しました: %v", err),
+			SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
+			CompleteProblem:       stage2Resp.CompleteProblem,
+			CalculationProgram:    stage3Resp.CalculationProgram,
+			CalculationResults:    stage3Resp.CalculationResults,
+			FinalExplanation: stage4Resp.FinalExplanation,
+			Stage1Log:             stage1Resp.Log,
+			Stage2Log:             stage2Resp.Log,
+			Stage3Log:             stage3Resp.Log,
+			Stage4Log:             stage4Resp.Log,
+			Stage5Log:             stage5Resp.Log,
 		}, nil
 	}
 	
@@ -1245,9 +1372,9 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		UserID:         user.ID,
 		Subject:        req.Subject,
 		Prompt:         req.Prompt,
-		Content:        stage1Resp.ProblemText,
-		Solution:       stage5Resp.FinalExplanation,
-		ImageBase64:    stage2Resp.ImageBase64,
+		Content:        stage2Resp.CompleteProblem,   // Stage2で生成された完全な問題
+		Solution:       stage4Resp.FinalExplanation,   // Stage4で生成された完全な解答・解説
+		ImageBase64:    stage5Resp.ImageBase64,      // Stage5で生成された図形
 		OpinionProfile: req.OpinionProfile,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
@@ -1265,29 +1392,29 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		fmt.Printf("⚠️ [FiveStage] Problem repository is not initialized, skipping database save\n")
 	}
 	
-	fmt.Printf("✅ [FiveStage] Five-stage problem generation completed successfully\n")
+	fmt.Printf("✅ [FiveStage] NEW Five-stage problem generation completed successfully\n")
 	
 	return &models.FiveStageGenerationResponse{
-		Success:            true,
-		ProblemText:        stage1Resp.ProblemText,
-		GeometryCode:       stage2Resp.GeometryCode,
-		ImageBase64:        stage2Resp.ImageBase64,
-		SolutionSteps:      stage3Resp.SolutionSteps,
-		CalculationProgram: stage4Resp.CalculationProgram,
-		CalculationResults: stage4Resp.CalculationResults,
-		FinalExplanation:   stage5Resp.FinalExplanation,
-		Stage1Log:          stage1Resp.Log,
-		Stage2Log:          stage2Resp.Log,
-		Stage3Log:          stage3Resp.Log,
-		Stage4Log:          stage4Resp.Log,
-		Stage5Log:          stage5Resp.Log,
+		Success:               true,
+		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
+		CompleteProblem:       stage2Resp.CompleteProblem,
+		CalculationProgram:    stage3Resp.CalculationProgram,
+		CalculationResults:    stage3Resp.CalculationResults,
+		FinalExplanation: stage4Resp.FinalExplanation,
+		GeometryCode:          stage5Resp.GeometryCode,
+		ImageBase64:           stage5Resp.ImageBase64,
+		Stage1Log:             stage1Resp.Log,
+		Stage2Log:             stage2Resp.Log,
+		Stage3Log:             stage3Resp.Log,
+		Stage4Log:             stage4Resp.Log,
+		Stage5Log:             stage5Resp.Log,
 	}, nil
 }
 
-// GenerateStage1 1段階目：問題文のみ生成
+// GenerateStage1 1段階目：小問構成と解答プロセス生成（新しいプロセス）
 func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Request, userSchoolCode string) (*models.Stage1Response, error) {
 	logBuilder := strings.Builder{}
-	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage1] 1段階目を開始：問題文生成 (ユーザー: %s)\n", userSchoolCode))
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage1] 1段階目を開始：小問構成と解答プロセス生成 (ユーザー: %s)\n", userSchoolCode))
 	
 	// ユーザー情報を取得
 	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
@@ -1301,56 +1428,11 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 		}, err
 	}
 	
-	// 生成制限チェック（-1は制限なし）
-	if user.ProblemGenerationLimit >= 0 && user.ProblemGenerationCount >= user.ProblemGenerationLimit {
-		errorMsg := fmt.Sprintf("問題生成回数の上限（%d回）に達しました", user.ProblemGenerationLimit)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage1Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("🔢 [Stage1] BEFORE UPDATE: User %s has %d/%d problems generated\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit))
-	
-	// 問題生成成功時にユーザーの生成回数を更新（Stage1で1回のみ更新）
-	oldCount := user.ProblemGenerationCount
-	user.ProblemGenerationCount++
-	user.UpdatedAt = time.Now()
-	
-	logBuilder.WriteString(fmt.Sprintf("📝 [Stage1] Attempting to update user generation count from %d to %d\n", oldCount, user.ProblemGenerationCount))
-	
-	if err := s.userRepo.Update(ctx, user); err != nil {
-		errorMsg := fmt.Sprintf("問題生成カウントの更新に失敗しました: %v", err)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage1Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	} else {
-		logBuilder.WriteString(fmt.Sprintf("✅ [Stage1] Successfully updated generation count: %s = %d/%d (was %d)\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit, oldCount))
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("🔢 User %s: %d/%d problems generated\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit))
-	
-	// API設定の確認
-	if user.PreferredAPI == "" || user.PreferredModel == "" {
-		errorMsg := fmt.Sprintf("AI設定が不完全です。現在の設定: API=%s, モデル=%s", user.PreferredAPI, user.PreferredModel)
-		logBuilder.WriteString(fmt.Sprintf("⚠️ %s\n", errorMsg))
-		return &models.Stage1Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 1段階目用のプロンプトを作成（問題文のみ生成）
-	prompt := s.createStage1Prompt(req.Prompt, req.Subject)
-	logBuilder.WriteString("📝 1段階目用プロンプトを作成しました\n")
+	// 1段階目用のプロンプトを作成（小問構成と解答プロセス生成）
+	prompt := s.createNewStage1Prompt(req.Prompt, req.Subject)
+	logBuilder.WriteString("📝 1段階目用プロンプト（小問構成と解答プロセス生成）を作成しました\n")
 	
 	// AIクライアントを選択してAPI呼び出し
 	var content string
@@ -1375,7 +1457,7 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 	}
 	
 	if err != nil {
-		errorMsg := fmt.Sprintf("%s APIでの問題生成に失敗しました: %v", user.PreferredAPI, err)
+		errorMsg := fmt.Sprintf("%s APIでの小問構成と解答プロセス生成に失敗しました: %v", user.PreferredAPI, err)
 		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
 		return &models.Stage1Response{
 			Success: false,
@@ -1386,14 +1468,14 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 	
 	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
 	
-	// 問題文を抽出
-	problemText := s.extractProblemText(content)
-	if problemText == "" {
-		problemText = strings.TrimSpace(content) // フォールバック：全体を問題文として使用
+	// 小問構成と解答プロセスを抽出
+	subProblemsAndProcess := s.extractSubProblemsAndProcess(content)
+	if subProblemsAndProcess == "" {
+		subProblemsAndProcess = strings.TrimSpace(content) // フォールバック：全体を小問構成と解答プロセスとして使用
 	}
 	
-	if problemText == "" {
-		errorMsg := "問題文の抽出に失敗しました"
+	if subProblemsAndProcess == "" {
+		errorMsg := "小問構成と解答プロセスの抽出に失敗しました"
 		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
 		return &models.Stage1Response{
 			Success: false,
@@ -1402,21 +1484,21 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 		}, fmt.Errorf(errorMsg)
 	}
 	
-	logBuilder.WriteString(fmt.Sprintf("📝 問題文を抽出しました (長さ: %d文字)\n", len(problemText)))
-	logBuilder.WriteString("✅ [Stage1] 1段階目が完了しました\n")
+	logBuilder.WriteString(fmt.Sprintf("📝 小問構成と解答プロセスを抽出しました (長さ: %d文字)\n", len(subProblemsAndProcess)))
+	logBuilder.WriteString("✅ [Stage1] 1段階目（小問構成と解答プロセス生成）が完了しました\n")
 	
 	return &models.Stage1Response{
-		Success:     true,
-		ProblemText: problemText,
-		Log:         logBuilder.String(),
+		Success:               true,
+		SubProblemsAndProcess: subProblemsAndProcess,
+		Log:                   logBuilder.String(),
 	}, nil
 }
 
 
-// GenerateStage2 2段階目：問題文から図形生成
+// GenerateStage2 2段階目：完全な問題生成（新しいプロセス）
 func (s *problemService) GenerateStage2(ctx context.Context, req models.Stage2Request, userSchoolCode string) (*models.Stage2Response, error) {
 	logBuilder := strings.Builder{}
-	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage2] 2段階目を開始：図形生成 (ユーザー: %s)\n", userSchoolCode))
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage2] 2段階目を開始：完全な問題生成 (ユーザー: %s)\n", userSchoolCode))
 	
 	// ユーザー情報を取得
 	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
@@ -1432,9 +1514,9 @@ func (s *problemService) GenerateStage2(ctx context.Context, req models.Stage2Re
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 2段階目用のプロンプトを作成（図形生成専用）
-	prompt := s.createStage2Prompt(req.ProblemText)
-	logBuilder.WriteString("📝 2段階目用プロンプトを作成しました\n")
+	// 2段階目用のプロンプトを作成（完全な問題生成）
+	prompt := s.createNewStage2Prompt(req.SubProblemsAndProcess)
+	logBuilder.WriteString("📝 2段階目用プロンプト（完全な問題生成）を作成しました\n")
 	
 	// AIクライアントを選択してAPI呼び出し
 	var content string
@@ -1459,59 +1541,52 @@ func (s *problemService) GenerateStage2(ctx context.Context, req models.Stage2Re
 	}
 	
 	if err != nil {
-		logBuilder.WriteString(fmt.Sprintf("⚠️ AIによる図形コード生成に失敗: %v\n", err))
-		// フォールバックとして図形なしで続行
-		logBuilder.WriteString("ℹ️ この問題は図形なしで続行します\n")
-		logBuilder.WriteString("✅ [Stage2] 2段階目が完了しました（図形なし）\n")
-		
+		errorMsg := fmt.Sprintf("%s APIでの完全な問題生成に失敗しました: %v", user.PreferredAPI, err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
 		return &models.Stage2Response{
-			Success:      true,
-			GeometryCode: "",
-			ImageBase64:  "",
-			Log:          logBuilder.String(),
-		}, nil
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
 	}
 	
 	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
 	
-	// 図形コードを抽出
-	geometryCode := s.extractPythonCode(content)
-	logBuilder.WriteString(fmt.Sprintf("🐍 図形コードの抽出: %t (長さ: %d文字)\n", geometryCode != "", len(geometryCode)))
-	
-	// 図形を実際に生成
-	var imageBase64 string
-	if geometryCode != "" {
-		logBuilder.WriteString("🎨 図形を生成中...\n")
-		imageBase64, err = s.coreClient.GenerateCustomGeometry(ctx, geometryCode, req.ProblemText)
-		if err != nil {
-			logBuilder.WriteString(fmt.Sprintf("⚠️ 図形生成に失敗: %v\n", err))
-		} else {
-			logBuilder.WriteString("✅ 図形を生成しました\n")
-		}
-	} else {
-		logBuilder.WriteString("ℹ️ この問題には図形は必要ありません\n")
+	// 完全な問題を抽出
+	completeProblem := s.extractCompleteProblem(content)
+	if completeProblem == "" {
+		completeProblem = strings.TrimSpace(content) // フォールバック：全体を完全な問題として使用
 	}
 	
-	logBuilder.WriteString(fmt.Sprintf("🖼️ 最終的な図形データの長さ: %d\n", len(imageBase64)))
-	logBuilder.WriteString("✅ [Stage2] 2段階目が完了しました\n")
+	if completeProblem == "" {
+		errorMsg := "完全な問題の抽出に失敗しました"
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage2Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("📝 完全な問題を抽出しました (長さ: %d文字)\n", len(completeProblem)))
+	logBuilder.WriteString("✅ [Stage2] 2段階目（完全な問題生成）が完了しました\n")
 	
 	return &models.Stage2Response{
-		Success:      true,
-		GeometryCode: geometryCode,
-		ImageBase64:  imageBase64,
-		Log:          logBuilder.String(),
+		Success:         true,
+		CompleteProblem: completeProblem,
+		Log:             logBuilder.String(),
 	}, nil
 }
 
 // createStage2Prompt 2段階目用のプロンプト（図形生成専用）
 func (s *problemService) createStage2Prompt(problemText string) string {
-	return s.createGeometryRegenerationPrompt(problemText)
+	return s.createGeometryPromptWithSamples(problemText)
 }
 
-// GenerateStage3 3段階目：解答手順生成
+// GenerateStage3 3段階目：数値計算プログラム生成・実行（新しいプロセス）
 func (s *problemService) GenerateStage3(ctx context.Context, req models.Stage3Request, userSchoolCode string) (*models.Stage3Response, error) {
 	logBuilder := strings.Builder{}
-	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage3] 3段階目を開始：解答手順生成 (ユーザー: %s)\n", userSchoolCode))
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage3] 3段階目を開始：数値計算プログラム生成・実行 (ユーザー: %s)\n", userSchoolCode))
 	
 	// ユーザー情報を取得
 	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
@@ -1527,9 +1602,9 @@ func (s *problemService) GenerateStage3(ctx context.Context, req models.Stage3Re
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 3段階目用のプロンプトを作成（解答手順のみ）
-	prompt := s.createStage3Prompt(req.ProblemText, req.GeometryCode)
-	logBuilder.WriteString("📝 3段階目用プロンプトを作成しました\n")
+	// 3段階目用のプロンプトを作成（数値計算プログラム生成）
+	prompt := s.createNewStage3Prompt(req.SubProblemsAndProcess)
+	logBuilder.WriteString("📝 3段階目用プロンプト（数値計算プログラム生成）を作成しました\n")
 	
 	// AIクライアントを選択してAPI呼び出し
 	var content string
@@ -1554,7 +1629,7 @@ func (s *problemService) GenerateStage3(ctx context.Context, req models.Stage3Re
 	}
 	
 	if err != nil {
-		errorMsg := fmt.Sprintf("%s APIでの解答手順生成に失敗しました: %v", user.PreferredAPI, err)
+		errorMsg := fmt.Sprintf("%s APIでの数値計算プログラム生成に失敗しました: %v", user.PreferredAPI, err)
 		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
 		return &models.Stage3Response{
 			Success: false,
@@ -1565,28 +1640,33 @@ func (s *problemService) GenerateStage3(ctx context.Context, req models.Stage3Re
 	
 	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
 	
-	// 解答手順を抽出
-	solutionSteps := s.extractSolutionSteps(content)
-	if solutionSteps == "" {
-		solutionSteps = strings.TrimSpace(content) // フォールバック：全体を解答手順として使用
+	// 数値計算プログラムを抽出
+	calculationProgram := s.extractCalculationProgram(content)
+	if calculationProgram == "" {
+		calculationProgram = strings.TrimSpace(content) // フォールバック：全体をプログラムとして使用
 	}
 	
-	if solutionSteps == "" {
-		errorMsg := "解答手順の抽出に失敗しました"
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage3Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
+	logBuilder.WriteString(fmt.Sprintf("🧮 計算プログラムの抽出: %t (長さ: %d文字)\n", calculationProgram != "", len(calculationProgram)))
+	
+	// 数値計算プログラムを実行
+	var calculationResults string
+	if calculationProgram != "" {
+		logBuilder.WriteString("🧮 数値計算プログラムを実行中...\n")
+		calculationResults, err = s.executeCalculationProgram(ctx, calculationProgram)
+		if err != nil {
+			logBuilder.WriteString(fmt.Sprintf("⚠️ 数値計算の実行に失敗: %v\n", err))
+			calculationResults = fmt.Sprintf("計算実行エラー: %v", err)
+		} else {
+			logBuilder.WriteString("✅ 数値計算を実行しました\n")
+		}
 	}
 	
-	logBuilder.WriteString(fmt.Sprintf("📚 解答手順を抽出しました (長さ: %d文字)\n", len(solutionSteps)))
-	logBuilder.WriteString("✅ [Stage3] 3段階目が完了しました\n")
+	logBuilder.WriteString("✅ [Stage3] 3段階目（数値計算プログラム生成・実行）が完了しました\n")
 	
 	return &models.Stage3Response{
-		Success:       true,
-		SolutionSteps: solutionSteps,
-		Log:           logBuilder.String(),
+		Success:            true,
+		CalculationProgram: calculationProgram,
+		CalculationResults: calculationResults,
+		Log:                logBuilder.String(),
 	}, nil
 }

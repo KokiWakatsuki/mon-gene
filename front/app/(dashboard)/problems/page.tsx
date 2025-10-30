@@ -66,13 +66,13 @@ export default function Home() {
     difficultyScore: 10,
   });
   
-  // 5段階生成システム専用の状態
+  // 5段階生成システム専用の状態（新しいプロセスに対応）
   const [fiveStageResults, setFiveStageResults] = useState<{
-    stage1?: { problemText: string; log: string };
-    stage2?: { geometryCode: string; imageBase64: string; log: string };
-    stage3?: { solutionSteps: string; log: string };
-    stage4?: { calculationProgram: string; calculationResults: string; log: string };
-    stage5?: { finalExplanation: string; log: string };
+    stage1?: { solutionProcess: string; log: string };
+    stage2?: { completeProblem: string; log: string };
+    stage3?: { calculationProgram: string; calculationResults: string; log: string };
+    stage4?: { finalExplanation: string; log: string };
+    stage5?: { geometryCode: string; imageBase64: string; log: string };
   }>({});
   const [currentStage, setCurrentStage] = useState<number>(0); // 0=未開始, 1-5=各段階
   const [stageProgress, setStageProgress] = useState<number>(0); // 進捗率 0-100
@@ -580,10 +580,10 @@ export default function Home() {
 
       console.log('🚀 [FiveStage] 5段階生成プロセス開始（リアルタイム進捗付き）');
       
-      // Stage 1: 問題文生成
+      // Stage 1: 解答プロセス生成
       setCurrentStage(1);
       setStageProgress(10);
-      console.log('🚀 [Stage1] 問題文生成開始');
+      console.log('🚀 [Stage1] 解答プロセス生成開始');
       
       const stage1Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage1`, {
         method: 'POST',
@@ -608,7 +608,7 @@ export default function Home() {
       }
       
       const stage1Result = {
-        problemText: stage1Data.problem_text || '',
+        solutionProcess: stage1Data.sub_problems_and_process || '', // 新しいプロセスでは解答プロセスを生成
         log: stage1Data.log || ''
       };
       
@@ -617,10 +617,10 @@ export default function Home() {
       
       console.log('✅ [Stage1] 完了');
       
-      // Stage 2: 図形生成
+      // 新しいプロセス：Stage 2: 数値計算プログラム生成・実行
       setCurrentStage(2);
       setStageProgress(30);
-      console.log('🚀 [Stage2] 図形生成開始');
+      console.log('🚀 [Stage2] 数値計算プログラム生成・実行開始');
       
       const stage2Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage2`, {
         method: 'POST',
@@ -629,7 +629,7 @@ export default function Home() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          problem_text: stage1Result.problemText
+          sub_problems_and_process: stage1Result.solutionProcess
         })
       });
       
@@ -643,8 +643,7 @@ export default function Home() {
       }
       
       const stage2Result = {
-        geometryCode: stage2Data.geometry_code || '',
-        imageBase64: stage2Data.image_base64 || '',
+        completeProblem: stage2Data.complete_problem || '',
         log: stage2Data.log || ''
       };
       
@@ -653,10 +652,10 @@ export default function Home() {
       
       console.log('✅ [Stage2] 完了');
       
-      // Stage 3: 解答手順生成
+      // 新しいプロセス：Stage 3: 数値計算プログラム生成・実行
       setCurrentStage(3);
       setStageProgress(50);
-      console.log('🚀 [Stage3] 解答手順生成開始');
+      console.log('🚀 [Stage3] 数値計算プログラム生成・実行開始');
       
       const stage3Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage3`, {
         method: 'POST',
@@ -665,9 +664,8 @@ export default function Home() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          problem_text: stage1Result.problemText,
-          geometry_code: stage2Result.geometryCode,
-          image_base64: stage2Result.imageBase64
+          sub_problems_and_process: stage1Result.solutionProcess,
+          complete_problem: stage2Result.completeProblem
         })
       });
       
@@ -681,7 +679,8 @@ export default function Home() {
       }
       
       const stage3Result = {
-        solutionSteps: stage3Data.solution_steps || '',
+        calculationProgram: stage3Data.calculation_program || '',
+        calculationResults: stage3Data.calculation_results || '',
         log: stage3Data.log || ''
       };
       
@@ -690,10 +689,10 @@ export default function Home() {
       
       console.log('✅ [Stage3] 完了');
       
-      // Stage 4: 数値計算プログラム生成・実行
+      // 新しいプロセス：Stage 4: 完全な解答・解説生成
       setCurrentStage(4);
       setStageProgress(70);
-      console.log('🚀 [Stage4] 数値計算開始');
+      console.log('🚀 [Stage4] 完全な解答・解説生成開始');
       
       const stage4Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage4`, {
         method: 'POST',
@@ -702,8 +701,9 @@ export default function Home() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          problem_text: stage1Result.problemText,
-          solution_steps: stage3Result.solutionSteps
+          sub_problems_and_process: stage1Result.solutionProcess,
+          complete_problem: stage2Result.completeProblem,
+          calculation_results: stage3Result.calculationResults
         })
       });
       
@@ -717,8 +717,7 @@ export default function Home() {
       }
       
       const stage4Result = {
-        calculationProgram: stage4Data.calculation_program || '',
-        calculationResults: stage4Data.calculation_results || '',
+        finalExplanation: stage4Data.final_explanation || '',
         log: stage4Data.log || ''
       };
       
@@ -727,10 +726,10 @@ export default function Home() {
       
       console.log('✅ [Stage4] 完了');
       
-      // Stage 5: 最終解説生成
+      // 新しいプロセス：Stage 5: 図形描画プログラム生成
       setCurrentStage(5);
       setStageProgress(90);
-      console.log('🚀 [Stage5] 最終解説生成開始');
+      console.log('🚀 [Stage5] 図形描画プログラム生成開始');
       
       const stage5Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage5`, {
         method: 'POST',
@@ -739,15 +738,16 @@ export default function Home() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          problem_text: stage1Result.problemText,
-          solution_steps: stage3Result.solutionSteps,
-          calculation_results: stage4Result.calculationResults,
+          sub_problems_and_process: stage1Result.solutionProcess,
+          complete_problem: stage2Result.completeProblem,
+          calculation_results: stage3Result.calculationResults,
+          final_explanation: stage4Result.finalExplanation,
           // 5段階生成完了後のDB保存用データを追加（OpinionProfileを含める）
           five_stage_data: {
             prompt: prompt,
             subject: activeSubject,
             opinion_profile: createOpinionProfileFromFilters(), // 重要：OpinionProfileを含める
-            image_base64: stage2Result.imageBase64 || ''
+            image_base64: '' // 図形は最後に生成されるため空
           }
         })
       });
@@ -762,7 +762,8 @@ export default function Home() {
       }
       
       const stage5Result = {
-        finalExplanation: stage5Data.final_explanation || '',
+        geometryCode: stage5Data.geometry_code || '',
+        imageBase64: stage5Data.image_base64 || '',
         log: stage5Data.log || ''
       };
       
@@ -774,14 +775,14 @@ export default function Home() {
       // 結果を問題リストに追加
       const problemTitle = `5段階生成問題 ${problems.length + 1}`;
       const newProblemId = String(problems.length + 1);
-      const finalSolution = stage5Result.finalExplanation;
+      const finalSolution = stage4Result.finalExplanation;
       
       const newProblem = {
         id: newProblemId,
         title: problemTitle,
-        content: stage1Result.problemText,
+        content: stage2Result.completeProblem, // 新しいプロセスでは問題文はStage2で生成
         solution: finalSolution,
-        imageBase64: stage2Result.imageBase64 || undefined,
+        imageBase64: stage5Result.imageBase64 || undefined, // 新しいプロセスでは図形はStage5で生成
       };
       
       setProblems(prev => [...prev, newProblem]);
@@ -1408,9 +1409,9 @@ export default function Home() {
               </label>
             </div>
             <div className="text-xs text-mongene-muted">
-              {generationMode === 'single' 
+              {generationMode === 'single'
                 ? '問題文と解答を1回のAPI呼び出しで生成します\n※計算はLLMが行います'
-                : '5段階に分けて生成します：①問題文→②図形→③解答手順→④数値計算→⑤最終解説\n※計算はプログラムで行います'
+                : '5段階に分けて生成します：①解答プロセス→②数値計算→③完全解答→④問題文→⑤図形\n※計算はプログラムで行います'
               }
             </div>
           </div>
@@ -1440,23 +1441,23 @@ export default function Home() {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-3">
                   <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage1 ? 'text-green-600' : currentStage === 1 ? 'text-blue-500' : 'text-mongene-muted'}`}>
                     <span>{fiveStageResults.stage1 ? '✅' : currentStage === 1 ? '⏳' : '⏸️'}</span>
-                    <span>Stage1: 問題文</span>
+                    <span>Stage1: 解答プロセス</span>
                   </div>
                   <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage2 ? 'text-green-600' : currentStage === 2 ? 'text-blue-500' : 'text-mongene-muted'}`}>
                     <span>{fiveStageResults.stage2 ? '✅' : currentStage === 2 ? '⏳' : '⏸️'}</span>
-                    <span>Stage2: 図形</span>
+                    <span>Stage2: 問題文</span>
                   </div>
                   <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage3 ? 'text-green-600' : currentStage === 3 ? 'text-blue-500' : 'text-mongene-muted'}`}>
                     <span>{fiveStageResults.stage3 ? '✅' : currentStage === 3 ? '⏳' : '⏸️'}</span>
-                    <span>Stage3: 解答手順</span>
+                    <span>Stage3: 数値計算</span>
                   </div>
                   <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage4 ? 'text-green-600' : currentStage === 4 ? 'text-blue-500' : 'text-mongene-muted'}`}>
                     <span>{fiveStageResults.stage4 ? '✅' : currentStage === 4 ? '⏳' : '⏸️'}</span>
-                    <span>Stage4: 数値計算</span>
+                    <span>Stage4: 完全解答</span>
                   </div>
                   <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage5 ? 'text-green-600' : currentStage === 5 ? 'text-blue-500' : 'text-mongene-muted'}`}>
                     <span>{fiveStageResults.stage5 ? '✅' : currentStage === 5 ? '⏳' : '⏸️'}</span>
-                    <span>Stage5: 最終解説</span>
+                    <span>Stage5: 図形</span>
                   </div>
                 </div>
                 
@@ -1547,13 +1548,13 @@ export default function Home() {
       <LoadingModal
         isOpen={isLoading}
         message={
-          generationMode === 'five-stage' 
-            ? currentStage === 1 ? '📝 問題文を生成中...' :
-              currentStage === 2 ? '🖼️ 図形を生成中...' :
-              currentStage === 3 ? '📚 解答手順を生成中...' :
-              currentStage === 4 ? '🧮 数値計算を実行中...' :
-              currentStage === 5 ? '✨ 最終解説を生成中...' :
-              '5段階生成を実行中...' 
+          generationMode === 'five-stage'
+            ? currentStage === 1 ? '📝 解答プロセスを生成中...' :
+              currentStage === 2 ? '📚 問題文を生成中...' :
+              currentStage === 3 ? '🧮 数値計算を実行中...' :
+              currentStage === 4 ? '✨ 完全な解答と解説を生成中...' :
+              currentStage === 5 ? '🖼️ 図形を生成中...' :
+              '5段階生成を実行中...'
             : '問題を生成しています...'
         }
       />

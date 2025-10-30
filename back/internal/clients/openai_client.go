@@ -91,7 +91,7 @@ func (c *openAIClient) GenerateContent(ctx context.Context, prompt string) (stri
 				Content: prompt,
 			},
 		},
-		MaxTokens: 2000,
+		MaxTokens: 5000,
 	}
 
 	jsonData, err := json.Marshal(request)

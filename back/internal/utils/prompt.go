@@ -212,7 +212,7 @@ func parseSampleContent(content string) (SampleData, error) {
 			sample.GeometryCode = extractCodeSection(section, "python")
 		}
 		
-		// 3. 解答手順
+		// 3. 解答手順（解答プロセスとしても使用）
 		if strings.HasPrefix(section, "3. 問題文と図形から，解答手順") {
 			sample.SolutionSteps = extractSolutionSteps(section)
 		}
@@ -452,4 +452,230 @@ func (p *PromptLoader) LoadStage5PromptWithSamples(problemText, solutionSteps, c
 	}
 	
 	return p.LoadPrompt("stage5_final_explanation.txt", variables)
+}
+
+// LoadNewStage1Prompt 新しい1段階目プロンプトを読み込み（解答プロセス生成）
+func (p *PromptLoader) LoadNewStage1Prompt(userPrompt, subject string) (string, error) {
+	variables := map[string]string{
+		"USER_PROMPT": userPrompt,
+		"SUBJECT":     subject,
+	}
+	return p.LoadPrompt("new_stage1_solution_process.txt", variables)
+}
+
+// LoadNewStage1PromptWithSamples 新しい1段階目プロンプトにサンプルを追加して読み込み
+func (p *PromptLoader) LoadNewStage1PromptWithSamples(userPrompt, subject string) (string, error) {
+	samples, err := p.LoadSampleProblems()
+	if err != nil {
+		// サンプルが読み込めない場合は通常のプロンプトを返す
+		return p.LoadNewStage1Prompt(userPrompt, subject)
+	}
+	
+	// few-shotサンプルを構築（解答手順を使用）
+	var fewShotExamples strings.Builder
+	fewShotExamples.WriteString("\n<few_shot_examples>\n")
+	fewShotExamples.WriteString("以下は参考となる解答プロセスの例です：\n\n")
+	
+	for i, sample := range samples {
+		if sample.SolutionSteps != "" {
+			fewShotExamples.WriteString(fmt.Sprintf("【例%d】\n", i+1))
+			fewShotExamples.WriteString(sample.SolutionSteps)
+			fewShotExamples.WriteString("\n\n")
+		}
+	}
+	fewShotExamples.WriteString("</few_shot_examples>\n")
+	
+	variables := map[string]string{
+		"USER_PROMPT":      userPrompt,
+		"SUBJECT":          subject,
+		"FEW_SHOT_SAMPLES": fewShotExamples.String(),
+	}
+	
+	return p.LoadPrompt("new_stage1_solution_process.txt", variables)
+}
+
+// LoadNewStage4Prompt 新しい4段階目プロンプトを読み込み（問題文生成）
+func (p *PromptLoader) LoadNewStage4Prompt(solutionProcess string) (string, error) {
+	variables := map[string]string{
+		"SOLUTION_PROCESS": solutionProcess,
+	}
+	return p.LoadPrompt("new_stage4_problem_from_process.txt", variables)
+}
+
+// LoadNewStage2Prompt 新しい2段階目プロンプトを読み込み（完全な問題生成）
+func (p *PromptLoader) LoadNewStage2Prompt(subProblemsAndProcess string) (string, error) {
+	variables := map[string]string{
+		"SUB_PROBLEMS_AND_PROCESS": subProblemsAndProcess,
+	}
+	return p.LoadPrompt("new_stage2_complete_problem.txt", variables)
+}
+
+// LoadNewStage2PromptWithSamples 新しい2段階目プロンプトにサンプルを追加して読み込み
+func (p *PromptLoader) LoadNewStage2PromptWithSamples(subProblemsAndProcess string) (string, error) {
+	samples, err := p.LoadSampleProblems()
+	if err != nil {
+		// サンプルが読み込めない場合は通常のプロンプトを返す
+		return p.LoadNewStage2Prompt(subProblemsAndProcess)
+	}
+	
+	// few-shotサンプルを構築（問題文を使用）
+	var fewShotExamples strings.Builder
+	fewShotExamples.WriteString("\n<few_shot_examples>\n")
+	fewShotExamples.WriteString("以下は参考となる完全な問題の例です：\n\n")
+	
+	for i, sample := range samples {
+		if sample.ProblemText != "" {
+			fewShotExamples.WriteString(fmt.Sprintf("【例%d】\n", i+1))
+			fewShotExamples.WriteString(sample.ProblemText)
+			fewShotExamples.WriteString("\n\n")
+		}
+	}
+	fewShotExamples.WriteString("</few_shot_examples>\n")
+	
+	variables := map[string]string{
+		"SUB_PROBLEMS_AND_PROCESS": subProblemsAndProcess,
+		"FEW_SHOT_SAMPLES":         fewShotExamples.String(),
+	}
+	
+	return p.LoadPrompt("new_stage2_complete_problem.txt", variables)
+}
+
+// LoadNewStage4PromptWithSamples 新しい4段階目プロンプトにサンプルを追加して読み込み
+func (p *PromptLoader) LoadNewStage4PromptWithSamples(solutionProcess string) (string, error) {
+	samples, err := p.LoadSampleProblems()
+	if err != nil {
+		// サンプルが読み込めない場合は通常のプロンプトを返す
+		return p.LoadNewStage4Prompt(solutionProcess)
+	}
+	
+	// few-shotサンプルを構築（問題文を使用）
+	var fewShotExamples strings.Builder
+	fewShotExamples.WriteString("\n<few_shot_examples>\n")
+	fewShotExamples.WriteString("以下は参考となる問題文の例です：\n\n")
+	
+	for i, sample := range samples {
+		if sample.ProblemText != "" {
+			fewShotExamples.WriteString(fmt.Sprintf("【例%d】\n", i+1))
+			fewShotExamples.WriteString(sample.ProblemText)
+			fewShotExamples.WriteString("\n\n")
+		}
+	}
+	fewShotExamples.WriteString("</few_shot_examples>\n")
+	
+	variables := map[string]string{
+		"SOLUTION_PROCESS": solutionProcess,
+		"FEW_SHOT_SAMPLES": fewShotExamples.String(),
+	}
+	
+	return p.LoadPrompt("new_stage4_problem_from_process.txt", variables)
+}
+
+// LoadNewStage3Prompt 新しい3段階目プロンプトを読み込み（数値計算プログラム生成）
+func (p *PromptLoader) LoadNewStage3Prompt(solutionProcess string) (string, error) {
+	variables := map[string]string{
+		"SOLUTION_PROCESS": solutionProcess,
+	}
+	return p.LoadPrompt("stage4_calculation_program.txt", variables)
+}
+
+// LoadNewStage3PromptWithSamples 新しい3段階目プロンプトにサンプルを追加して読み込み
+func (p *PromptLoader) LoadNewStage3PromptWithSamples(solutionProcess string) (string, error) {
+	samples, err := p.LoadSampleProblems()
+	if err != nil {
+		// サンプルが読み込めない場合は通常のプロンプトを返す
+		return p.LoadNewStage3Prompt(solutionProcess)
+	}
+	
+	// few-shotサンプルを構築（数値計算プログラムを使用）
+	var fewShotExamples strings.Builder
+	fewShotExamples.WriteString("\n<few_shot_examples>\n")
+	fewShotExamples.WriteString("以下は参考となる数値計算プログラムの例です：\n\n")
+	
+	for i, sample := range samples {
+		if sample.CalculationProgram != "" {
+			fewShotExamples.WriteString(fmt.Sprintf("【例%d】\n", i+1))
+			fewShotExamples.WriteString("```python\n")
+			fewShotExamples.WriteString(sample.CalculationProgram)
+			fewShotExamples.WriteString("\n```\n\n")
+		}
+	}
+	fewShotExamples.WriteString("</few_shot_examples>\n")
+	
+	variables := map[string]string{
+		"SOLUTION_PROCESS": solutionProcess,
+		"FEW_SHOT_SAMPLES": fewShotExamples.String(),
+	}
+	
+	return p.LoadPrompt("stage4_calculation_program.txt", variables)
+}
+
+// LoadNewStage5Prompt 新しい5段階目プロンプトを読み込み（完全な解答・解説生成）
+func (p *PromptLoader) LoadNewStage5Prompt(solutionProcess, calculationResults string) (string, error) {
+	variables := map[string]string{
+		"SOLUTION_PROCESS":    solutionProcess,
+		"CALCULATION_RESULTS": calculationResults,
+	}
+	return p.LoadPrompt("stage5_final_explanation.txt", variables)
+}
+
+// LoadNewStage5PromptWithSamples 新しい5段階目プロンプトにサンプルを追加して読み込み
+func (p *PromptLoader) LoadNewStage5PromptWithSamples(solutionProcess, calculationResults string) (string, error) {
+	samples, err := p.LoadSampleProblems()
+	if err != nil {
+		// サンプルが読み込めない場合は通常のプロンプトを返す
+		return p.LoadNewStage5Prompt(solutionProcess, calculationResults)
+	}
+	
+	// few-shotサンプルを構築（完全な解答・解説を使用）
+	var fewShotExamples strings.Builder
+	fewShotExamples.WriteString("\n<few_shot_examples>\n")
+	fewShotExamples.WriteString("以下は参考となる完全な解答・解説の例です：\n\n")
+	
+	for i, sample := range samples {
+		if sample.FinalExplanation != "" {
+			fewShotExamples.WriteString(fmt.Sprintf("【例%d】\n", i+1))
+			fewShotExamples.WriteString(sample.FinalExplanation)
+			fewShotExamples.WriteString("\n\n")
+		}
+	}
+	fewShotExamples.WriteString("</few_shot_examples>\n")
+	
+	variables := map[string]string{
+		"SOLUTION_PROCESS":    solutionProcess,
+		"CALCULATION_RESULTS": calculationResults,
+		"FEW_SHOT_SAMPLES":    fewShotExamples.String(),
+	}
+	
+	return p.LoadPrompt("stage5_final_explanation.txt", variables)
+}
+
+// LoadGeometryPromptWithSamples 図形描画プロンプトにサンプルを追加して読み込み（新Stage5用）
+func (p *PromptLoader) LoadGeometryPromptWithSamples(problemText string) (string, error) {
+	samples, err := p.LoadSampleProblems()
+	if err != nil {
+		// サンプルが読み込めない場合は通常のプロンプトを返す
+		return p.LoadGeometryRegenerationPrompt(problemText)
+	}
+	
+	// few-shotサンプルを構築（図形描画コードを使用）
+	var fewShotExamples strings.Builder
+	fewShotExamples.WriteString("\n<few_shot_examples>\n")
+	fewShotExamples.WriteString("以下は参考となる図形描画プログラムの例です：\n\n")
+	
+	for i, sample := range samples {
+		if sample.GeometryCode != "" {
+			fewShotExamples.WriteString(fmt.Sprintf("【例%d】\n", i+1))
+			fewShotExamples.WriteString("```python\n")
+			fewShotExamples.WriteString(sample.GeometryCode)
+			fewShotExamples.WriteString("\n```\n\n")
+		}
+	}
+	fewShotExamples.WriteString("</few_shot_examples>\n")
+	
+	variables := map[string]string{
+		"PROBLEM_TEXT":     problemText,
+		"FEW_SHOT_SAMPLES": fewShotExamples.String(),
+	}
+	
+	return p.LoadPrompt("geometry_regeneration.txt", variables)
 }

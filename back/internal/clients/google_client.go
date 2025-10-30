@@ -100,7 +100,7 @@ func (c *googleClient) GenerateContent(ctx context.Context, prompt string) (stri
 			},
 		},
 		GenerationConfig: GoogleGenerationConfig{
-			MaxOutputTokens: 8000,
+			MaxOutputTokens: 30000,
 		},
 	}
 
