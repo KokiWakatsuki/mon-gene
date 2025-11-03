@@ -52,18 +52,48 @@ export default function Home() {
   // 生成システム用の状態
   const [generationMode, setGenerationMode] = useState<'single' | 'five-stage'>('single');
   
-  // opinion.md基準での問題生成モード（常にtrue）
+  // opinion.md基準での問題生成モード（Ver.2に移行）
   const [useOpinionCriteria] = useState<boolean>(true);
-  const [opinionProfile, setOpinionProfile] = useState<{
-    domain: number;
-    skillLevel: number;
-    structureComplexity: [number, number];
-    difficultyScore: number;
+  const [opinionProfileV2, setOpinionProfileV2] = useState<{
+    problem_text_length: number;
+    sub_problem_text_length: number;
+    given_values_count: number;
+    sub_problem_count: number;
+    sub_problem_types: string[];
+    solid_composition: string;
+    answer_formats: string[];
+    answer_units: string[];
+    uses_auxiliary_points: boolean;
+    setup_units: string[];
+    solution_units: string[];
+    total_vertices: number;
+    has_moving_point: boolean;
+    figure_values_count: number;
+    solution_steps: number;
+    has_logical_branching: boolean;
+    theorem_count: number;
+    requires_multi_unit_integration: boolean;
+    has_irrelevant_info: boolean;
   }>({
-    domain: 1,
-    skillLevel: 5,
-    structureComplexity: [3, 3],
-    difficultyScore: 10,
+    problem_text_length: 100,
+    sub_problem_text_length: 50,
+    given_values_count: 3,
+    sub_problem_count: 2,
+    sub_problem_types: ['長さを求める'],
+    solid_composition: '単一の立体',
+    answer_formats: ['整数'],
+    answer_units: ['cm'],
+    uses_auxiliary_points: false,
+    setup_units: ['直方体'],
+    solution_units: ['三平方の定理'],
+    total_vertices: 8,
+    has_moving_point: false,
+    figure_values_count: 3,
+    solution_steps: 3,
+    has_logical_branching: false,
+    theorem_count: 2,
+    requires_multi_unit_integration: false,
+    has_irrelevant_info: false,
   });
   
   // 5段階生成システム専用の状態（新しいプロセスに対応）
@@ -560,9 +590,9 @@ export default function Home() {
       return;
     }
 
-    // opinion profileの必須項目チェック
-    if (opinionProfile.domain === 0 || opinionProfile.skillLevel === 0) {
-      alert('全ての評価項目を設定してください');
+    // opinion profile v2の必須項目チェック
+    if (opinionProfileV2.sub_problem_count === 0) {
+      alert('小問の数を設定してください');
       return;
     }
     
@@ -594,7 +624,8 @@ export default function Home() {
         body: JSON.stringify({
           prompt: prompt,
           subject: activeSubject,
-          filters: selectedFilters
+          filters: selectedFilters,
+          opinion_profile_v2: createOpinionProfileFromFilters() // Ver.2を追加
         })
       });
       
@@ -742,12 +773,12 @@ export default function Home() {
           complete_problem: stage2Result.completeProblem,
           calculation_results: stage3Result.calculationResults,
           final_explanation: stage4Result.finalExplanation,
-          // 5段階生成完了後のDB保存用データを追加（OpinionProfileを含める）
+          // 5段階生成完了後のDB保存用データを追加
           five_stage_data: {
             prompt: prompt,
             subject: activeSubject,
-            opinion_profile: createOpinionProfileFromFilters(), // 重要：OpinionProfileを含める
-            image_base64: '' // 図形は最後に生成されるため空
+            opinion_profile_v2: createOpinionProfileFromFilters(), // Ver.2のみ使用
+            final_explanation: stage4Result.finalExplanation // Stage4の解答を追加
           }
         })
       });
@@ -829,9 +860,9 @@ export default function Home() {
       return;
     }
 
-    // opinion profileの必須項目チェック
-    if (opinionProfile.domain === 0 || opinionProfile.skillLevel === 0) {
-      alert('全ての評価項目を設定してください');
+    // opinion profile v2の必須項目チェック
+    if (opinionProfileV2.sub_problem_count === 0) {
+      alert('小問の数を設定してください');
       return;
     }
     
@@ -870,7 +901,7 @@ export default function Home() {
             prompt: prompt,
             subject: activeSubject,
             filters: selectedFilters,
-            opinion_profile: createOpinionProfileFromFilters()
+            opinion_profile_v2: createOpinionProfileFromFilters() // Ver.2に変更
           })
         });
         
@@ -977,39 +1008,57 @@ export default function Home() {
     const filterTexts = [];
     
     filterTexts.push(`科目: ${activeSubject}`);
-    filterTexts.push('評価基準: opinion.md Ver.4.0に基づく高校入試数学・最終問題評価基準');
+    filterTexts.push('評価基準: opinion_ver2.md に基づく空間図形問題の詳細指標');
     
-    // opinionProfileから詳細プロンプトを生成
-    const domainMap: {[key: number]: string} = {
-      1: '関数（座標平面上のグラフの性質）',
-      2: '平面図形（円、三角形・四角形の相似や合同、三平方の定理）',
-      3: '空間図形（直方体、角錐、円錐、球などの立体）',
-      4: '確率・統計（複雑なルール下での確率計算、複数資料の読み取り）',
-      5: '数と式（整数問題、方程式の応用、規則性）',
-      6: '融合問題（複数分野の組み合わせ）'
-    };
+    // opinionProfileV2から詳細プロンプトを生成
+    filterTexts.push(`\n【文章量・構成】`);
+    filterTexts.push(`- 大問の問題文文字数: ${opinionProfileV2.problem_text_length}文字`);
+    filterTexts.push(`- 小問の総文字数: ${opinionProfileV2.sub_problem_text_length}文字`);
+    filterTexts.push(`- 与えられる数値の個数: ${opinionProfileV2.given_values_count}個`);
+    filterTexts.push(`- 小問の数: ${opinionProfileV2.sub_problem_count}問`);
+    if (opinionProfileV2.sub_problem_types.length > 0) {
+      filterTexts.push(`- 小問の種別: ${opinionProfileV2.sub_problem_types.join(', ')}`);
+    }
+    filterTexts.push(`- 立体の構成: ${opinionProfileV2.solid_composition}`);
     
-    filterTexts.push(`出題分野: ${domainMap[opinionProfile.domain] || `コード${opinionProfile.domain}`}`);
-    filterTexts.push(`論理思考力レベル: ${opinionProfile.skillLevel}/10`);
-    filterTexts.push(`数学的直観力: ${opinionProfile.structureComplexity[0]}/10`);
-    filterTexts.push(`表現・解釈力: ${opinionProfile.structureComplexity[1]}/10`);
-    filterTexts.push(`問題解決力: ${opinionProfile.difficultyScore}/20`);
+    filterTexts.push(`\n【解答形式】`);
+    if (opinionProfileV2.answer_formats.length > 0) {
+      filterTexts.push(`- 解答の形式: ${opinionProfileV2.answer_formats.join(', ')}`);
+    }
+    if (opinionProfileV2.answer_units.length > 0) {
+      filterTexts.push(`- 要求単位: ${opinionProfileV2.answer_units.join(', ')}`);
+    }
+    filterTexts.push(`- 補助点の使用: ${opinionProfileV2.uses_auxiliary_points ? 'あり' : 'なし'}`);
+    
+    filterTexts.push(`\n【使用単元】`);
+    if (opinionProfileV2.setup_units.length > 0) {
+      filterTexts.push(`- 設定: ${opinionProfileV2.setup_units.join(', ')}`);
+    }
+    if (opinionProfileV2.solution_units.length > 0) {
+      filterTexts.push(`- 解法: ${opinionProfileV2.solution_units.join(', ')}`);
+    }
+    
+    filterTexts.push(`\n【図形】`);
+    filterTexts.push(`- 総頂点・点の数: ${opinionProfileV2.total_vertices}個`);
+    filterTexts.push(`- 動点: ${opinionProfileV2.has_moving_point ? 'あり' : 'なし'}`);
+    filterTexts.push(`- 図中の数値: ${opinionProfileV2.figure_values_count}個`);
+    
+    filterTexts.push(`\n【解法プロセス】`);
+    filterTexts.push(`- 解法のステップ数: ${opinionProfileV2.solution_steps}ステップ`);
+    filterTexts.push(`- 論理的分岐: ${opinionProfileV2.has_logical_branching ? 'あり' : 'なし'}`);
+    filterTexts.push(`- 使用定理・公式の数: ${opinionProfileV2.theorem_count}個`);
+    filterTexts.push(`- 複数単元の統合: ${opinionProfileV2.requires_multi_unit_integration ? '必要' : '不要'}`);
+    filterTexts.push(`- 無関係な情報: ${opinionProfileV2.has_irrelevant_info ? 'あり' : 'なし'}`);
     
     filterTexts.push('');
-    filterTexts.push('※この基準に従って、高校入試数学の最終問題レベルの問題を生成してください。');
-    filterTexts.push('※opinion.md Ver.4.0の4つの評価指標に基づいています。');
+    filterTexts.push('※この基準に従って、空間図形問題を生成してください。');
     
     return `以下の条件で${activeSubject}の問題を生成してください:\n${filterTexts.join('\n')}`;
   };
 
-  // opinionProfileからAPIリクエスト用のオブジェクトを作成
+  // opinionProfileV2からAPIリクエスト用のオブジェクトを作成
   const createOpinionProfileFromFilters = () => {
-    return {
-      domain: opinionProfile.domain,
-      skill_level: opinionProfile.skillLevel,
-      structure_complexity: opinionProfile.structureComplexity,
-      difficulty_score: opinionProfile.difficultyScore
-    };
+    return opinionProfileV2;
   };
 
   // キーワード検索する関数
@@ -1050,29 +1099,15 @@ export default function Home() {
     }
   };
 
-  // パラメータ検索する関数（OpinionProfile基準対応）
+  // パラメータ検索する関数（OpinionProfileV2基準対応）
   const searchProblemsByFilters = async () => {
-    // OpinionProfile基準での検索条件作成
+    // OpinionProfileV2基準での検索条件作成
     const opinionFilters: Record<string, string[]> = {};
     
-    // OpinionProfileから検索用フィルターを作成
-    if (opinionProfile.domain > 0) {
-      opinionFilters['出題分野コード'] = [String(opinionProfile.domain)];
-    }
-    if (opinionProfile.skillLevel > 0) {
-      opinionFilters['コアスキルレベル'] = [String(opinionProfile.skillLevel)];
-    }
-    if (opinionProfile.structureComplexity[0] > 0) {
-      opinionFilters['読解・設定の複雑度'] = [String(opinionProfile.structureComplexity[0])];
-    }
-    if (opinionProfile.structureComplexity[1] > 0) {
-      opinionFilters['設問の誘導性'] = [String(opinionProfile.structureComplexity[1])];
-    }
-    if (opinionProfile.difficultyScore > 0) {
-      opinionFilters['総合難易度スコア'] = [String(opinionProfile.difficultyScore)];
-    }
-
-    console.log('🔍 [Frontend] OpinionProfile検索フィルター:', opinionFilters);
+    // OpinionProfileV2から検索用フィルターを作成
+    // 注: 検索機能はopinion_ver2の指標に対応していないため、
+    // 現時点では基本的な検索のみ実行
+    console.log('🔍 [Frontend] OpinionProfileV2検索（未実装）');
 
     // 検索条件をチェック
     const hasSubject = activeSubject !== '';
@@ -1127,29 +1162,14 @@ export default function Home() {
     }
   };
 
-  // キーワード + 条件の組み合わせ検索する関数（OpinionProfile基準対応）
+  // キーワード + 条件の組み合わせ検索する関数（OpinionProfileV2基準対応）
   const searchProblemsByKeywordAndFilters = async () => {
-    // OpinionProfile基準での検索条件作成
+    // OpinionProfileV2基準での検索条件作成
     const opinionFilters: Record<string, string[]> = {};
     
-    // OpinionProfileから検索用フィルターを作成
-    if (opinionProfile.domain > 0) {
-      opinionFilters['出題分野コード'] = [String(opinionProfile.domain)];
-    }
-    if (opinionProfile.skillLevel > 0) {
-      opinionFilters['コアスキルレベル'] = [String(opinionProfile.skillLevel)];
-    }
-    if (opinionProfile.structureComplexity[0] > 0) {
-      opinionFilters['読解・設定の複雑度'] = [String(opinionProfile.structureComplexity[0])];
-    }
-    if (opinionProfile.structureComplexity[1] > 0) {
-      opinionFilters['設問の誘導性'] = [String(opinionProfile.structureComplexity[1])];
-    }
-    if (opinionProfile.difficultyScore > 0) {
-      opinionFilters['総合難易度スコア'] = [String(opinionProfile.difficultyScore)];
-    }
-
-    console.log('🔍 [Frontend] OpinionProfile組み合わせ検索フィルター:', opinionFilters);
+    // 注: 検索機能はopinion_ver2の指標に対応していないため、
+    // 現時点ではキーワード検索のみ実行
+    console.log('🔍 [Frontend] OpinionProfileV2組み合わせ検索（未実装）');
 
     // 検索条件をチェック
     const hasKeyword = searchKeyword.trim() !== '';
@@ -1222,20 +1242,8 @@ export default function Home() {
         {/* OpinionProfileSettings統合（Ver.4.0基準） */}
         <div className="mb-6">
           <OpinionProfileSettings
-            opinionProfile={{
-              domain: opinionProfile.domain,
-              skill_level: opinionProfile.skillLevel,
-              structure_complexity: opinionProfile.structureComplexity,
-              difficulty_score: opinionProfile.difficultyScore,
-            }}
-            onOpinionProfileChange={(profile) => {
-              setOpinionProfile({
-                domain: profile.domain,
-                skillLevel: profile.skill_level,
-                structureComplexity: profile.structure_complexity,
-                difficultyScore: profile.difficulty_score,
-              });
-            }}
+            opinionProfile={opinionProfileV2}
+            onOpinionProfileChange={setOpinionProfileV2}
           />
         </div>
         
@@ -1549,13 +1557,13 @@ export default function Home() {
         isOpen={isLoading}
         message={
           generationMode === 'five-stage'
-            ? currentStage === 1 ? '📝 解答プロセスを生成中...' :
-              currentStage === 2 ? '📚 問題文を生成中...' :
-              currentStage === 3 ? '🧮 数値計算を実行中...' :
-              currentStage === 4 ? '✨ 完全な解答と解説を生成中...' :
-              currentStage === 5 ? '🖼️ 図形を生成中...' :
-              '5段階生成を実行中...'
-            : '問題を生成しています...'
+            ? currentStage === 1 ? '📝 AIが解答プロセスを生成中...' :
+              currentStage === 2 ? '📚 AIが問題文を生成中...' :
+              currentStage === 3 ? '🧮 数値計算プログラムを実行中...' :
+              currentStage === 4 ? '✨ AIが完全な解答と解説を生成中...' :
+              currentStage === 5 ? '🖼️ AIが図形描画プログラムを生成中...' :
+              'AIが5段階生成を実行中...'
+            : 'AIが問題を生成しています...'
         }
       />
 

@@ -204,15 +204,16 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 
 	// 3. 問題をデータベースに保存
 	problem := &models.Problem{
-		UserID:         user.ID,
-		Subject:        req.Subject,
-		Prompt:         req.Prompt,
-		Content:        problemText,
-		Solution:       solutionText,
-		ImageBase64:    imageBase64,
-		OpinionProfile: req.OpinionProfile,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		UserID:           user.ID,
+		Subject:          req.Subject,
+		Prompt:           req.Prompt,
+		Content:          problemText,
+		Solution:         solutionText,
+		ImageBase64:      imageBase64,
+		OpinionProfile:   req.OpinionProfile,   // レガシー（後方互換性）
+		OpinionProfileV2: req.OpinionProfileV2, // 新基準（Ver.2）
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 
 	// リポジトリが実装されている場合のみ保存
@@ -1369,15 +1370,16 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 	fmt.Printf("💾 [FiveStage] Saving generated problem to database\n")
 	
 	problem := &models.Problem{
-		UserID:         user.ID,
-		Subject:        req.Subject,
-		Prompt:         req.Prompt,
-		Content:        stage2Resp.CompleteProblem,   // Stage2で生成された完全な問題
-		Solution:       stage4Resp.FinalExplanation,   // Stage4で生成された完全な解答・解説
-		ImageBase64:    stage5Resp.ImageBase64,      // Stage5で生成された図形
-		OpinionProfile: req.OpinionProfile,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		UserID:           user.ID,
+		Subject:          req.Subject,
+		Prompt:           req.Prompt,
+		Content:          stage2Resp.CompleteProblem,   // Stage2で生成された完全な問題
+		Solution:         stage4Resp.FinalExplanation,   // Stage4で生成された完全な解答・解説
+		ImageBase64:      stage5Resp.ImageBase64,      // Stage5で生成された図形
+		OpinionProfile:   req.OpinionProfile,          // レガシー（後方互換性）
+		OpinionProfileV2: req.OpinionProfileV2,        // 新基準（Ver.2）
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 
 	// リポジトリが実装されている場合のみ保存

@@ -2,9 +2,10 @@ package models
 
 // TwoStageGenerationRequest 2段階生成のリクエスト
 type TwoStageGenerationRequest struct {
-	Prompt         string          `json:"prompt"`
-	Subject        string          `json:"subject"`
-	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty"`
+	Prompt           string            `json:"prompt"`
+	Subject          string            `json:"subject"`
+	OpinionProfile   *OpinionProfile   `json:"opinion_profile,omitempty"`   // レガシー
+	OpinionProfileV2 *OpinionProfileV2 `json:"opinion_profile_v2,omitempty"` // 新基準
 }
 
 // TwoStageGenerationResponse 2段階生成の最終レスポンス
@@ -55,9 +56,10 @@ type SecondStageResponse struct {
 
 // FiveStageGenerationRequest 5段階生成のリクエスト
 type FiveStageGenerationRequest struct {
-	Prompt         string          `json:"prompt"`
-	Subject        string          `json:"subject"`
-	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty"`
+	Prompt           string            `json:"prompt"`
+	Subject          string            `json:"subject"`
+	OpinionProfile   *OpinionProfile   `json:"opinion_profile,omitempty"`   // レガシー
+	OpinionProfileV2 *OpinionProfileV2 `json:"opinion_profile_v2,omitempty"` // 新基準
 }
 
 // FiveStageGenerationResponse 5段階生成の最終レスポンス（修正版）
@@ -152,10 +154,10 @@ type Stage5Request struct {
 
 // FiveStageDataForSave 5段階生成完了後のDB保存用データ
 type FiveStageDataForSave struct {
-	Prompt         string          `json:"prompt"`
-	Subject        string          `json:"subject"`
-	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty"`
-	ImageBase64    string          `json:"image_base64,omitempty"`
+	Prompt           string            `json:"prompt"`
+	Subject          string            `json:"subject"`
+	OpinionProfileV2 *OpinionProfileV2 `json:"opinion_profile_v2,omitempty"` // Ver.2のみ使用
+	FinalExplanation string            `json:"final_explanation,omitempty"`  // Stage4の解答を追加
 }
 
 // Stage5Response 5段階目のレスポンス（図形描画プログラム生成・実行）

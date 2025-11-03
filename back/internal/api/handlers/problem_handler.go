@@ -58,7 +58,12 @@ func (h *ProblemHandler) GenerateProblem(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// opinion.md基準を使用している場合の追加検証
+	// デバッグ: リクエストの内容を確認
+	println("📋 [DEBUG] GenerateProblem request:")
+	println("  OpinionProfile (v1):", req.OpinionProfile != nil)
+	println("  OpinionProfileV2 (v2):", req.OpinionProfileV2 != nil)
+
+	// opinion_ver1.md基準を使用している場合の追加検証（レガシー）
 	if req.OpinionProfile != nil {
 		if req.OpinionProfile.Domain < 1 || req.OpinionProfile.Domain > 6 {
 			utils.WriteErrorResponse(w, http.StatusBadRequest, "出題分野コードは1-6の範囲で指定してください")
@@ -78,11 +83,55 @@ func (h *ProblemHandler) GenerateProblem(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		
-		println("📋 [DEBUG] Opinion.md criteria detected:")
+		println("📋 [DEBUG] Opinion ver1 criteria detected (legacy):")
 		println("  Domain:", req.OpinionProfile.Domain)
 		println("  SkillLevel:", req.OpinionProfile.SkillLevel)
 		println("  StructureComplexity: [", req.OpinionProfile.StructureComplexity[0], ",", req.OpinionProfile.StructureComplexity[1], "]")
 		println("  DifficultyScore:", req.OpinionProfile.DifficultyScore)
+	}
+
+	// opinion_ver2.md基準を使用している場合の追加検証
+	if req.OpinionProfileV2 != nil {
+		// 基本的な数値範囲チェック
+		if req.OpinionProfileV2.ProblemTextLength < 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "大問の問題文文字数は0以上である必要があります")
+			return
+		}
+		if req.OpinionProfileV2.SubProblemTextLength < 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "小問の総文字数は0以上である必要があります")
+			return
+		}
+		if req.OpinionProfileV2.GivenValuesCount < 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "与えられる数値の個数は0以上である必要があります")
+			return
+		}
+		if req.OpinionProfileV2.SubProblemCount < 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "小問の数は0以上である必要があります")
+			return
+		}
+		if req.OpinionProfileV2.TotalVertices < 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "総頂点・点の数は0以上である必要があります")
+			return
+		}
+		if req.OpinionProfileV2.FigureValuesCount < 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "図中に明記された数値の個数は0以上である必要があります")
+			return
+		}
+		if req.OpinionProfileV2.SolutionSteps < 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "解法のステップ数は0以上である必要があります")
+			return
+		}
+		if req.OpinionProfileV2.TheoremCount < 0 {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "使用定理・公式の数は0以上である必要があります")
+			return
+		}
+		
+		println("📋 [DEBUG] Opinion ver2 criteria detected:")
+		println("  ProblemTextLength:", req.OpinionProfileV2.ProblemTextLength)
+		println("  SubProblemCount:", req.OpinionProfileV2.SubProblemCount)
+		println("  SolutionSteps:", req.OpinionProfileV2.SolutionSteps)
+		println("  HasMovingPoint:", req.OpinionProfileV2.HasMovingPoint)
+		println("  TheoremCount:", req.OpinionProfileV2.TheoremCount)
 	}
 
 	// ユーザーのSchoolCodeを渡して問題を生成
@@ -233,6 +282,11 @@ func (h *ProblemHandler) GenerateProblemFiveStage(w http.ResponseWriter, r *http
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "科目は必須です")
 		return
 	}
+
+	// デバッグ: リクエストの内容を確認
+	println("📋 [DEBUG] FiveStageGeneration request:")
+	println("  OpinionProfile (v1):", req.OpinionProfile != nil)
+	println("  OpinionProfileV2 (v2):", req.OpinionProfileV2 != nil)
 
 	// 5段階生成プロセスを実行
 	response, err := h.problemService.GenerateProblemFiveStage(r.Context(), req, user.SchoolCode)
@@ -479,20 +533,21 @@ func (h *ProblemHandler) GenerateStage5(w http.ResponseWriter, r *http.Request) 
 		println("🔍 [Stage5Handler] Problem data prepared:")
 		println("  Subject:", req.FiveStageData.Subject)
 		println("  Content length:", len(req.CompleteProblem))
-		println("  Solution length:", len(response.GeometryCode))
+		println("  Solution length:", len(req.FiveStageData.FinalExplanation))
 		println("  Has image:", len(response.ImageBase64) > 0)
+		println("  OpinionProfileV2 (v2):", req.FiveStageData.OpinionProfileV2 != nil)
 		
 		// 実際のDB保存処理を実行
 		problem := &models.Problem{
-			UserID:         user.ID,
-			Subject:        req.FiveStageData.Subject,
-			Prompt:         req.FiveStageData.Prompt,
-			Content:        req.CompleteProblem,
-			Solution:       "", // 新しいプロセスでは解答は別の段階で生成済み
-			ImageBase64:    response.ImageBase64,
-			OpinionProfile: req.FiveStageData.OpinionProfile,
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
+			UserID:           user.ID,
+			Subject:          req.FiveStageData.Subject,
+			Prompt:           req.FiveStageData.Prompt,
+			Content:          req.CompleteProblem,
+			Solution:         req.FiveStageData.FinalExplanation, // Stage4で生成された解答を保存
+			ImageBase64:      response.ImageBase64,
+			OpinionProfileV2: req.FiveStageData.OpinionProfileV2, // Ver.2のみ使用
+			CreatedAt:        time.Now(),
+			UpdatedAt:        time.Now(),
 		}
 		
 		// GenerateProblemサービスのDB保存ロジックを参考に、直接リポジトリに保存

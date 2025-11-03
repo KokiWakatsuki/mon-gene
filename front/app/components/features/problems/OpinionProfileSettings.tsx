@@ -2,88 +2,41 @@
 
 import { useState } from 'react';
 
-interface OpinionProfile {
-  domain: number;
-  skill_level: number;
-  structure_complexity: [number, number];
-  difficulty_score: number;
+interface OpinionProfileV2 {
+  // 1. 文章量・構成に関する指標
+  problem_text_length: number;
+  sub_problem_text_length: number;
+  given_values_count: number;
+  sub_problem_count: number;
+  sub_problem_types: string[];
+  solid_composition: string;
+  
+  // 2. 解答形式に関する指標
+  answer_formats: string[];
+  answer_units: string[];
+  uses_auxiliary_points: boolean;
+  
+  // 3. 使用単元に関する指標
+  setup_units: string[];
+  solution_units: string[];
+  
+  // 4. 図形に関する指標
+  total_vertices: number;
+  has_moving_point: boolean;
+  figure_values_count: number;
+  
+  // 5. 解法プロセスと認知負荷に関する指標
+  solution_steps: number;
+  has_logical_branching: boolean;
+  theorem_count: number;
+  requires_multi_unit_integration: boolean;
+  has_irrelevant_info: boolean;
 }
 
 interface OpinionProfileSettingsProps {
-  opinionProfile: OpinionProfile;
-  onOpinionProfileChange: (profile: OpinionProfile) => void;
+  opinionProfile: OpinionProfileV2;
+  onOpinionProfileChange: (profile: OpinionProfileV2) => void;
 }
-
-const domainOptions = [
-  { value: 1, label: '関数', description: '座標平面上にグラフが描かれており、その性質（変域、変化の割合、面積、交点など）を問う問題。' },
-  { value: 2, label: '平面図形', description: '円、三角形・四角形の相似や合同、三平方の定理などを主軸に構成された、二次元空間内の図形問題。' },
-  { value: 3, label: '空間図形', description: '直方体、角錐、円錐、球などの立体を対象に、体積、表面積、線分の長さ、最短距離、切断などを問う問題。' },
-  { value: 4, label: '確率・統計', description: '複雑なルール下での確率計算や、複数の資料（箱ひげ図など）の読み取りと比較を問う問題。' },
-  { value: 5, label: '数と式', description: '整数問題、方程式の応用、規則性の発見などを主軸とし、図形や関数に依らない問題。' },
-  { value: 6, label: '融合問題', description: '上記の2つ以上の分野が同等の比重で組み合わされている問題。（例：6 (1+3) -> 関数と空間図形の融合）' }
-];
-
-const skillLevelDescriptions = [
-  { value: 1, label: '基本的知識', description: '最終問題としては異例だが、基本的な公式や定理を直接的に用いて解ける場合。' },
-  { value: 2, label: '応用的知識', description: '特定の応用公式や定理（例：メネラウスの定理等）を知っているかどうかが、解答時間を大きく左右する場合。' },
-  { value: 3, label: '手順の遂行能力', description: '解法に至るまでのステップ数が多く、複数の基本的な解法を順番に、正確に適用していく作業の正確さが問われる場合。' },
-  { value: 4, label: '計算の実行精度', description: '解法の方針は比較的見えやすいが、計算過程が非常に煩雑で、最後までミスなく計算しきる能力が最も問われる場合。' },
-  { value: 5, label: '標準的なモデル化能力', description: '会話文や状況設定がやや複雑で、それを数式や図に変換するプロセスが主な課題となる、ごく一般的な応用問題。' },
-  { value: 6, label: '複雑な情報統制・モデル化能力', description: 'ストーリー仕立ての長文や、複数の図表から必要な情報を抽出し、統合して一つの数理モデル（方程式や図形）に落とし込むプロセスが最も困難な場合。' },
-  { value: 7, label: '緻密な論理構築能力', description: '複数の定理や定義を連鎖的に適用する必要がある、または複雑な場合分けを伴うなど、解答までの道筋を矛盾なく、段階的に組み立てる純粋な論理力が試される場合。' },
-  { value: 8, label: '高度な空間認識能力', description: '複雑な立体の切断面の形状を正確に想像したり、展開図上での点の動きを三次元的に再構成したりする能力が、他のどの能力よりも中心的に要求される場合。' },
-  { value: 9, label: '独創的な着眼力', description: '問題の突破口が、非常に巧妙な補助線、図形の回転・等積変形、想定外の視点からのアプローチなど、定石から大きく外れた「ひらめき」に強く依存している場合。' },
-  { value: 10, label: '高次元の発想力', description: '解法が、高校数学の範囲の考え方（例：ベクトル）を導入すると著しく容易になる、またはそれに準ずる最高レベルの着想（例：体積の2通りの表現による高さ算出）を必要とする場合。' }
-];
-
-const readingComplexityDescriptions = [
-  { value: 1, label: '図と数式のみ', description: '図と数式のみで構成され、文章による設定がほぼ存在しない。' },
-  { value: 2, label: '短い補足文', description: '1〜2行の短い補足文が図に添えられている。' },
-  { value: 3, label: '標準的な状況設定', description: '1段落程度の文章で、標準的な問題の状況設定が説明されている。' },
-  { value: 4, label: '複数条件の整理', description: '複数の条件や定義が箇条書きで与えられ、それらを整理する必要がある。' },
-  { value: 5, label: 'やや長文', description: 'やや長文（2段落以上）で構成され、問題の場面を理解するのに少し時間がかかる。' },
-  { value: 6, label: '会話文形式', description: '会話文形式（登場人物2人程度）で、やり取りの中から条件を抽出する必要がある。' },
-  { value: 7, label: 'ストーリー・動点', description: 'ストーリー形式で数学と直接関係のない背景情報が含まれる、または動点が1つ含まれる。' },
-  { value: 8, label: '複雑な動的設定', description: '複数の動点や複雑な移動ルールが絡むなど、設定自体が動的で極めて複雑。' },
-  { value: 9, label: '非常に複雑なストーリー', description: '非常に長く複雑なストーリー、または法律の条文のような厳密な独自ルールの読解が必須。' },
-  { value: 10, label: '最高レベルの読解', description: '複数の独自ルールが複雑に重なり、ルールブックを正確に読み解くような最高レベルの読解力が要求される。' }
-];
-
-const guidanceDescriptions = [
-  { value: 1, label: '完全な無誘導', description: '大問全体が1つの設問で構成されているか、小問があっても互いに全く関連性がない（完全な無誘導）。' },
-  { value: 2, label: '小問間の関連性薄', description: '小問間の関連性が非常に薄く、思考のつながりがほとんどない。' },
-  { value: 3, label: '独立した思考', description: '小問は同じ図形や設定を共有しているが、思考プロセスはそれぞれで独立している。' },
-  { value: 4, label: '状況理解の助け', description: '前問が、次問を解く上での状況理解の助けになる程度。直接的なヒントではない。' },
-  { value: 5, label: '標準的な誘導', description: '前問の結果が、次問を解く上での複数のヒントの一つとして利用できる（標準的な誘導）。' },
-  { value: 6, label: '重要な要素', description: '前問で証明した事実や導出した結果が、次問を解く上で重要な要素として機能する。' },
-  { value: 7, label: '解法テンプレート', description: '前問の解法プロセスそのものが、次問の解法のテンプレートや主要な考え方となっている。' },
-  { value: 8, label: '直接的利用', description: '前問の答え（数値や式）を、次問の計算に直接的に利用する必要がある。' },
-  { value: 9, label: '明確な連鎖構造', description: '設問(1)→(2)→(3)と、前の答えがないと次の設問に着手できない、明確な連鎖構造になっている。' },
-  { value: 10, label: '完全なレール形式', description: '(9)に加え、各設問が次の設問を解くためのほぼ唯一の道筋を示している（完全なレール形式）。' }
-];
-
-const difficultyDescriptions = [
-  { value: 1, label: 'エラー', description: '採点対象外や作問ミスの可能性が疑われるレベル。' },
-  { value: 2, label: '超基礎', description: '最終問題としては異例だが、計算問題レベル。' },
-  { value: 3, label: '基礎', description: '教科書の例題レベル。解法が一つに定まる。' },
-  { value: 4, label: '基礎定着', description: '教科書の練習問題レベル。基本的な公式や定理を正しく使えるか問う。' },
-  { value: 5, label: '基礎＋', description: '基本的な公式や定理を使うが、わずかに捻りがある。' },
-  { value: 6, label: '基礎応用', description: '異なる単元の基本知識を直接的に組み合わせる。' },
-  { value: 7, label: 'やや易', description: '標準的な問題の小問(1)レベル。手順が少なく、計算も平易。' },
-  { value: 8, label: '標準', description: '教科書の章末問題レベル。思考力が必要だが、解法は典型的。' },
-  { value: 9, label: '標準＋', description: '基本的な解法を複数ステップ踏む必要がある。' },
-  { value: 10, label: '応用', description: '複数の単元の知識を組み合わせる、ごく標準的な応用問題。' },
-  { value: 11, label: '応用＋', description: '典型的な応用問題だが、計算量がやや多い、または少し工夫が必要。' },
-  { value: 12, label: '発展', description: '思考のステップ数が多く、解法選択に迷う可能性がある。' },
-  { value: 13, label: '上位校標準', description: '複数の知識を組み合わせる、標準的な応用問題。上位校合格には完答したい。' },
-  { value: 14, label: '上位校応用', description: '複雑な計算を伴う応用問題。時間内に処理しきる正確性が求められる。' },
-  { value: 15, label: '難関', description: 'トップ校の合否を分ける典型的な難問。思考の深さが試される。' },
-  { value: 16, label: '難関＋', description: '複数の応用知識を組み合わせ、かつ計算も複雑。思考力と処理能力の双方が高いレベルで要求される。' },
-  { value: 17, label: '超難関', description: '正答率が数%と想定される。高度な発想に加え、極めて複雑な手順・計算を要する。' },
-  { value: 18, label: '全国最難関', description: '私立最難関校の入試問題と比較しても遜色ないレベル。思考の独創性が求められる。' },
-  { value: 19, label: '捨て問', description: '高校範囲の知識が背景にあり、中学範囲の知識だけでは発想が極めて困難な問題。' },
-  { value: 20, label: '超・捨て問', description: '複数の高校範囲の知識を示唆する、公立高校入試の枠を明らかに逸脱した問題。' }
-];
 
 interface AccordionItemProps {
   title: string;
@@ -113,57 +66,13 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, isOpen, 
   );
 };
 
-interface SliderSectionProps {
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  onChange: (value: number) => void;
-  descriptions: { value: number; label: string; description: string }[];
-}
-
-const SliderSection: React.FC<SliderSectionProps> = ({ value, min, max, step = 1, onChange, descriptions }) => {
-  const currentDesc = descriptions.find(desc => desc.value === value);
-  
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center space-x-4">
-        <span className="text-sm font-medium text-gray-600 w-12">{min}</span>
-        <div className="flex-1">
-          <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            onChange={(e) => onChange(parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-            style={{
-              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((value - min) / (max - min)) * 100}%, #e5e7eb ${((value - min) / (max - min)) * 100}%, #e5e7eb 100%)`
-            }}
-          />
-        </div>
-        <span className="text-sm font-medium text-gray-600 w-12">{max}</span>
-        <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium min-w-[3rem] text-center">
-          {value}
-        </div>
-      </div>
-      {currentDesc && (
-        <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-blue-500">
-          <div className="font-medium text-gray-800 mb-1">{currentDesc.label}</div>
-          <div className="text-sm text-gray-600">{currentDesc.description}</div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export default function OpinionProfileSettings({ opinionProfile, onOpinionProfileChange }: OpinionProfileSettingsProps) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    domain: true,
-    skill: false,
-    structure: false,
-    difficulty: false
+    textComposition: true,
+    answerFormat: false,
+    units: false,
+    geometry: false,
+    solutionProcess: false
   });
 
   const toggleSection = (section: string) => {
@@ -173,107 +82,359 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
     }));
   };
 
-  const updateProfile = (updates: Partial<OpinionProfile>) => {
+  const updateProfile = (updates: Partial<OpinionProfileV2>) => {
     onOpinionProfileChange({ ...opinionProfile, ...updates });
+  };
+
+  const toggleArrayItem = (array: string[], item: string) => {
+    if (array.includes(item)) {
+      return array.filter(i => i !== item);
+    } else {
+      return [...array, item];
+    }
   };
 
   return (
     <div className="space-y-4">
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-2">
-          高校入試数学・最終問題「県別スタイルプロファイル」評価基準 Ver. 4.0
+          意見プロファイル指標一覧（Ver. 2.0）
         </h3>
         <p className="text-sm text-gray-600">
-          47都道府県の公立高等学校入学者選抜学力検査問題（数学）の最終大問を分析し、その特性を定量的にプロファイリングします。
+          空間図形問題の詳細な特性を定量的に設定します。
         </p>
       </div>
 
+      {/* 1. 文章量・構成に関する指標 */}
       <AccordionItem
-        title="指標1：出題分野コード (1-6)"
-        isOpen={openSections.domain}
-        onToggle={() => toggleSection('domain')}
+        title="1. 文章量・構成に関する指標"
+        isOpen={openSections.textComposition}
+        onToggle={() => toggleSection('textComposition')}
       >
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-2">
-            {domainOptions.map(option => (
-              <label key={option.value} className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="radio"
-                  name="domain"
-                  value={option.value}
-                  checked={opinionProfile.domain === option.value}
-                  onChange={() => updateProfile({ domain: option.value })}
-                  className="mt-1 text-blue-600"
-                />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-800">{option.value}. {option.label}</div>
-                  <div className="text-sm text-gray-600">{option.description}</div>
-                </div>
-              </label>
-            ))}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              大問の問題文文字数: {opinionProfile.problem_text_length}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="500"
+              step="10"
+              value={opinionProfile.problem_text_length}
+              onChange={(e) => updateProfile({ problem_text_length: parseInt(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              小問の総文字数: {opinionProfile.sub_problem_text_length}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="300"
+              step="10"
+              value={opinionProfile.sub_problem_text_length}
+              onChange={(e) => updateProfile({ sub_problem_text_length: parseInt(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              与えられる数値の個数: {opinionProfile.given_values_count}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              value={opinionProfile.given_values_count}
+              onChange={(e) => updateProfile({ given_values_count: parseInt(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              小問の数: {opinionProfile.sub_problem_count}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="5"
+              value={opinionProfile.sub_problem_count}
+              onChange={(e) => updateProfile({ sub_problem_count: parseInt(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">小問ごとの要求種別</label>
+            <div className="flex flex-wrap gap-2">
+              {['長さを求める', '面積を求める', '体積を求める', '最短距離を求める', '角度を求める', '比を求める'].map(type => (
+                <button
+                  key={type}
+                  onClick={() => updateProfile({ sub_problem_types: toggleArrayItem(opinionProfile.sub_problem_types, type) })}
+                  className={`px-3 py-1 rounded-full text-sm ${
+                    opinionProfile.sub_problem_types.includes(type)
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">立体の構成</label>
+            <select
+              value={opinionProfile.solid_composition}
+              onChange={(e) => updateProfile({ solid_composition: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            >
+              <option value="">選択してください</option>
+              <option value="単一の立体">単一の立体</option>
+              <option value="複数の立体の組み合わせ">複数の立体の組み合わせ</option>
+            </select>
           </div>
         </div>
       </AccordionItem>
 
+      {/* 2. 解答形式に関する指標 */}
       <AccordionItem
-        title="指標2：コアスキル評価 (1-10)"
-        isOpen={openSections.skill}
-        onToggle={() => toggleSection('skill')}
+        title="2. 解答形式に関する指標"
+        isOpen={openSections.answerFormat}
+        onToggle={() => toggleSection('answerFormat')}
       >
-        <SliderSection
-          value={opinionProfile.skill_level}
-          min={1}
-          max={10}
-          onChange={(value) => updateProfile({ skill_level: value })}
-          descriptions={skillLevelDescriptions}
-        />
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">解答の形式</label>
+            <div className="flex flex-wrap gap-2">
+              {['整数', '既約分数', '無理数(√)'].map(format => (
+                <button
+                  key={format}
+                  onClick={() => updateProfile({ answer_formats: toggleArrayItem(opinionProfile.answer_formats, format) })}
+                  className={`px-3 py-1 rounded-full text-sm ${
+                    opinionProfile.answer_formats.includes(format)
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  {format}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">小問ごとの要求単位</label>
+            <div className="flex flex-wrap gap-2">
+              {['cm', 'cm²', 'cm³', '度', '単位なし'].map(unit => (
+                <button
+                  key={unit}
+                  onClick={() => updateProfile({ answer_units: toggleArrayItem(opinionProfile.answer_units, unit) })}
+                  className={`px-3 py-1 rounded-full text-sm ${
+                    opinionProfile.answer_units.includes(unit)
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={opinionProfile.uses_auxiliary_points}
+                onChange={(e) => updateProfile({ uses_auxiliary_points: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-gray-700">正答例での補助点の使用</span>
+            </label>
+          </div>
+        </div>
       </AccordionItem>
 
+      {/* 3. 使用単元に関する指標 */}
       <AccordionItem
-        title="指標3：問題構造評価 [A, B] (各1-10)"
-        isOpen={openSections.structure}
-        onToggle={() => toggleSection('structure')}
+        title="3. 使用単元に関する指標"
+        isOpen={openSections.units}
+        onToggle={() => toggleSection('units')}
       >
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div>
-            <h4 className="font-medium text-gray-800 mb-3">A: 読解・設定の複雑度</h4>
-            <SliderSection
-              value={opinionProfile.structure_complexity[0]}
-              min={1}
-              max={10}
-              onChange={(value) => updateProfile({ 
-                structure_complexity: [value, opinionProfile.structure_complexity[1]] 
-              })}
-              descriptions={readingComplexityDescriptions}
+            <label className="block text-sm font-medium text-gray-700 mb-2">単元（設定）</label>
+            <div className="flex flex-wrap gap-2">
+              {['正方形', '長方形', '正三角形', '二等辺三角形', '直角三角形', '台形', '円', 
+                '直方体', '立方体', '正四角すい', '三角すい', '円すい', '三角柱', '円柱',
+                '平行', '垂直・垂線', '中点', '交点', '平面'].map(unit => (
+                <button
+                  key={unit}
+                  onClick={() => updateProfile({ setup_units: toggleArrayItem(opinionProfile.setup_units, unit) })}
+                  className={`px-3 py-1 rounded-full text-sm ${
+                    opinionProfile.setup_units.includes(unit)
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">単元（解法）</label>
+            <div className="flex flex-wrap gap-2">
+              {['三平方の定理', '相似', '中点連結定理', '円周角の定理',
+                '面積の公式', '体積の公式',
+                '平行と比', '相似比', '面積比', '体積比', '二等辺三角形の性質', '正三角形の性質',
+                '展開図', '補助線'].map(unit => (
+                <button
+                  key={unit}
+                  onClick={() => updateProfile({ solution_units: toggleArrayItem(opinionProfile.solution_units, unit) })}
+                  className={`px-3 py-1 rounded-full text-sm ${
+                    opinionProfile.solution_units.includes(unit)
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </AccordionItem>
+
+      {/* 4. 図形に関する指標 */}
+      <AccordionItem
+        title="4. 図形に関する指標"
+        isOpen={openSections.geometry}
+        onToggle={() => toggleSection('geometry')}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              総頂点・点の数: {opinionProfile.total_vertices}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="20"
+              value={opinionProfile.total_vertices}
+              onChange={(e) => updateProfile({ total_vertices: parseInt(e.target.value) })}
+              className="w-full"
             />
           </div>
+
           <div>
-            <h4 className="font-medium text-gray-800 mb-3">B: 設問の誘導性</h4>
-            <SliderSection
-              value={opinionProfile.structure_complexity[1]}
-              min={1}
-              max={10}
-              onChange={(value) => updateProfile({ 
-                structure_complexity: [opinionProfile.structure_complexity[0], value] 
-              })}
-              descriptions={guidanceDescriptions}
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={opinionProfile.has_moving_point}
+                onChange={(e) => updateProfile({ has_moving_point: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-gray-700">動点の有無</span>
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              図中に明記された数値の個数: {opinionProfile.figure_values_count}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="15"
+              value={opinionProfile.figure_values_count}
+              onChange={(e) => updateProfile({ figure_values_count: parseInt(e.target.value) })}
+              className="w-full"
             />
           </div>
         </div>
       </AccordionItem>
 
+      {/* 5. 解法プロセスと認知負荷に関する指標 */}
       <AccordionItem
-        title="指標4：総合難易度スコア (1-20)"
-        isOpen={openSections.difficulty}
-        onToggle={() => toggleSection('difficulty')}
+        title="5. 解法プロセスと認知負荷に関する指標"
+        isOpen={openSections.solutionProcess}
+        onToggle={() => toggleSection('solutionProcess')}
       >
-        <SliderSection
-          value={opinionProfile.difficulty_score}
-          min={1}
-          max={20}
-          onChange={(value) => updateProfile({ difficulty_score: value })}
-          descriptions={difficultyDescriptions}
-        />
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              解法のステップ数: {opinionProfile.solution_steps}
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              value={opinionProfile.solution_steps}
+              onChange={(e) => updateProfile({ solution_steps: parseInt(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={opinionProfile.has_logical_branching}
+                onChange={(e) => updateProfile({ has_logical_branching: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-gray-700">論理的分岐の有無（場合分け）</span>
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              使用定理・公式の数: {opinionProfile.theorem_count}
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="8"
+              value={opinionProfile.theorem_count}
+              onChange={(e) => updateProfile({ theorem_count: parseInt(e.target.value) })}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={opinionProfile.requires_multi_unit_integration}
+                onChange={(e) => updateProfile({ requires_multi_unit_integration: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-gray-700">複数単元の知識統合の要否</span>
+            </label>
+          </div>
+
+          <div>
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={opinionProfile.has_irrelevant_info}
+                onChange={(e) => updateProfile({ has_irrelevant_info: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm text-gray-700">無関係な情報の有無（外発的認知負荷）</span>
+            </label>
+          </div>
+        </div>
       </AccordionItem>
     </div>
   );
