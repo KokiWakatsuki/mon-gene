@@ -1197,6 +1197,15 @@ func (s *problemService) GenerateProblemFiveStageWithProgress(ctx context.Contex
 	
 	// 5段階生成完了後、問題をproblemsテーブルに保存（会話履歴も含む）
 	fmt.Printf("💾 [FiveStage] Saving generated problem to database\n")
+	
+	// 会話履歴のnullチェック
+	if conversationHistory == nil {
+		fmt.Printf("⚠️ [FiveStage] Conversation history is nil, initializing empty history\n")
+		conversationHistory = &models.ConversationHistory{
+			Messages: make([]models.ConversationMessage, 0),
+		}
+	}
+	
 	fmt.Printf("💬 [FiveStage] Conversation history messages: %d\n", len(conversationHistory.Messages))
 	
 	// 正しいマッピング:
@@ -1394,19 +1403,36 @@ func (s *problemService) GenerateStage1WithHistory(ctx context.Context, req mode
 	var content string
 	clientMessages := s.convertToClientMessages(history)
 	
+	// 会話履歴の内容をログ出力（デバッグ用）
+	fmt.Printf("📋 [Stage1-Chat] Conversation history details:\n")
+	for i, msg := range clientMessages {
+		contentPreview := msg.Content
+		if len(contentPreview) > 200 {
+			contentPreview = contentPreview[:200] + "..."
+		}
+		fmt.Printf("  Message %d: role=%s, content_length=%d, preview=%s\n", i+1, msg.Role, len(msg.Content), contentPreview)
+	}
+	
 	switch user.PreferredAPI {
 	case "openai", "chatgpt":
 		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
+		fmt.Printf("🔄 [Stage1-Chat] Calling OpenAI API...\n")
 		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+		fmt.Printf("🔄 [Stage1-Chat] OpenAI API call completed, err=%v\n", err)
 	case "google", "gemini":
 		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
+		fmt.Printf("🔄 [Stage1-Chat] Calling Google API...\n")
 		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+		fmt.Printf("🔄 [Stage1-Chat] Google API call completed, err=%v\n", err)
 	case "claude", "laboratory":
 		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
+		fmt.Printf("🔄 [Stage1-Chat] Calling Claude API with %d messages...\n", len(clientMessages))
 		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+		fmt.Printf("🔄 [Stage1-Chat] Claude API call completed, err=%v, content_length=%d\n", err, len(content))
 	default:
 		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
 		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		fmt.Printf("❌ [Stage1-Chat] %s\n", errorMsg)
 		return &models.Stage1Response{
 			Success: false,
 			Error:   errorMsg,
@@ -1417,6 +1443,8 @@ func (s *problemService) GenerateStage1WithHistory(ctx context.Context, req mode
 	if err != nil {
 		errorMsg := fmt.Sprintf("%s APIでの小問構成と解答プロセス生成に失敗しました: %v", user.PreferredAPI, err)
 		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		fmt.Printf("❌ [Stage1-Chat] API Error: %v\n", err)
+		fmt.Printf("❌ [Stage1-Chat] Error type: %T\n", err)
 		return &models.Stage1Response{
 			Success: false,
 			Error:   errorMsg,

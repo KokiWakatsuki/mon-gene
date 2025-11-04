@@ -97,7 +97,8 @@ func (c *claudeClient) GenerateContent(ctx context.Context, prompt string) (stri
 	fmt.Printf("🤖 Using Claude API with model: %s\n", c.model)
 
 	// 推論トークンの設定
-	thinkingBudget := 1000
+	// 用途: 1段階生成（旧方式）- 単一プロンプトから問題を一度に生成
+	thinkingBudget := 10000
 	maxTokens := 10000 + thinkingBudget // 推論トークン + 10000
 
 	request := ClaudeRequest{
@@ -240,9 +241,11 @@ func (c *claudeClient) GenerateMultimodalContent(ctx context.Context, prompt str
 		}
 	}
 
-	// 推論トークンの設定（1000に変更）
-	thinkingBudget := 1000
-	baseOutputTokens := 5000
+	// 推論トークンの設定
+	// 用途: マルチモーダル生成 - 画像やファイルを含む入力からの問題生成
+	// 画像解析には追加の推論が必要なため、十分なトークン数を確保
+	thinkingBudget := 10000
+	baseOutputTokens := 10000
 	maxTokens := baseOutputTokens + thinkingBudget // 基本出力トークン + 推論トークン
 
 	request := ClaudeRequest{
@@ -364,8 +367,10 @@ func (c *claudeClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 		})
 	}
 
-	// 推論トークンの設定（1000に変更）
-	thinkingBudget := 1000
+	// 推論トークンの設定
+	// 用途: 5段階生成（新方式）- 会話履歴を使った段階的な問題生成
+	// Stage 1-5の各段階で会話の文脈を理解し、適切な応答を生成
+	thinkingBudget := 10000
 	baseOutputTokens := 10000
 	maxTokens := baseOutputTokens + thinkingBudget // 基本出力トークン + 推論トークン
 

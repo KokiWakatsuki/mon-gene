@@ -95,7 +95,8 @@ func (c *googleClient) GenerateContent(ctx context.Context, prompt string) (stri
 	fmt.Printf("🤖 Using Google API with model: %s\n", c.model)
 
 	// 推論トークンの設定
-	thinkingBudget := int32(1000)
+	// 用途: 1段階生成（旧方式）- 単一プロンプトから問題を一度に生成
+	thinkingBudget := int32(10000)
 	maxOutputTokens := 10000 + int(thinkingBudget) // 推論トークン + 10000
 
 	request := GoogleRequest{
@@ -264,9 +265,11 @@ func (c *googleClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 		conversationText.WriteString(msg.Content)
 	}
 
-	// 推論トークンの設定（1000に変更）
-	thinkingBudget := int32(1000)
-	baseOutputTokens := 5000
+	// 推論トークンの設定
+	// 用途: 5段階生成（新方式）- 会話履歴を使った段階的な問題生成
+	// Stage 1-5の各段階で会話の文脈を理解し、適切な応答を生成
+	thinkingBudget := int32(10000)
+	baseOutputTokens := 10000
 	maxOutputTokens := baseOutputTokens + int(thinkingBudget) // 基本出力トークン + 推論トークン
 
 	request := GoogleRequest{
