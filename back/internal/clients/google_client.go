@@ -264,9 +264,10 @@ func (c *googleClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 		conversationText.WriteString(msg.Content)
 	}
 
-	// 推論トークンの設定
-	thinkingBudget := int32(10000)
-	maxOutputTokens := 10000 + int(thinkingBudget) // 推論トークン + 10000
+	// 推論トークンの設定（1000に変更）
+	thinkingBudget := int32(1000)
+	baseOutputTokens := 5000
+	maxOutputTokens := baseOutputTokens + int(thinkingBudget) // 基本出力トークン + 推論トークン
 
 	request := GoogleRequest{
 		Contents: []GoogleContent{
@@ -286,7 +287,7 @@ func (c *googleClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 		},
 	}
 
-	fmt.Printf("🧠 Using thinking tokens: %d, max output tokens: %d (with history)\n", thinkingBudget, maxOutputTokens)
+	fmt.Printf("🧠 [Google] Thinking budget: %d tokens, Base output: %d tokens, Total max: %d tokens (with history)\n", thinkingBudget, baseOutputTokens, maxOutputTokens)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {

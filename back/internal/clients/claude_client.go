@@ -240,9 +240,10 @@ func (c *claudeClient) GenerateMultimodalContent(ctx context.Context, prompt str
 		}
 	}
 
-	// 推論トークンの設定
-	thinkingBudget := 10000
-	maxTokens := 10000 + thinkingBudget // 推論トークン + 10000
+	// 推論トークンの設定（1000に変更）
+	thinkingBudget := 1000
+	baseOutputTokens := 5000
+	maxTokens := baseOutputTokens + thinkingBudget // 基本出力トークン + 推論トークン
 
 	request := ClaudeRequest{
 		Model:     c.model,
@@ -259,7 +260,7 @@ func (c *claudeClient) GenerateMultimodalContent(ctx context.Context, prompt str
 		},
 	}
 
-	fmt.Printf("🧠 Using thinking tokens: %d, max tokens: %d (multimodal)\n", thinkingBudget, maxTokens)
+	fmt.Printf("🧠 [Claude] Thinking budget: %d tokens, Base output: %d tokens, Total max: %d tokens (multimodal)\n", thinkingBudget, baseOutputTokens, maxTokens)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -363,9 +364,10 @@ func (c *claudeClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 		})
 	}
 
-	// 推論トークンの設定
-	thinkingBudget := 10000
-	maxTokens := 10000 + thinkingBudget // 推論トークン + 10000
+	// 推論トークンの設定（1000に変更）
+	thinkingBudget := 1000
+	baseOutputTokens := 10000
+	maxTokens := baseOutputTokens + thinkingBudget // 基本出力トークン + 推論トークン
 
 	request := ClaudeRequest{
 		Model:     c.model,
@@ -377,7 +379,7 @@ func (c *claudeClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 		},
 	}
 
-	fmt.Printf("🧠 Using thinking tokens: %d, max tokens: %d (with history)\n", thinkingBudget, maxTokens)
+	fmt.Printf("🧠 [Claude] Thinking budget: %d tokens, Base output: %d tokens, Total max: %d tokens (with history)\n", thinkingBudget, baseOutputTokens, maxTokens)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
