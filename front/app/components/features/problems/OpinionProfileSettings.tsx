@@ -124,7 +124,7 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
     <div className="space-y-4">
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-2">
-          意見プロファイル指標一覧（Ver. 2.0）
+          設定項目
         </h3>
         <p className="text-sm text-gray-600">
           空間図形問題の詳細な特性を定量的に設定します。

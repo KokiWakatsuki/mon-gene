@@ -1277,8 +1277,9 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 	
 	// 新しいプロセス：1段階目：小問構成と解答プロセス生成
 	stage1Req := models.Stage1Request{
-		Prompt:  req.Prompt,
-		Subject: req.Subject,
+		Prompt:    req.Prompt,
+		Subject:   req.Subject,
+		SkipCount: true, // FiveStage全体呼び出し時は既にカウント済みなのでスキップ
 	}
 	stage1Resp, err := s.GenerateStage1(ctx, stage1Req, userSchoolCode)
 	if err != nil || !stage1Resp.Success {
@@ -1428,6 +1429,44 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 			Error:   errorMsg,
 			Log:     logBuilder.String(),
 		}, err
+	}
+	
+	// 個別呼び出し時のみカウント処理を実行（FiveStage全体呼び出し時は既にカウント済み）
+	// リクエストにSkipCountフラグがない場合のみカウント
+	if !req.SkipCount {
+		logBuilder.WriteString(fmt.Sprintf("🔢 現在の生成回数: %d/%d\n", user.ProblemGenerationCount, user.ProblemGenerationLimit))
+		
+		// 生成制限チェック（-1は制限なし）
+		if user.ProblemGenerationLimit >= 0 && user.ProblemGenerationCount >= user.ProblemGenerationLimit {
+			errorMsg := fmt.Sprintf("問題生成回数の上限（%d回）に達しました", user.ProblemGenerationLimit)
+			logBuilder.WriteString(fmt.Sprintf("🚫 %s\n", errorMsg))
+			return &models.Stage1Response{
+				Success: false,
+				Error:   errorMsg,
+				Log:     logBuilder.String(),
+			}, fmt.Errorf(errorMsg)
+		}
+		
+		// 問題生成回数を更新
+		oldCount := user.ProblemGenerationCount
+		user.ProblemGenerationCount++
+		user.UpdatedAt = time.Now()
+		
+		logBuilder.WriteString(fmt.Sprintf("📝 生成回数を更新: %d → %d\n", oldCount, user.ProblemGenerationCount))
+		
+		if err := s.userRepo.Update(ctx, user); err != nil {
+			errorMsg := fmt.Sprintf("問題生成カウントの更新に失敗しました: %v", err)
+			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+			return &models.Stage1Response{
+				Success: false,
+				Error:   errorMsg,
+				Log:     logBuilder.String(),
+			}, fmt.Errorf(errorMsg)
+		}
+		
+		logBuilder.WriteString(fmt.Sprintf("✅ 問題生成カウントを更新: %s = %d/%d\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit))
+	} else {
+		logBuilder.WriteString("ℹ️ カウント処理をスキップ（FiveStage全体呼び出し時）\n")
 	}
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))

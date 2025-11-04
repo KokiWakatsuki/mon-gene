@@ -86,8 +86,9 @@ type FiveStageGenerationResponse struct {
 
 // Stage1Request 1段階目のリクエスト（小問構成と解答プロセス生成）
 type Stage1Request struct {
-	Prompt  string `json:"prompt"`
-	Subject string `json:"subject"`
+	Prompt    string `json:"prompt"`
+	Subject   string `json:"subject"`
+	SkipCount bool   `json:"skip_count,omitempty"` // FiveStage全体呼び出し時にtrueを設定（重複カウント防止）
 }
 
 // Stage1Response 1段階目のレスポンス（小問構成と解答プロセス生成）
