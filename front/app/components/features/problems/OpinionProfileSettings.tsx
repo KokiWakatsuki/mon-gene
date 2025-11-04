@@ -68,6 +68,7 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, isOpen, 
 
 export default function OpinionProfileSettings({ opinionProfile, onOpinionProfileChange }: OpinionProfileSettingsProps) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    detailSettings: false,
     textComposition: true,
     answerFormat: false,
     units: false,
@@ -94,6 +95,31 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
     }
   };
 
+  // 新潟県2024年プリセット
+  const applyNiigataPreset = () => {
+    onOpinionProfileChange({
+      problem_text_length: 122,
+      sub_problem_text_length: 108,
+      given_values_count: 3,
+      sub_problem_count: 4,
+      sub_problem_types: ['長さを求める', '面積を求める', '体積を求める'],
+      solid_composition: '単一の立体',
+      answer_formats: ['整数', '既約分数'],
+      answer_units: ['cm', 'cm²', 'cm³'],
+      uses_auxiliary_points: true,
+      setup_units: ['直方体', '平行'],
+      solution_units: ['三平方の定理', '相似', '面積の公式', '体積の公式', '平行と比', '相似比', '体積比', '展開図', '補助線'],
+      total_vertices: 11,
+      has_moving_point: true,
+      figure_values_count: 3,
+      solution_steps: 11,
+      has_logical_branching: false,
+      theorem_count: 4,
+      requires_multi_unit_integration: true,
+      has_irrelevant_info: false,
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="mb-6">
@@ -105,12 +131,39 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
         </p>
       </div>
 
-      {/* 1. 文章量・構成に関する指標 */}
+      {/* プリセットボタン */}
+      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h4 className="text-sm font-semibold text-gray-800 mb-3">📋 プリセット設定</h4>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={applyNiigataPreset}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+          >
+            🏫 新潟県（2024年）
+          </button>
+        </div>
+        <p className="text-xs text-gray-600 mt-2">
+          ※プリセットを選択すると、該当する公立高校入試の評価指標に基づいた設定が適用されます
+        </p>
+      </div>
+
+      {/* 詳細設定アコーディオン */}
       <AccordionItem
-        title="1. 文章量・構成に関する指標"
-        isOpen={openSections.textComposition}
-        onToggle={() => toggleSection('textComposition')}
+        title="📝 詳細設定"
+        isOpen={openSections.detailSettings}
+        onToggle={() => toggleSection('detailSettings')}
       >
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 mb-4">
+            より詳細な条件を設定したい場合は、以下の項目を調整してください。
+          </p>
+
+          {/* 1. 文章量・構成に関する指標 */}
+          <AccordionItem
+            title="1. 文章量・構成に関する指標"
+            isOpen={openSections.textComposition}
+            onToggle={() => toggleSection('textComposition')}
+          >
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -201,15 +254,15 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
               <option value="複数の立体の組み合わせ">複数の立体の組み合わせ</option>
             </select>
           </div>
-        </div>
-      </AccordionItem>
+          </div>
+        </AccordionItem>
 
-      {/* 2. 解答形式に関する指標 */}
-      <AccordionItem
-        title="2. 解答形式に関する指標"
-        isOpen={openSections.answerFormat}
-        onToggle={() => toggleSection('answerFormat')}
-      >
+        {/* 2. 解答形式に関する指標 */}
+        <AccordionItem
+          title="2. 解答形式に関する指標"
+          isOpen={openSections.answerFormat}
+          onToggle={() => toggleSection('answerFormat')}
+        >
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">解答の形式</label>
@@ -260,15 +313,15 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
               <span className="text-sm text-gray-700">正答例での補助点の使用</span>
             </label>
           </div>
-        </div>
-      </AccordionItem>
+          </div>
+        </AccordionItem>
 
-      {/* 3. 使用単元に関する指標 */}
-      <AccordionItem
-        title="3. 使用単元に関する指標"
-        isOpen={openSections.units}
-        onToggle={() => toggleSection('units')}
-      >
+        {/* 3. 使用単元に関する指標 */}
+        <AccordionItem
+          title="3. 使用単元に関する指標"
+          isOpen={openSections.units}
+          onToggle={() => toggleSection('units')}
+        >
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">単元（設定）</label>
@@ -312,15 +365,15 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
               ))}
             </div>
           </div>
-        </div>
-      </AccordionItem>
+          </div>
+        </AccordionItem>
 
-      {/* 4. 図形に関する指標 */}
-      <AccordionItem
-        title="4. 図形に関する指標"
-        isOpen={openSections.geometry}
-        onToggle={() => toggleSection('geometry')}
-      >
+        {/* 4. 図形に関する指標 */}
+        <AccordionItem
+          title="4. 図形に関する指標"
+          isOpen={openSections.geometry}
+          onToggle={() => toggleSection('geometry')}
+        >
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -361,15 +414,15 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
               className="w-full"
             />
           </div>
-        </div>
-      </AccordionItem>
+          </div>
+        </AccordionItem>
 
-      {/* 5. 解法プロセスと認知負荷に関する指標 */}
-      <AccordionItem
-        title="5. 解法プロセスと認知負荷に関する指標"
-        isOpen={openSections.solutionProcess}
-        onToggle={() => toggleSection('solutionProcess')}
-      >
+        {/* 5. 解法プロセスと認知負荷に関する指標 */}
+        <AccordionItem
+          title="5. 解法プロセスと認知負荷に関する指標"
+          isOpen={openSections.solutionProcess}
+          onToggle={() => toggleSection('solutionProcess')}
+        >
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -378,7 +431,7 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
             <input
               type="range"
               min="1"
-              max="10"
+              max="20"
               value={opinionProfile.solution_steps}
               onChange={(e) => updateProfile({ solution_steps: parseInt(e.target.value) })}
               className="w-full"
@@ -434,6 +487,8 @@ export default function OpinionProfileSettings({ opinionProfile, onOpinionProfil
               <span className="text-sm text-gray-700">無関係な情報の有無（外発的認知負荷）</span>
             </label>
           </div>
+          </div>
+        </AccordionItem>
         </div>
       </AccordionItem>
     </div>

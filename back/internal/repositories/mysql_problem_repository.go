@@ -1,3 +1,4 @@
+
 package repositories
 
 import (
@@ -291,7 +292,7 @@ func (r *MySQLProblemRepository) SearchCombined(ctx context.Context, userID int6
 	fmt.Printf("  - limit: %d, offset: %d\n", limit, offset)
 	fmt.Printf("  - filters: %+v\n", filters)
 	
-	// 基本クエリの構築（opinion_profile + opinion_profile_v2対応）
+	// 基本クエリの構築（opinion_profile_v2対応）
 	query := `
 		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
 		FROM problems
@@ -314,110 +315,202 @@ func (r *MySQLProblemRepository) SearchCombined(ctx context.Context, userID int6
 		fmt.Printf("  ✅ Subject filter added: %q\n", subject)
 	}
 
-	// OpinionProfileベースのフィルター検索を実装（matchType対応）
+	// opinion_profile_v2が存在することを確認（フィルターがある場合のみ）
 	if filters != nil && len(filters) > 0 {
-		fmt.Printf("  📊 Processing filters (%d entries):\n", len(filters))
-		var filterConditions []string
-		var filterArgs []interface{}
-
-		// 出題分野コードでの絞り込み
-		if domainValues, exists := filters["出題分野コード"]; exists {
-			if domains, ok := domainValues.([]string); ok && len(domains) > 0 {
-				if len(domains) == 1 {
-					if domain := domains[0]; domain != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.domain') = ?")
-						filterArgs = append(filterArgs, domain)
-					}
-				}
-			}
-		}
-
-		// コアスキルレベルでの絞り込み
-		if skillValues, exists := filters["コアスキルレベル"]; exists {
-			if skills, ok := skillValues.([]string); ok && len(skills) > 0 {
-				if len(skills) == 1 {
-					if skill := skills[0]; skill != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.skill_level') = ?")
-						filterArgs = append(filterArgs, skill)
-					}
-				}
-			}
-		}
-
-		// 読解・設定の複雑度での絞り込み
-		if complexityValues, exists := filters["読解・設定の複雑度"]; exists {
-			if complexities, ok := complexityValues.([]string); ok && len(complexities) > 0 {
-				if len(complexities) == 1 {
-					if complexity := complexities[0]; complexity != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.structure_complexity[0]') = ?")
-						filterArgs = append(filterArgs, complexity)
-					}
-				}
-			}
-		}
-
-		// 設問の誘導性での絞り込み
-		if guidanceValues, exists := filters["設問の誘導性"]; exists {
-			if guidances, ok := guidanceValues.([]string); ok && len(guidances) > 0 {
-				if len(guidances) == 1 {
-					if guidance := guidances[0]; guidance != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.structure_complexity[1]') = ?")
-						filterArgs = append(filterArgs, guidance)
-					}
-				}
-			}
-		}
-
-		// 総合難易度スコアでの絞り込み（具体的な数値との完全一致）
-		if difficultyValues, exists := filters["総合難易度スコア"]; exists {
-			if difficulties, ok := difficultyValues.([]string); ok && len(difficulties) > 0 {
-				if len(difficulties) == 1 {
-					if difficulty := difficulties[0]; difficulty != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.difficulty_score') = ?")
-						filterArgs = append(filterArgs, difficulty)
-					}
-				}
-			}
-		}
-
-		// matchTypeに基づいてフィルター条件を結合
-		if len(filterConditions) > 0 {
-			if matchType == "partial" {
-				// 部分一致: いずれかの条件が一致すればOK
-				query += " AND (" + filterConditions[0]
-				for i := 1; i < len(filterConditions); i++ {
-					query += " OR " + filterConditions[i]
-				}
-				query += ")"
-			} else {
-				// 完全一致 (デフォルト): すべての条件が一致する必要がある
-				for _, condition := range filterConditions {
-					query += " AND " + condition
-				}
-			}
-			queryArgs = append(queryArgs, filterArgs...)
-		}
+		query += " AND opinion_profile_v2 IS NOT NULL"
 	}
 
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	queryArgs = append(queryArgs, limit, offset)
+	query += " ORDER BY created_at DESC"
+
+	fmt.Printf("\n🔎 [QUERY]\n")
+	fmt.Printf("SQL: %s\n", query)
+	fmt.Printf("Args: %v\n\n", queryArgs)
 
 	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
+		fmt.Printf("❌ [ERROR] Query execution failed: %v\n", err)
 		return nil, fmt.Errorf("failed to search problems by combined conditions: %w", err)
 	}
 	defer rows.Close()
 
-	var problems []*models.Problem
+	var allProblems []*models.Problem
 	for rows.Next() {
 		problem, err := r.scanProblem(rows)
 		if err != nil {
+			fmt.Printf("❌ [ERROR] Row scanning failed: %v\n", err)
 			return nil, fmt.Errorf("failed to scan problem: %w", err)
 		}
-		problems = append(problems, problem)
+		allProblems = append(allProblems, problem)
 	}
 
-	return problems, nil
+	fmt.Printf("📋 [ALL PROBLEMS] Found %d problems\n", len(allProblems))
+
+	// フィルターがない場合はページネーションして返す
+	if filters == nil || len(filters) == 0 {
+		start := offset
+		end := offset + limit
+		if start > len(allProblems) {
+			return []*models.Problem{}, nil
+		}
+		if end > len(allProblems) {
+			end = len(allProblems)
+		}
+		return allProblems[start:end], nil
+	}
+
+	// アプリケーション層でフィルタリング（SearchByFiltersと同じロジック）
+	var matchedProblems []*models.Problem
+	
+	for _, problem := range allProblems {
+		if problem.OpinionProfileV2 == nil {
+			continue
+		}
+		
+		profile := problem.OpinionProfileV2
+		matchCount := 0
+		totalConditions := 0
+		
+		// 各フィールドをチェック
+		checkField := func(key string, dbValue interface{}, searchValue interface{}) bool {
+			totalConditions++
+			
+			switch v := dbValue.(type) {
+			case int:
+				if searchVal, ok := searchValue.(float64); ok {
+					if v == int(searchVal) {
+						matchCount++
+						return true
+					}
+				}
+			case bool:
+				if searchVal, ok := searchValue.(bool); ok {
+					if v == searchVal {
+						matchCount++
+						return true
+					}
+				}
+			case string:
+				if searchVal, ok := searchValue.(string); ok {
+					if v == searchVal {
+						matchCount++
+						return true
+					}
+				}
+			case []string:
+				if searchArr, ok := searchValue.([]interface{}); ok {
+					if len(v) == len(searchArr) {
+						allMatch := true
+						for _, searchItem := range searchArr {
+							if searchStr, ok := searchItem.(string); ok {
+								found := false
+								for _, dbItem := range v {
+									if dbItem == searchStr {
+										found = true
+										break
+									}
+								}
+								if !found {
+									allMatch = false
+									break
+								}
+							}
+						}
+						if allMatch {
+							matchCount++
+							return true
+						}
+					}
+				}
+			}
+			return false
+		}
+		
+		// 各フィールドをチェック
+		if val, exists := filters["problem_text_length"]; exists {
+			checkField("problem_text_length", profile.ProblemTextLength, val)
+		}
+		if val, exists := filters["sub_problem_text_length"]; exists {
+			checkField("sub_problem_text_length", profile.SubProblemTextLength, val)
+		}
+		if val, exists := filters["given_values_count"]; exists {
+			checkField("given_values_count", profile.GivenValuesCount, val)
+		}
+		if val, exists := filters["sub_problem_count"]; exists {
+			checkField("sub_problem_count", profile.SubProblemCount, val)
+		}
+		if val, exists := filters["sub_problem_types"]; exists {
+			checkField("sub_problem_types", profile.SubProblemTypes, val)
+		}
+		if val, exists := filters["solid_composition"]; exists {
+			checkField("solid_composition", profile.SolidComposition, val)
+		}
+		if val, exists := filters["answer_formats"]; exists {
+			checkField("answer_formats", profile.AnswerFormats, val)
+		}
+		if val, exists := filters["answer_units"]; exists {
+			checkField("answer_units", profile.AnswerUnits, val)
+		}
+		if val, exists := filters["uses_auxiliary_points"]; exists {
+			checkField("uses_auxiliary_points", profile.UsesAuxiliaryPoints, val)
+		}
+		if val, exists := filters["setup_units"]; exists {
+			checkField("setup_units", profile.SetupUnits, val)
+		}
+		if val, exists := filters["solution_units"]; exists {
+			checkField("solution_units", profile.SolutionUnits, val)
+		}
+		if val, exists := filters["total_vertices"]; exists {
+			checkField("total_vertices", profile.TotalVertices, val)
+		}
+		if val, exists := filters["has_moving_point"]; exists {
+			checkField("has_moving_point", profile.HasMovingPoint, val)
+		}
+		if val, exists := filters["figure_values_count"]; exists {
+			checkField("figure_values_count", profile.FigureValuesCount, val)
+		}
+		if val, exists := filters["solution_steps"]; exists {
+			checkField("solution_steps", profile.SolutionSteps, val)
+		}
+		if val, exists := filters["has_logical_branching"]; exists {
+			checkField("has_logical_branching", profile.HasLogicalBranching, val)
+		}
+		if val, exists := filters["theorem_count"]; exists {
+			checkField("theorem_count", profile.TheoremCount, val)
+		}
+		if val, exists := filters["requires_multi_unit_integration"]; exists {
+			checkField("requires_multi_unit_integration", profile.RequiresMultiUnitIntegration, val)
+		}
+		if val, exists := filters["has_irrelevant_info"]; exists {
+			checkField("has_irrelevant_info", profile.HasIrrelevantInfo, val)
+		}
+		
+		// マッチング判定
+		if matchType == "exact" {
+			if matchCount == totalConditions && totalConditions > 0 {
+				matchedProblems = append(matchedProblems, problem)
+				fmt.Printf("  ✅ Problem %d: EXACT MATCH (%d/%d)\n", problem.ID, matchCount, totalConditions)
+			}
+		} else {
+			if matchCount > 0 {
+				matchedProblems = append(matchedProblems, problem)
+				fmt.Printf("  ✅ Problem %d: PARTIAL MATCH (%d/%d)\n", problem.ID, matchCount, totalConditions)
+			}
+		}
+	}
+
+	fmt.Printf("📋 [FILTERED] %d problems matched\n", len(matchedProblems))
+	
+	// ページネーション
+	start := offset
+	end := offset + limit
+	if start > len(matchedProblems) {
+		return []*models.Problem{}, nil
+	}
+	if end > len(matchedProblems) {
+		end = len(matchedProblems)
+	}
+	
+	return matchedProblems[start:end], nil
 }
 
 func (r *MySQLProblemRepository) Delete(ctx context.Context, id int64) error {
@@ -430,7 +523,6 @@ func (r *MySQLProblemRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *MySQLProblemRepository) SearchByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error) {
-	// 従来のfiltersベース検索は削除、基本的な検索のみ実行
 	query := `
 		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
 		FROM problems
@@ -464,11 +556,11 @@ func (r *MySQLProblemRepository) SearchByFilters(ctx context.Context, userID int
 	fmt.Printf("  - limit: %d, offset: %d\n", limit, offset)
 	fmt.Printf("  - filters: %+v\n", filters)
 	
-	// opinion_profile + opinion_profile_v2ベースの検索を実装
+	// まずすべての問題を取得（opinion_profile_v2があるもののみ）
 	query := `
 		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
 		FROM problems
-		WHERE user_id = ?`
+		WHERE user_id = ? AND opinion_profile_v2 IS NOT NULL`
 
 	queryArgs := []interface{}{userID}
 
@@ -478,187 +570,12 @@ func (r *MySQLProblemRepository) SearchByFilters(ctx context.Context, userID int
 		queryArgs = append(queryArgs, subject)
 		fmt.Printf("  ✅ Subject filter added: %q\n", subject)
 	}
-
-	// OpinionProfileベースのフィルター検索を実装（matchType対応）
-	if filters != nil && len(filters) > 0 {
-		fmt.Printf("  📊 Processing filters (%d entries):\n", len(filters))
-		var filterConditions []string
-		var filterArgs []interface{}
-
-		// 出題分野コードでの絞り込み
-		if domainValues, exists := filters["出題分野コード"]; exists {
-			fmt.Printf("    🔍 出題分野コード: %+v (type: %T)\n", domainValues, domainValues)
-			// []interface{} から []string への変換を処理
-			var domains []string
-			if domainSlice, ok := domainValues.([]interface{}); ok {
-				for _, v := range domainSlice {
-					if str, ok := v.(string); ok {
-						domains = append(domains, str)
-					}
-				}
-			} else if domainSlice, ok := domainValues.([]string); ok {
-				domains = domainSlice
-			}
-			
-			if len(domains) > 0 {
-				if len(domains) == 1 {
-					if domain := domains[0]; domain != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.domain') = CAST(? AS UNSIGNED)")
-						filterArgs = append(filterArgs, domain)
-						fmt.Printf("      ✅ Added domain filter: %q (as UNSIGNED)\n", domain)
-					}
-				}
-			} else {
-				fmt.Printf("      ❌ Failed to parse domains: %+v\n", domainValues)
-			}
-		}
-
-		// コアスキルレベルでの絞り込み
-		if skillValues, exists := filters["コアスキルレベル"]; exists {
-			fmt.Printf("    🔍 コアスキルレベル: %+v (type: %T)\n", skillValues, skillValues)
-			// []interface{} から []string への変換を処理
-			var skills []string
-			if skillSlice, ok := skillValues.([]interface{}); ok {
-				for _, v := range skillSlice {
-					if str, ok := v.(string); ok {
-						skills = append(skills, str)
-					}
-				}
-			} else if skillSlice, ok := skillValues.([]string); ok {
-				skills = skillSlice
-			}
-			
-			if len(skills) > 0 {
-				if len(skills) == 1 {
-					if skill := skills[0]; skill != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.skill_level') = CAST(? AS UNSIGNED)")
-						filterArgs = append(filterArgs, skill)
-						fmt.Printf("      ✅ Added skill_level filter: %q (as UNSIGNED)\n", skill)
-					}
-				}
-			} else {
-				fmt.Printf("      ❌ Failed to parse skills: %+v\n", skillValues)
-			}
-		}
-
-		// 読解・設定の複雑度での絞り込み
-		if complexityValues, exists := filters["読解・設定の複雑度"]; exists {
-			fmt.Printf("    🔍 読解・設定の複雑度: %+v (type: %T)\n", complexityValues, complexityValues)
-			// []interface{} から []string への変換を処理
-			var complexities []string
-			if complexitySlice, ok := complexityValues.([]interface{}); ok {
-				for _, v := range complexitySlice {
-					if str, ok := v.(string); ok {
-						complexities = append(complexities, str)
-					}
-				}
-			} else if complexitySlice, ok := complexityValues.([]string); ok {
-				complexities = complexitySlice
-			}
-			
-			if len(complexities) > 0 {
-				if len(complexities) == 1 {
-					if complexity := complexities[0]; complexity != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.structure_complexity[0]') = CAST(? AS UNSIGNED)")
-						filterArgs = append(filterArgs, complexity)
-						fmt.Printf("      ✅ Added structure_complexity[0] filter: %q (as UNSIGNED)\n", complexity)
-					}
-				}
-			} else {
-				fmt.Printf("      ❌ Failed to parse complexities: %+v\n", complexityValues)
-			}
-		}
-
-		// 設問の誘導性での絞り込み
-		if guidanceValues, exists := filters["設問の誘導性"]; exists {
-			fmt.Printf("    🔍 設問の誘導性: %+v (type: %T)\n", guidanceValues, guidanceValues)
-			// []interface{} から []string への変換を処理
-			var guidances []string
-			if guidanceSlice, ok := guidanceValues.([]interface{}); ok {
-				for _, v := range guidanceSlice {
-					if str, ok := v.(string); ok {
-						guidances = append(guidances, str)
-					}
-				}
-			} else if guidanceSlice, ok := guidanceValues.([]string); ok {
-				guidances = guidanceSlice
-			}
-			
-			if len(guidances) > 0 {
-				if len(guidances) == 1 {
-					if guidance := guidances[0]; guidance != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.structure_complexity[1]') = CAST(? AS UNSIGNED)")
-						filterArgs = append(filterArgs, guidance)
-						fmt.Printf("      ✅ Added structure_complexity[1] filter: %q (as UNSIGNED)\n", guidance)
-					}
-				}
-			} else {
-				fmt.Printf("      ❌ Failed to parse guidances: %+v\n", guidanceValues)
-			}
-		}
-
-		// 総合難易度スコアでの絞り込み（具体的な数値との完全一致）
-		if difficultyValues, exists := filters["総合難易度スコア"]; exists {
-			fmt.Printf("    🔍 総合難易度スコア: %+v (type: %T)\n", difficultyValues, difficultyValues)
-			// []interface{} から []string への変換を処理
-			var difficulties []string
-			if difficultySlice, ok := difficultyValues.([]interface{}); ok {
-				for _, v := range difficultySlice {
-					if str, ok := v.(string); ok {
-						difficulties = append(difficulties, str)
-					}
-				}
-			} else if difficultySlice, ok := difficultyValues.([]string); ok {
-				difficulties = difficultySlice
-			}
-			
-			if len(difficulties) > 0 {
-				if len(difficulties) == 1 {
-					if difficulty := difficulties[0]; difficulty != "" {
-						filterConditions = append(filterConditions, "JSON_EXTRACT(opinion_profile, '$.difficulty_score') = CAST(? AS UNSIGNED)")
-						filterArgs = append(filterArgs, difficulty)
-						fmt.Printf("      ✅ Added difficulty_score filter: %q (as UNSIGNED)\n", difficulty)
-					}
-				}
-			} else {
-				fmt.Printf("      ❌ Failed to parse difficulties: %+v\n", difficultyValues)
-			}
-		}
-
-		fmt.Printf("  📊 Generated filter conditions (%d): %v\n", len(filterConditions), filterConditions)
-		fmt.Printf("  📊 Filter args (%d): %v\n", len(filterArgs), filterArgs)
-
-		// matchTypeに基づいてフィルター条件を結合
-		if len(filterConditions) > 0 {
-			if matchType == "partial" {
-				// 部分一致: いずれかの条件が一致すればOK
-				query += " AND (" + filterConditions[0]
-				for i := 1; i < len(filterConditions); i++ {
-					query += " OR " + filterConditions[i]
-				}
-				query += ")"
-				fmt.Printf("  ✅ Applied PARTIAL matching (OR logic)\n")
-			} else {
-				// 完全一致 (デフォルト): すべての条件が一致する必要がある
-				for _, condition := range filterConditions {
-					query += " AND " + condition
-				}
-				fmt.Printf("  ✅ Applied EXACT matching (AND logic)\n")
-			}
-			queryArgs = append(queryArgs, filterArgs...)
-		} else {
-			fmt.Printf("  ⚠️ No filter conditions generated!\n")
-		}
-	} else {
-		fmt.Printf("  ℹ️ No filters provided\n")
-	}
-
-	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-	queryArgs = append(queryArgs, limit, offset)
-
-	fmt.Printf("\n🔎 [FINAL QUERY]\n")
+	
+	query += " ORDER BY created_at DESC"
+	
+	fmt.Printf("\n🔎 [QUERY]\n")
 	fmt.Printf("SQL: %s\n", query)
-	fmt.Printf("Args (%d): %v\n\n", len(queryArgs), queryArgs)
+	fmt.Printf("Args: %v\n\n", queryArgs)
 
 	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
@@ -667,22 +584,193 @@ func (r *MySQLProblemRepository) SearchByFilters(ctx context.Context, userID int
 	}
 	defer rows.Close()
 
-	var problems []*models.Problem
+	var allProblems []*models.Problem
 	for rows.Next() {
 		problem, err := r.scanProblem(rows)
 		if err != nil {
 			fmt.Printf("❌ [ERROR] Row scanning failed: %v\n", err)
 			return nil, fmt.Errorf("failed to scan problem: %w", err)
 		}
-		problems = append(problems, problem)
+		allProblems = append(allProblems, problem)
 	}
 
-	fmt.Printf("📋 [RESULT] Found %d problems\n", len(problems))
-	for i, p := range problems {
-		fmt.Printf("  - Problem %d: ID=%d, Subject=%q, OpinionProfile=%+v\n", i+1, p.ID, p.Subject, p.OpinionProfile)
+	fmt.Printf("📋 [ALL PROBLEMS] Found %d problems from database\n", len(allProblems))
+
+	// フィルターがない場合はすべて返す
+	if filters == nil || len(filters) == 0 {
+		fmt.Printf("  ℹ️ No filters provided, returning all problems\n")
+		start := offset
+		end := offset + limit
+		if start > len(allProblems) {
+			return []*models.Problem{}, nil
+		}
+		if end > len(allProblems) {
+			end = len(allProblems)
+		}
+		return allProblems[start:end], nil
 	}
 
-	return problems, nil
+	// アプリケーション層でフィルタリング
+	var matchedProblems []*models.Problem
+	
+	for _, problem := range allProblems {
+		if problem.OpinionProfileV2 == nil {
+			continue
+		}
+		
+		profile := problem.OpinionProfileV2
+		matchCount := 0
+		totalConditions := 0
+		
+		// 各フィールドをチェック
+		checkField := func(key string, dbValue interface{}, searchValue interface{}) bool {
+			totalConditions++
+			
+			switch v := dbValue.(type) {
+			case int:
+				if searchVal, ok := searchValue.(float64); ok {
+					if v == int(searchVal) {
+						matchCount++
+						return true
+					}
+				}
+			case bool:
+				if searchVal, ok := searchValue.(bool); ok {
+					if v == searchVal {
+						matchCount++
+						return true
+					}
+				}
+			case string:
+				if searchVal, ok := searchValue.(string); ok {
+					if v == searchVal {
+						matchCount++
+						return true
+					}
+				}
+			case []string:
+				// 配列の場合：検索値の配列とDB値の配列を比較
+				if searchArr, ok := searchValue.([]interface{}); ok {
+					// すべての要素が一致するかチェック
+					if len(v) == len(searchArr) {
+						allMatch := true
+						for _, searchItem := range searchArr {
+							if searchStr, ok := searchItem.(string); ok {
+								found := false
+								for _, dbItem := range v {
+									if dbItem == searchStr {
+										found = true
+										break
+									}
+								}
+								if !found {
+									allMatch = false
+									break
+								}
+							}
+						}
+						if allMatch {
+							matchCount++
+							return true
+						}
+					}
+				}
+			}
+			return false
+		}
+		
+		// 各フィールドをチェック
+		if val, exists := filters["problem_text_length"]; exists {
+			checkField("problem_text_length", profile.ProblemTextLength, val)
+		}
+		if val, exists := filters["sub_problem_text_length"]; exists {
+			checkField("sub_problem_text_length", profile.SubProblemTextLength, val)
+		}
+		if val, exists := filters["given_values_count"]; exists {
+			checkField("given_values_count", profile.GivenValuesCount, val)
+		}
+		if val, exists := filters["sub_problem_count"]; exists {
+			checkField("sub_problem_count", profile.SubProblemCount, val)
+		}
+		if val, exists := filters["sub_problem_types"]; exists {
+			checkField("sub_problem_types", profile.SubProblemTypes, val)
+		}
+		if val, exists := filters["solid_composition"]; exists {
+			checkField("solid_composition", profile.SolidComposition, val)
+		}
+		if val, exists := filters["answer_formats"]; exists {
+			checkField("answer_formats", profile.AnswerFormats, val)
+		}
+		if val, exists := filters["answer_units"]; exists {
+			checkField("answer_units", profile.AnswerUnits, val)
+		}
+		if val, exists := filters["uses_auxiliary_points"]; exists {
+			checkField("uses_auxiliary_points", profile.UsesAuxiliaryPoints, val)
+		}
+		if val, exists := filters["setup_units"]; exists {
+			checkField("setup_units", profile.SetupUnits, val)
+		}
+		if val, exists := filters["solution_units"]; exists {
+			checkField("solution_units", profile.SolutionUnits, val)
+		}
+		if val, exists := filters["total_vertices"]; exists {
+			checkField("total_vertices", profile.TotalVertices, val)
+		}
+		if val, exists := filters["has_moving_point"]; exists {
+			checkField("has_moving_point", profile.HasMovingPoint, val)
+		}
+		if val, exists := filters["figure_values_count"]; exists {
+			checkField("figure_values_count", profile.FigureValuesCount, val)
+		}
+		if val, exists := filters["solution_steps"]; exists {
+			checkField("solution_steps", profile.SolutionSteps, val)
+		}
+		if val, exists := filters["has_logical_branching"]; exists {
+			checkField("has_logical_branching", profile.HasLogicalBranching, val)
+		}
+		if val, exists := filters["theorem_count"]; exists {
+			checkField("theorem_count", profile.TheoremCount, val)
+		}
+		if val, exists := filters["requires_multi_unit_integration"]; exists {
+			checkField("requires_multi_unit_integration", profile.RequiresMultiUnitIntegration, val)
+		}
+		if val, exists := filters["has_irrelevant_info"]; exists {
+			checkField("has_irrelevant_info", profile.HasIrrelevantInfo, val)
+		}
+		
+		// マッチング判定
+		if matchType == "exact" {
+			// 完全一致：すべての条件が一致
+			if matchCount == totalConditions && totalConditions > 0 {
+				matchedProblems = append(matchedProblems, problem)
+				fmt.Printf("  ✅ Problem %d: EXACT MATCH (%d/%d conditions)\n", problem.ID, matchCount, totalConditions)
+			} else {
+				fmt.Printf("  ❌ Problem %d: Not exact match (%d/%d conditions)\n", problem.ID, matchCount, totalConditions)
+			}
+		} else {
+			// 部分一致：どれか1つでも一致
+			if matchCount > 0 {
+				matchedProblems = append(matchedProblems, problem)
+				fmt.Printf("  ✅ Problem %d: PARTIAL MATCH (%d/%d conditions)\n", problem.ID, matchCount, totalConditions)
+			} else {
+				fmt.Printf("  ❌ Problem %d: No match (%d/%d conditions)\n", problem.ID, matchCount, totalConditions)
+			}
+		}
+	}
+
+	fmt.Printf("📋 [FILTERED RESULT] %d problems matched (matchType: %s)\n", len(matchedProblems), matchType)
+	
+	// ページネーション適用
+	start := offset
+	end := offset + limit
+	if start > len(matchedProblems) {
+		return []*models.Problem{}, nil
+	}
+	if end > len(matchedProblems) {
+		end = len(matchedProblems)
+	}
+	
+	return matchedProblems[start:end], nil
 }
 
 func (r *MySQLProblemRepository) SearchByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error) {

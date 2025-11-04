@@ -49,11 +49,34 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
   const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('partial');
   
-  // 生成システム用の状態
-  const [generationMode, setGenerationMode] = useState<'single' | 'five-stage'>('single');
+  // 生成システム用の状態（デフォルトをインクリメンタルモデルに変更）
+  const [generationMode, setGenerationMode] = useState<'single' | 'five-stage'>('five-stage');
   
   // opinion.md基準での問題生成モード（Ver.2に移行）
   const [useOpinionCriteria] = useState<boolean>(true);
+  // デフォルト値を定義（検索時の比較用）
+  const defaultOpinionProfileV2 = {
+    problem_text_length: 100,
+    sub_problem_text_length: 50,
+    given_values_count: 3,
+    sub_problem_count: 2,
+    sub_problem_types: ['長さを求める'],
+    solid_composition: '単一の立体',
+    answer_formats: ['整数'],
+    answer_units: ['cm'],
+    uses_auxiliary_points: false,
+    setup_units: ['直方体'],
+    solution_units: ['三平方の定理'],
+    total_vertices: 8,
+    has_moving_point: false,
+    figure_values_count: 3,
+    solution_steps: 3,
+    has_logical_branching: false,
+    theorem_count: 2,
+    requires_multi_unit_integration: false,
+    has_irrelevant_info: false,
+  };
+
   const [opinionProfileV2, setOpinionProfileV2] = useState<{
     problem_text_length: number;
     sub_problem_text_length: number;
@@ -74,27 +97,7 @@ export default function Home() {
     theorem_count: number;
     requires_multi_unit_integration: boolean;
     has_irrelevant_info: boolean;
-  }>({
-    problem_text_length: 100,
-    sub_problem_text_length: 50,
-    given_values_count: 3,
-    sub_problem_count: 2,
-    sub_problem_types: ['長さを求める'],
-    solid_composition: '単一の立体',
-    answer_formats: ['整数'],
-    answer_units: ['cm'],
-    uses_auxiliary_points: false,
-    setup_units: ['直方体'],
-    solution_units: ['三平方の定理'],
-    total_vertices: 8,
-    has_moving_point: false,
-    figure_values_count: 3,
-    solution_steps: 3,
-    has_logical_branching: false,
-    theorem_count: 2,
-    requires_multi_unit_integration: false,
-    has_irrelevant_info: false,
-  });
+  }>(defaultOpinionProfileV2);
   
   // 5段階生成システム専用の状態（新しいプロセスに対応）
   const [fiveStageResults, setFiveStageResults] = useState<{
@@ -1061,6 +1064,78 @@ export default function Home() {
     return opinionProfileV2;
   };
 
+  // 検索用：デフォルト値から変更されたフィールドのみを抽出
+  const getModifiedFilters = () => {
+    const modifiedFilters: any = {};
+    
+    // 数値フィールドの比較
+    if (opinionProfileV2.problem_text_length !== defaultOpinionProfileV2.problem_text_length) {
+      modifiedFilters.problem_text_length = opinionProfileV2.problem_text_length;
+    }
+    if (opinionProfileV2.sub_problem_text_length !== defaultOpinionProfileV2.sub_problem_text_length) {
+      modifiedFilters.sub_problem_text_length = opinionProfileV2.sub_problem_text_length;
+    }
+    if (opinionProfileV2.given_values_count !== defaultOpinionProfileV2.given_values_count) {
+      modifiedFilters.given_values_count = opinionProfileV2.given_values_count;
+    }
+    if (opinionProfileV2.sub_problem_count !== defaultOpinionProfileV2.sub_problem_count) {
+      modifiedFilters.sub_problem_count = opinionProfileV2.sub_problem_count;
+    }
+    if (opinionProfileV2.total_vertices !== defaultOpinionProfileV2.total_vertices) {
+      modifiedFilters.total_vertices = opinionProfileV2.total_vertices;
+    }
+    if (opinionProfileV2.figure_values_count !== defaultOpinionProfileV2.figure_values_count) {
+      modifiedFilters.figure_values_count = opinionProfileV2.figure_values_count;
+    }
+    if (opinionProfileV2.solution_steps !== defaultOpinionProfileV2.solution_steps) {
+      modifiedFilters.solution_steps = opinionProfileV2.solution_steps;
+    }
+    if (opinionProfileV2.theorem_count !== defaultOpinionProfileV2.theorem_count) {
+      modifiedFilters.theorem_count = opinionProfileV2.theorem_count;
+    }
+    
+    // ブール値フィールドの比較
+    if (opinionProfileV2.uses_auxiliary_points !== defaultOpinionProfileV2.uses_auxiliary_points) {
+      modifiedFilters.uses_auxiliary_points = opinionProfileV2.uses_auxiliary_points;
+    }
+    if (opinionProfileV2.has_moving_point !== defaultOpinionProfileV2.has_moving_point) {
+      modifiedFilters.has_moving_point = opinionProfileV2.has_moving_point;
+    }
+    if (opinionProfileV2.has_logical_branching !== defaultOpinionProfileV2.has_logical_branching) {
+      modifiedFilters.has_logical_branching = opinionProfileV2.has_logical_branching;
+    }
+    if (opinionProfileV2.requires_multi_unit_integration !== defaultOpinionProfileV2.requires_multi_unit_integration) {
+      modifiedFilters.requires_multi_unit_integration = opinionProfileV2.requires_multi_unit_integration;
+    }
+    if (opinionProfileV2.has_irrelevant_info !== defaultOpinionProfileV2.has_irrelevant_info) {
+      modifiedFilters.has_irrelevant_info = opinionProfileV2.has_irrelevant_info;
+    }
+    
+    // 文字列フィールドの比較
+    if (opinionProfileV2.solid_composition !== defaultOpinionProfileV2.solid_composition) {
+      modifiedFilters.solid_composition = opinionProfileV2.solid_composition;
+    }
+    
+    // 配列フィールドの比較（JSON文字列化して比較）
+    if (JSON.stringify(opinionProfileV2.sub_problem_types.sort()) !== JSON.stringify(defaultOpinionProfileV2.sub_problem_types.sort())) {
+      modifiedFilters.sub_problem_types = opinionProfileV2.sub_problem_types;
+    }
+    if (JSON.stringify(opinionProfileV2.answer_formats.sort()) !== JSON.stringify(defaultOpinionProfileV2.answer_formats.sort())) {
+      modifiedFilters.answer_formats = opinionProfileV2.answer_formats;
+    }
+    if (JSON.stringify(opinionProfileV2.answer_units.sort()) !== JSON.stringify(defaultOpinionProfileV2.answer_units.sort())) {
+      modifiedFilters.answer_units = opinionProfileV2.answer_units;
+    }
+    if (JSON.stringify(opinionProfileV2.setup_units.sort()) !== JSON.stringify(defaultOpinionProfileV2.setup_units.sort())) {
+      modifiedFilters.setup_units = opinionProfileV2.setup_units;
+    }
+    if (JSON.stringify(opinionProfileV2.solution_units.sort()) !== JSON.stringify(defaultOpinionProfileV2.solution_units.sort())) {
+      modifiedFilters.solution_units = opinionProfileV2.solution_units;
+    }
+    
+    return modifiedFilters;
+  };
+
   // キーワード検索する関数
   const searchProblems = async () => {
     if (!searchKeyword.trim()) {
@@ -1101,20 +1176,13 @@ export default function Home() {
 
   // パラメータ検索する関数（OpinionProfileV2基準対応）
   const searchProblemsByFilters = async () => {
-    // OpinionProfileV2基準での検索条件作成
-    const opinionFilters: Record<string, string[]> = {};
-    
-    // OpinionProfileV2から検索用フィルターを作成
-    // 注: 検索機能はopinion_ver2の指標に対応していないため、
-    // 現時点では基本的な検索のみ実行
-    console.log('🔍 [Frontend] OpinionProfileV2検索（未実装）');
+    console.log('🔍 [Frontend] opinionProfileV2:', opinionProfileV2);
 
     // 検索条件をチェック
     const hasSubject = activeSubject !== '';
-    const hasFilters = Object.keys(opinionFilters).length > 0;
 
-    if (!hasSubject && !hasFilters) {
-      alert('科目を選択するか、OpinionProfile条件を設定してください');
+    if (!hasSubject) {
+      alert('科目を選択してください');
       return;
     }
 
@@ -1124,7 +1192,7 @@ export default function Home() {
 
       const requestBody = {
         subject: activeSubject,
-        filters: opinionFilters,
+        filters: opinionProfileV2, // 現在の設定をそのまま送信
         matchType: searchMatchType,
       };
 
@@ -1164,20 +1232,18 @@ export default function Home() {
 
   // キーワード + 条件の組み合わせ検索する関数（OpinionProfileV2基準対応）
   const searchProblemsByKeywordAndFilters = async () => {
-    // OpinionProfileV2基準での検索条件作成
-    const opinionFilters: Record<string, string[]> = {};
-    
-    // 注: 検索機能はopinion_ver2の指標に対応していないため、
-    // 現時点ではキーワード検索のみ実行
-    console.log('🔍 [Frontend] OpinionProfileV2組み合わせ検索（未実装）');
+    // 変更されたフィールドのみを抽出
+    const modifiedFilters = getModifiedFilters();
+    console.log('🔍 [Frontend] opinionProfileV2:', opinionProfileV2);
+    console.log('🔍 [Frontend] modifiedFilters:', modifiedFilters);
 
     // 検索条件をチェック
     const hasKeyword = searchKeyword.trim() !== '';
     const hasSubject = activeSubject !== '';
-    const hasFilters = Object.keys(opinionFilters).length > 0;
+    const hasModifiedFilters = Object.keys(modifiedFilters).length > 0;
 
-    if (!hasKeyword && !hasSubject && !hasFilters) {
-      alert('キーワードを入力するか、科目・OpinionProfile条件を設定してください');
+    if (!hasKeyword && !hasSubject) {
+      alert('キーワードを入力するか、科目を選択してください');
       return;
     }
 
@@ -1185,10 +1251,13 @@ export default function Home() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
+      // 完全一致の場合は全フィールド、部分一致の場合は変更されたフィールドのみ
+      const filtersToSend = searchMatchType === 'exact' ? opinionProfileV2 : modifiedFilters;
+
       const requestBody = {
         keyword: searchKeyword.trim() || undefined,
         subject: activeSubject || undefined,
-        filters: Object.keys(opinionFilters).length > 0 ? opinionFilters : undefined,
+        filters: hasModifiedFilters || searchMatchType === 'exact' ? filtersToSend : undefined,
         matchType: searchMatchType,
       };
 
