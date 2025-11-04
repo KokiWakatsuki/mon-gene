@@ -19,9 +19,15 @@ type claudeClient struct {
 }
 
 type ClaudeRequest struct {
-	Model     string    `json:"model"`
-	MaxTokens int       `json:"max_tokens"`
-	Messages  []Message `json:"messages"`
+	Model     string          `json:"model"`
+	MaxTokens int             `json:"max_tokens"`
+	Messages  []Message       `json:"messages"`
+	Thinking  *ThinkingConfig `json:"thinking,omitempty"`
+}
+
+type ThinkingConfig struct {
+	Type         string `json:"type"`
+	BudgetTokens int    `json:"budget_tokens"`
 }
 
 type Message struct {
@@ -90,16 +96,26 @@ func (c *claudeClient) GenerateContent(ctx context.Context, prompt string) (stri
 
 	fmt.Printf("🤖 Using Claude API with model: %s\n", c.model)
 
+	// 推論トークンの設定
+	thinkingBudget := 1000
+	maxTokens := 10000 + thinkingBudget // 推論トークン + 10000
+
 	request := ClaudeRequest{
 		Model:     c.model,
-		MaxTokens: 5000,
+		MaxTokens: maxTokens,
 		Messages: []Message{
 			{
 				Role:    "user",
 				Content: prompt,
 			},
 		},
+		Thinking: &ThinkingConfig{
+			Type:         "enabled",
+			BudgetTokens: thinkingBudget,
+		},
 	}
+
+	fmt.Printf("🧠 Using thinking tokens: %d, max tokens: %d\n", thinkingBudget, maxTokens)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -224,16 +240,26 @@ func (c *claudeClient) GenerateMultimodalContent(ctx context.Context, prompt str
 		}
 	}
 
+	// 推論トークンの設定
+	thinkingBudget := 10000
+	maxTokens := 10000 + thinkingBudget // 推論トークン + 10000
+
 	request := ClaudeRequest{
 		Model:     c.model,
-		MaxTokens: 5000,
+		MaxTokens: maxTokens,
 		Messages: []Message{
 			{
 				Role:    "user",
 				Content: contentArray,
 			},
 		},
+		Thinking: &ThinkingConfig{
+			Type:         "enabled",
+			BudgetTokens: thinkingBudget,
+		},
 	}
+
+	fmt.Printf("🧠 Using thinking tokens: %d, max tokens: %d (multimodal)\n", thinkingBudget, maxTokens)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -337,11 +363,21 @@ func (c *claudeClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 		})
 	}
 
+	// 推論トークンの設定
+	thinkingBudget := 10000
+	maxTokens := 10000 + thinkingBudget // 推論トークン + 10000
+
 	request := ClaudeRequest{
 		Model:     c.model,
-		MaxTokens: 5000,
+		MaxTokens: maxTokens,
 		Messages:  claudeMessages,
+		Thinking: &ThinkingConfig{
+			Type:         "enabled",
+			BudgetTokens: thinkingBudget,
+		},
 	}
+
+	fmt.Printf("🧠 Using thinking tokens: %d, max tokens: %d (with history)\n", thinkingBudget, maxTokens)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {

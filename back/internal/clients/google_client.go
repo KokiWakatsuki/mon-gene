@@ -31,6 +31,11 @@ type GooglePart struct {
 
 type GoogleGenerationConfig struct {
 	MaxOutputTokens int `json:"maxOutputTokens"`
+	ThinkingConfig *GoogleThinkingConfig `json:"thinkingConfig,omitempty"`
+}
+
+type GoogleThinkingConfig struct {
+	ThinkingBudget *int32 `json:"thinkingBudget,omitempty"`
 }
 
 type GoogleResponse struct {
@@ -89,6 +94,10 @@ func (c *googleClient) GenerateContent(ctx context.Context, prompt string) (stri
 
 	fmt.Printf("🤖 Using Google API with model: %s\n", c.model)
 
+	// 推論トークンの設定
+	thinkingBudget := int32(1000)
+	maxOutputTokens := 10000 + int(thinkingBudget) // 推論トークン + 10000
+
 	request := GoogleRequest{
 		Contents: []GoogleContent{
 			{
@@ -100,9 +109,14 @@ func (c *googleClient) GenerateContent(ctx context.Context, prompt string) (stri
 			},
 		},
 		GenerationConfig: GoogleGenerationConfig{
-			MaxOutputTokens: 30000,
+			MaxOutputTokens: maxOutputTokens,
+			ThinkingConfig: &GoogleThinkingConfig{
+				ThinkingBudget: &thinkingBudget,
+			},
 		},
 	}
+
+	fmt.Printf("🧠 Using thinking tokens: %d, max output tokens: %d\n", thinkingBudget, maxOutputTokens)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -250,6 +264,10 @@ func (c *googleClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 		conversationText.WriteString(msg.Content)
 	}
 
+	// 推論トークンの設定
+	thinkingBudget := int32(10000)
+	maxOutputTokens := 10000 + int(thinkingBudget) // 推論トークン + 10000
+
 	request := GoogleRequest{
 		Contents: []GoogleContent{
 			{
@@ -261,9 +279,14 @@ func (c *googleClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 			},
 		},
 		GenerationConfig: GoogleGenerationConfig{
-			MaxOutputTokens: 30000,
+			MaxOutputTokens: maxOutputTokens,
+			ThinkingConfig: &GoogleThinkingConfig{
+				ThinkingBudget: &thinkingBudget,
+			},
 		},
 	}
+
+	fmt.Printf("🧠 Using thinking tokens: %d, max output tokens: %d (with history)\n", thinkingBudget, maxOutputTokens)
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
