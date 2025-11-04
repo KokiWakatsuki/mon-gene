@@ -70,9 +70,10 @@ func main() {
 	problemHandler := handlers.NewProblemHandler(problemService, authService)
 	healthHandler := handlers.NewHealthHandler()
 	chatHandler := handlers.NewChatHandler(authService)
+	sseHandler := handlers.NewSSEHandler(problemService, authService)
 
 	// ルーターの設定
-	router := routes.NewRouter(authHandler, problemHandler, healthHandler, chatHandler)
+	router := routes.NewRouter(authHandler, problemHandler, healthHandler, chatHandler, sseHandler)
 
 	// サーバーの起動
 	port := os.Getenv("PORT")
@@ -87,6 +88,8 @@ func main() {
 	log.Printf("  - POST /api/forgot-password")
 	log.Printf("  - POST /api/logout")
 	log.Printf("  - POST /api/generate-problem")
+	log.Printf("  - POST /api/generate-problem-five-stage")
+	log.Printf("  - POST /api/generate-problem-five-stage-sse (SSE)")
 	log.Printf("  - POST /api/generate-pdf")
 	log.Printf("  - GET  /api/problems/search?keyword=<keyword>")
 	log.Printf("  - GET  /api/problems/history")

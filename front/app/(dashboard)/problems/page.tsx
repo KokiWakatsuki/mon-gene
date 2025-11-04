@@ -442,22 +442,115 @@ export default function Home() {
   const handlePrint = (id: string) => {
     const problem = problems.find(p => p.id === id);
     if (problem) {
+      // LaTeX数式レンダリング関数（ProblemPreviewModalと同じ）
+      const renderLatexToHtml = (latex: string): string => {
+        return latex
+          .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<span class="math-fraction-block"><span class="numerator">$1</span><span class="fraction-line-block"></span><span class="denominator">$2</span></span>')
+          .replace(/\\sqrt\{([^}]+)\}/g, '<span class="math-symbol">√<span class="sqrt-content">$1</span></span>')
+          .replace(/\\vec\{([^}]+)\}/g, '<span class="math-vector">$1→</span>')
+          .replace(/\\overrightarrow\{([^}]+)\}/g, '<span class="math-vector">$1→</span>')
+          .replace(/\\times/g, '×')
+          .replace(/\\cdot/g, '·')
+          .replace(/\\pi/g, 'π')
+          .replace(/\\infty/g, '∞')
+          .replace(/\\pm/g, '±')
+          .replace(/\\leq/g, '≤')
+          .replace(/\\geq/g, '≥')
+          .replace(/\\neq/g, '≠')
+          .replace(/\\approx/g, '≈')
+          .replace(/\\rightarrow/g, '→')
+          .replace(/\\leftarrow/g, '←');
+      };
+
+      const renderAdvancedMathSymbols = (text: string): string => {
+        if (!text) return '';
+        
+        const mathPlaceholders: string[] = [];
+        let placeholderIndex = 0;
+        
+        let processedText = text
+          .replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+            const placeholder = `__MATH_BLOCK_${placeholderIndex}__`;
+            mathPlaceholders[placeholderIndex] = `<div class="math-block">${renderLatexToHtml(formula.trim())}</div>`;
+            placeholderIndex++;
+            return placeholder;
+          })
+          .replace(/\$([^$\n]+)\$/g, (match, formula) => {
+            const placeholder = `__MATH_INLINE_${placeholderIndex}__`;
+            mathPlaceholders[placeholderIndex] = `<span class="math-inline">${renderLatexToHtml(formula.trim())}</span>`;
+            placeholderIndex++;
+            return placeholder;
+          });
+        
+        processedText = processedText
+          .replace(/\\overrightarrow\{([^}]+)\}/g, '<span class="math-vector">$1→</span>')
+          .replace(/([A-Z]{1,3})⃗/g, '<span class="math-vector">$1→</span>')
+          .replace(/√(\d+)/g, '<span class="math-symbol">√$1</span>')
+          .replace(/√\(([^)]+)\)/g, '<span class="math-symbol">√($1)</span>')
+          .replace(/√([a-zA-Z]+)/g, '<span class="math-symbol">√$1</span>')
+          .replace(/(\w+)²/g, '$1<sup>2</sup>')
+          .replace(/(\w+)³/g, '$1<sup>3</sup>')
+          .replace(/(\w+)⁴/g, '$1<sup>4</sup>')
+          .replace(/(\w+)⁵/g, '$1<sup>5</sup>')
+          .replace(/∠([A-Z]+)/g, '<span class="math-symbol">∠$1</span>')
+          .replace(/(\d+)\/(\d+)/g, '<span class="math-fraction"><sup>$1</sup>/<sub>$2</sub></span>')
+          .replace(/×/g, '<span class="math-symbol">×</span>')
+          .replace(/÷/g, '<span class="math-symbol">÷</span>')
+          .replace(/°/g, '<span class="math-symbol">°</span>')
+          .replace(/π/g, '<span class="math-symbol">π</span>')
+          .replace(/∞/g, '<span class="math-symbol">∞</span>')
+          .replace(/±/g, '<span class="math-symbol">±</span>')
+          .replace(/≤/g, '<span class="math-symbol">≤</span>')
+          .replace(/≥/g, '<span class="math-symbol">≥</span>')
+          .replace(/≠/g, '<span class="math-symbol">≠</span>')
+          .replace(/≈/g, '<span class="math-symbol">≈</span>')
+          .replace(/≅/g, '<span class="math-symbol">≅</span>')
+          .replace(/∽/g, '<span class="math-symbol">∽</span>')
+          .replace(/→/g, '<span class="math-symbol">→</span>')
+          .replace(/←/g, '<span class="math-symbol">←</span>');
+        
+        mathPlaceholders.forEach((replacement, index) => {
+          processedText = processedText.replace(`__MATH_BLOCK_${index}__`, replacement);
+          processedText = processedText.replace(`__MATH_INLINE_${index}__`, replacement);
+        });
+        
+        return processedText;
+      };
+
+      const renderBasicMarkdown = (text: string): string => {
+        return text
+          .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mb-2 text-gray-700">$1</h3>')
+          .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mb-3 text-gray-800">$1</h2>')
+          .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mb-4 text-gray-900">$1</h1>')
+          .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
+          .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">$1</code>')
+          .replace(/\n/g, '<br />');
+      };
+
+      const processContent = (content: string): string => {
+        return renderBasicMarkdown(renderAdvancedMathSymbols(content));
+      };
+
       // 印刷用の新しいウィンドウを開く
       const printWindow = window.open('', '_blank');
       if (printWindow) {
-        const imageHtml = problem.imageBase64 
+        const processedContent = processContent(problem.content || '');
+        const processedSolution = problem.solution ? processContent(problem.solution) : '';
+        
+        const imageHtml = problem.imageBase64
           ? `<div style="text-align: center; margin: 20px 0;">
-               <img src="data:image/png;base64,${problem.imageBase64}" 
-                    style="max-width: 100%; height: auto; border: 1px solid #ddd;" 
+               <img src="data:image/png;base64,${problem.imageBase64}"
+                    style="max-width: 100%; height: auto; border: 1px solid #ddd;"
                     alt="問題図形" />
              </div>`
           : '';
         
         // 解答・解説がある場合は別ページに追加
-        const solutionHtml = problem.solution 
+        const solutionHtml = processedSolution
           ? `<div style="page-break-before: always;">
                <h1>解答・解説</h1>
-               <div class="content">${problem.solution}</div>
+               <div class="content">${processedSolution}</div>
              </div>`
           : '';
         
@@ -468,7 +561,7 @@ export default function Home() {
             <title>${problem.title}</title>
             <style>
               body {
-                font-family: Arial, sans-serif;
+                font-family: 'Times New Roman', Arial, sans-serif;
                 margin: 20px;
                 line-height: 1.6;
               }
@@ -479,9 +572,94 @@ export default function Home() {
                 padding-bottom: 10px;
               }
               .content {
-                white-space: pre-wrap;
                 font-size: 14px;
                 margin-bottom: 20px;
+              }
+              .math-symbol {
+                font-family: 'Times New Roman', serif;
+                font-weight: normal;
+                color: #1f2937;
+                font-size: 1.1em;
+              }
+              .math-vector {
+                font-family: 'Times New Roman', serif;
+                font-weight: bold;
+                color: #1f2937;
+                font-size: 1.05em;
+              }
+              .math-fraction {
+                display: inline-block;
+                vertical-align: middle;
+                font-family: 'Times New Roman', serif;
+                margin: 0 2px;
+              }
+              .fraction-line {
+                font-size: 1.2em;
+                color: #374151;
+              }
+              .math-fraction-block {
+                display: inline-flex;
+                flex-direction: column;
+                vertical-align: middle;
+                text-align: center;
+                font-family: 'Times New Roman', serif;
+                margin: 0 4px;
+                align-items: center;
+              }
+              .numerator {
+                display: block;
+                font-size: 0.9em;
+                line-height: 1;
+                padding: 0 2px;
+              }
+              .fraction-line-block {
+                display: block;
+                border-top: 1.5px solid #374151;
+                margin: 1px 0;
+                width: 100%;
+                min-width: 20px;
+                height: 0;
+                line-height: 0;
+              }
+              .fraction-line-block::before {
+                content: '';
+                display: block;
+              }
+              .denominator {
+                display: block;
+                font-size: 0.9em;
+                line-height: 1;
+                padding: 0 2px;
+              }
+              .sqrt-content {
+                border-top: 1px solid #374151;
+                padding: 0 2px;
+              }
+              .math-block {
+                display: block;
+                text-align: center;
+                margin: 12px 0;
+                padding: 8px;
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 4px;
+                font-family: 'Times New Roman', serif;
+                font-size: 1.1em;
+              }
+              .math-inline {
+                font-family: 'Times New Roman', serif;
+                font-size: 1.05em;
+                color: #1f2937;
+              }
+              sup {
+                font-size: 0.75em;
+                vertical-align: super;
+                line-height: 0;
+              }
+              sub {
+                font-size: 0.75em;
+                vertical-align: sub;
+                line-height: 0;
               }
               .image-container {
                 text-align: center;
@@ -501,7 +679,7 @@ export default function Home() {
           </head>
           <body>
             <h1>${problem.title}</h1>
-            <div class="content">${problem.content || ''}</div>
+            <div class="content">${processedContent}</div>
             ${imageHtml}
             ${solutionHtml}
           </body>
@@ -585,7 +763,7 @@ export default function Home() {
   };
 
 
-  // 5段階生成システムの関数（リアルタイム進捗付き）
+  // 5段階生成システムの関数（SSE使用）
   const handleGenerateFiveStage = async () => {
     // 上限チェック
     if (isGenerationLimitReached()) {
@@ -601,7 +779,7 @@ export default function Home() {
     
     setIsLoading(true);
     setFiveStageResults({});
-    setCurrentStage(0);
+    setCurrentStage(1);
     setStageProgress(0);
     
     try {
@@ -611,221 +789,98 @@ export default function Home() {
         throw new Error('認証トークンが見つかりません。再度ログインしてください。');
       }
 
-      console.log('🚀 [FiveStage] 5段階生成プロセス開始（リアルタイム進捗付き）');
+      console.log('🚀 [FiveStage] 5段階生成プロセス開始（SSE使用）');
       
-      // Stage 1: 解答プロセス生成
-      setCurrentStage(1);
-      setStageProgress(10);
-      console.log('🚀 [Stage1] 解答プロセス生成開始');
-      
-      const stage1Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage1`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          prompt: prompt,
-          subject: activeSubject,
-          filters: selectedFilters,
-          opinion_profile_v2: createOpinionProfileFromFilters() // Ver.2を追加
-        })
+      // SSEを使用してリアルタイム進捗を取得
+      const requestBody = JSON.stringify({
+        prompt: prompt,
+        subject: activeSubject,
+        filters: selectedFilters,
+        opinion_profile_v2: createOpinionProfileFromFilters()
       });
-      
-      if (!stage1Response.ok) {
-        throw new Error(`Stage1エラー: ${stage1Response.status} ${stage1Response.statusText}`);
-      }
-      
-      const stage1Data = await stage1Response.json();
-      if (!stage1Data.success) {
-        throw new Error(stage1Data.error || 'Stage1に失敗しました');
-      }
-      
-      const stage1Result = {
-        solutionProcess: stage1Data.sub_problems_and_process || '', // 新しいプロセスでは解答プロセスを生成
-        log: stage1Data.log || ''
-      };
-      
-      setFiveStageResults(prev => ({ ...prev, stage1: stage1Result }));
-      setStageProgress(20);
-      
-      console.log('✅ [Stage1] 完了');
-      
-      // 新しいプロセス：Stage 2: 数値計算プログラム生成・実行
-      setCurrentStage(2);
-      setStageProgress(30);
-      console.log('🚀 [Stage2] 数値計算プログラム生成・実行開始');
-      
-      const stage2Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage2`, {
+
+      // fetchでSSE接続（EventSourceはPOSTをサポートしていないため）
+      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-problem-five-stage-sse`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          sub_problems_and_process: stage1Result.solutionProcess
-        })
+        body: requestBody
       });
-      
-      if (!stage2Response.ok) {
-        throw new Error(`Stage2エラー: ${stage2Response.status} ${stage2Response.statusText}`);
+
+      if (!response.ok) {
+        throw new Error(`SSE接続エラー: ${response.status} ${response.statusText}`);
       }
-      
-      const stage2Data = await stage2Response.json();
-      if (!stage2Data.success) {
-        throw new Error(stage2Data.error || 'Stage2に失敗しました');
-      }
-      
-      const stage2Result = {
-        completeProblem: stage2Data.complete_problem || '',
-        log: stage2Data.log || ''
-      };
-      
-      setFiveStageResults(prev => ({ ...prev, stage2: stage2Result }));
-      setStageProgress(40);
-      
-      console.log('✅ [Stage2] 完了');
-      
-      // 新しいプロセス：Stage 3: 数値計算プログラム生成・実行
-      setCurrentStage(3);
-      setStageProgress(50);
-      console.log('🚀 [Stage3] 数値計算プログラム生成・実行開始');
-      
-      const stage3Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage3`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          sub_problems_and_process: stage1Result.solutionProcess,
-          complete_problem: stage2Result.completeProblem
-        })
-      });
-      
-      if (!stage3Response.ok) {
-        throw new Error(`Stage3エラー: ${stage3Response.status} ${stage3Response.statusText}`);
-      }
-      
-      const stage3Data = await stage3Response.json();
-      if (!stage3Data.success) {
-        throw new Error(stage3Data.error || 'Stage3に失敗しました');
-      }
-      
-      const stage3Result = {
-        calculationProgram: stage3Data.calculation_program || '',
-        calculationResults: stage3Data.calculation_results || '',
-        log: stage3Data.log || ''
-      };
-      
-      setFiveStageResults(prev => ({ ...prev, stage3: stage3Result }));
-      setStageProgress(60);
-      
-      console.log('✅ [Stage3] 完了');
-      
-      // 新しいプロセス：Stage 4: 完全な解答・解説生成
-      setCurrentStage(4);
-      setStageProgress(70);
-      console.log('🚀 [Stage4] 完全な解答・解説生成開始');
-      
-      const stage4Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage4`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          sub_problems_and_process: stage1Result.solutionProcess,
-          complete_problem: stage2Result.completeProblem,
-          calculation_results: stage3Result.calculationResults
-        })
-      });
-      
-      if (!stage4Response.ok) {
-        throw new Error(`Stage4エラー: ${stage4Response.status} ${stage4Response.statusText}`);
-      }
-      
-      const stage4Data = await stage4Response.json();
-      if (!stage4Data.success) {
-        throw new Error(stage4Data.error || 'Stage4に失敗しました');
-      }
-      
-      const stage4Result = {
-        finalExplanation: stage4Data.final_explanation || '',
-        log: stage4Data.log || ''
-      };
-      
-      setFiveStageResults(prev => ({ ...prev, stage4: stage4Result }));
-      setStageProgress(80);
-      
-      console.log('✅ [Stage4] 完了');
-      
-      // 新しいプロセス：Stage 5: 図形描画プログラム生成
-      setCurrentStage(5);
-      setStageProgress(90);
-      console.log('🚀 [Stage5] 図形描画プログラム生成開始');
-      
-      const stage5Response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-stage5`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          sub_problems_and_process: stage1Result.solutionProcess,
-          complete_problem: stage2Result.completeProblem,
-          calculation_results: stage3Result.calculationResults,
-          final_explanation: stage4Result.finalExplanation,
-          // 5段階生成完了後のDB保存用データを追加
-          five_stage_data: {
-            prompt: prompt,
-            subject: activeSubject,
-            opinion_profile_v2: createOpinionProfileFromFilters(), // Ver.2のみ使用
-            final_explanation: stage4Result.finalExplanation // Stage4の解答を追加
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalResult: any = null;
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const event = JSON.parse(data);
+              console.log('📨 [SSE] Event:', event);
+
+              if (event.type === 'stage_complete') {
+                // ステージ完了：次のステージの開始位置に強制移行
+                console.log(`✅ [SSE] Stage ${event.stage} 完了`);
+                setCurrentStage(event.stage + 1);
+              } else if (event.type === 'stage_start') {
+                console.log(`🚀 [SSE] Stage ${event.stage} 開始`);
+                setCurrentStage(event.stage);
+              } else if (event.type === 'error') {
+                console.error('❌ [SSE] Error:', event.error);
+                throw new Error(event.error);
+              } else if (event.type === 'complete') {
+                console.log('✅ [SSE] 完了');
+                finalResult = JSON.parse(event.message);
+                setStageProgress(99);
+                setCurrentStage(5);
+              }
+            } catch (e) {
+              console.error('❌ [SSE] Parse error:', e);
+            }
           }
-        })
-      });
-      
-      if (!stage5Response.ok) {
-        throw new Error(`Stage5エラー: ${stage5Response.status} ${stage5Response.statusText}`);
+        }
       }
-      
-      const stage5Data = await stage5Response.json();
-      if (!stage5Data.success) {
-        throw new Error(stage5Data.error || 'Stage5に失敗しました');
+
+      if (!finalResult) {
+        throw new Error('5段階生成の結果を取得できませんでした');
       }
-      
-      const stage5Result = {
-        geometryCode: stage5Data.geometry_code || '',
-        imageBase64: stage5Data.image_base64 || '',
-        log: stage5Data.log || ''
-      };
-      
-      setFiveStageResults(prev => ({ ...prev, stage5: stage5Result }));
-      setStageProgress(100);
-      
-      console.log('✅ [Stage5] 完了');
-      
+
+      console.log('📦 [FiveStage] Final result:', finalResult);
+
       // 結果を問題リストに追加
-      const problemTitle = `5段階生成問題 ${problems.length + 1}`;
+      const problemTitle = `問題 ${problems.length + 1}`;
       const newProblemId = String(problems.length + 1);
-      const finalSolution = stage4Result.finalExplanation;
-      
+
       const newProblem = {
         id: newProblemId,
         title: problemTitle,
-        content: stage2Result.completeProblem, // 新しいプロセスでは問題文はStage2で生成
-        solution: finalSolution,
-        imageBase64: stage5Result.imageBase64 || undefined, // 新しいプロセスでは図形はStage5で生成
+        content: finalResult.complete_problem || '',
+        solution: finalResult.final_explanation || '',
+        imageBase64: finalResult.image_base64 || undefined,
       };
-      
+
       setProblems(prev => [...prev, newProblem]);
-      
+
       // ユーザー情報を更新
       await fetchUserInfo();
-      
+
       setIsLoading(false);
-      
+
       // プレビューモーダルを表示
       setPreviewModal({
         isOpen: true,
@@ -833,9 +888,9 @@ export default function Home() {
         problemTitle: problemTitle,
         problemContent: newProblem.content,
         imageBase64: newProblem.imageBase64,
-        solutionText: finalSolution,
+        solutionText: newProblem.solution,
       });
-      
+
       console.log('✅ [FiveStage] 5段階生成プロセス完全完了');
       
     } catch (error) {
@@ -1488,57 +1543,29 @@ export default function Home() {
             <div className="text-xs text-mongene-muted">
               {generationMode === 'single'
                 ? '問題文と解答を1回のAPI呼び出しで生成します\n※計算はLLMが行います'
-                : '5段階に分けて生成します：①解答プロセス→②数値計算→③完全解答→④問題文→⑤図形\n※計算はプログラムで行います'
+                : '5段階に分けて生成します：①小問構成→②数値計算→③図形描画→④問題文→⑤解答解説\n※計算はプログラムで行います'
               }
             </div>
           </div>
 
 
-          {/* 5段階生成の場合の詳細UI */}
+          {/* 5段階生成の場合の説明 */}
           {generationMode === 'five-stage' && (
             <div className="border-t border-white/20 pt-4">
               <h4 className="font-bold text-mongene-ink mb-3">🔥 5段階生成プロセス（最高精度）</h4>
-              
-              {/* 進捗バー */}
-              <div className="mb-4 p-3 bg-white/5 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-mongene-ink">進捗: Stage {currentStage}/5</span>
-                  <span className="text-sm text-mongene-muted">{stageProgress.toFixed(0)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${stageProgress}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              {/* 各段階の状態表示 */}
-              <div className="mb-4 p-3 bg-white/5 rounded-lg">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-3">
-                  <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage1 ? 'text-green-600' : currentStage === 1 ? 'text-blue-500' : 'text-mongene-muted'}`}>
-                    <span>{fiveStageResults.stage1 ? '✅' : currentStage === 1 ? '⏳' : '⏸️'}</span>
-                    <span>Stage1: 解答プロセス</span>
-                  </div>
-                  <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage2 ? 'text-green-600' : currentStage === 2 ? 'text-blue-500' : 'text-mongene-muted'}`}>
-                    <span>{fiveStageResults.stage2 ? '✅' : currentStage === 2 ? '⏳' : '⏸️'}</span>
-                    <span>Stage2: 問題文</span>
-                  </div>
-                  <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage3 ? 'text-green-600' : currentStage === 3 ? 'text-blue-500' : 'text-mongene-muted'}`}>
-                    <span>{fiveStageResults.stage3 ? '✅' : currentStage === 3 ? '⏳' : '⏸️'}</span>
-                    <span>Stage3: 数値計算</span>
-                  </div>
-                  <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage4 ? 'text-green-600' : currentStage === 4 ? 'text-blue-500' : 'text-mongene-muted'}`}>
-                    <span>{fiveStageResults.stage4 ? '✅' : currentStage === 4 ? '⏳' : '⏸️'}</span>
-                    <span>Stage4: 完全解答</span>
-                  </div>
-                  <div className={`flex items-center gap-1 text-xs ${fiveStageResults.stage5 ? 'text-green-600' : currentStage === 5 ? 'text-blue-500' : 'text-mongene-muted'}`}>
-                    <span>{fiveStageResults.stage5 ? '✅' : currentStage === 5 ? '⏳' : '⏸️'}</span>
-                    <span>Stage5: 図形</span>
-                  </div>
-                </div>
-                
-              </div>
+              <p className="text-sm text-mongene-muted mb-3">
+                問題生成を5つのステージに分けて実行します：
+              </p>
+              <ol className="text-sm text-mongene-muted space-y-1 ml-4">
+                <li>1️⃣ 小問構成と解答プロセスの設計</li>
+                <li>2️⃣ パラメータ設定と動的検証（数値計算）</li>
+                <li>3️⃣ 問題文用の図形描画</li>
+                <li>4️⃣ 完全な問題文の生成</li>
+                <li>5️⃣ 完全な解答・解説の生成</li>
+              </ol>
+              <p className="text-xs text-mongene-muted mt-3">
+                ※進捗はローディング画面で確認できます
+              </p>
             </div>
           )}
         </div>
@@ -1626,14 +1653,16 @@ export default function Home() {
         isOpen={isLoading}
         message={
           generationMode === 'five-stage'
-            ? currentStage === 1 ? '📝 AIが解答プロセスを生成中...' :
-              currentStage === 2 ? '📚 AIが問題文を生成中...' :
-              currentStage === 3 ? '🧮 数値計算プログラムを実行中...' :
-              currentStage === 4 ? '✨ AIが完全な解答と解説を生成中...' :
-              currentStage === 5 ? '🖼️ AIが図形描画プログラムを生成中...' :
-              'AIが5段階生成を実行中...'
+            ? '🔥 5段階生成プロセスを実行中...'
             : 'AIが問題を生成しています...'
         }
+        showProgress={generationMode === 'five-stage'}
+        estimatedDuration={60000}
+        currentStage={currentStage}
+        onStageChange={(stage) => {
+          setCurrentStage(stage);
+          console.log(`📊 [Frontend] Stage ${stage} に移行`);
+        }}
       />
 
     </div>

@@ -223,3 +223,145 @@ func (c *googleClient) GenerateMultimodalContent(ctx context.Context, prompt str
 	
 	return c.GenerateContent(ctx, enhancedPrompt)
 }
+
+func (c *googleClient) GenerateWithHistory(ctx context.Context, messages []ChatMessage) (string, error) {
+	if c.apiKey == "" {
+		return "", fmt.Errorf("Google API key not configured")
+	}
+
+	if c.model == "" {
+		return "", fmt.Errorf("Google model not specified. Please configure your AI settings in the settings page")
+	}
+
+	fmt.Printf("🤖 Using Google API with model: %s (with %d messages in history)\n", c.model, len(messages))
+
+	// ChatMessageをGoogleのContent形式に変換
+	// Google APIは会話履歴を単一のテキストとして結合する必要がある
+	var conversationText strings.Builder
+	for i, msg := range messages {
+		if i > 0 {
+			conversationText.WriteString("\n\n")
+		}
+		if msg.Role == "user" {
+			conversationText.WriteString("【ユーザー】\n")
+		} else {
+			conversationText.WriteString("【アシスタント】\n")
+		}
+		conversationText.WriteString(msg.Content)
+	}
+
+	request := GoogleRequest{
+		Contents: []GoogleContent{
+			{
+				Parts: []GooglePart{
+					{
+						Text: conversationText.String(),
+					},
+				},
+			},
+		},
+		GenerationConfig: GoogleGenerationConfig{
+			MaxOutputTokens: 30000,
+		},
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent?key=%s", c.model, c.apiKey)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("❌ Google API error - Status: %d, Body: %s\n", resp.StatusCode, string(body))
+		var errorResponse GoogleResponse
+		if err := json.Unmarshal(body, &errorResponse); err == nil && errorResponse.Error != nil {
+			switch errorResponse.Error.Code {
+			case 400:
+				if strings.Contains(errorResponse.Error.Message, "too many tokens") || strings.Contains(errorResponse.Error.Message, "maximum context length") {
+					return "", NewTokenLimitError(fmt.Sprintf("会話履歴が長すぎます。履歴を短くして再度お試しください。詳細: %s", errorResponse.Error.Message))
+				}
+				return "", NewGeneralError(fmt.Sprintf("Google API リクエストエラー: %s", errorResponse.Error.Message))
+			case 403:
+				return "", NewInvalidAPIKeyError(fmt.Sprintf("設定を確認してください。詳細: %s", errorResponse.Error.Message))
+			case 404:
+				return "", NewModelNotFoundError(fmt.Sprintf("モデル「%s」が利用できません。詳細: %s", c.model, errorResponse.Error.Message))
+			case 429:
+				return "", NewRateLimitError(fmt.Sprintf("しばらく待ってから再試行してください。詳細: %s", errorResponse.Error.Message))
+			default:
+				return "", NewGeneralError(fmt.Sprintf("Google API error (code %d): %s", errorResponse.Error.Code, errorResponse.Error.Message))
+			}
+		}
+		return "", NewGeneralError(fmt.Sprintf("Google API error (status %d): %s", resp.StatusCode, string(body)))
+	}
+
+	fmt.Printf("🔍 Google API raw response: %s\n", string(body))
+
+	var response GoogleResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if response.Error != nil {
+		switch response.Error.Code {
+		case 400:
+			if strings.Contains(response.Error.Message, "too many tokens") || strings.Contains(response.Error.Message, "maximum context length") {
+				return "", NewTokenLimitError(fmt.Sprintf("会話履歴が長すぎます。履歴を短くして再度お試しください。詳細: %s", response.Error.Message))
+			}
+			return "", NewGeneralError(fmt.Sprintf("Google API リクエストエラー: %s", response.Error.Message))
+		case 403:
+			return "", NewInvalidAPIKeyError(fmt.Sprintf("設定を確認してください。詳細: %s", response.Error.Message))
+		case 404:
+			return "", NewModelNotFoundError(fmt.Sprintf("モデル「%s」が利用できません。詳細: %s", c.model, response.Error.Message))
+		case 429:
+			return "", NewRateLimitError(fmt.Sprintf("しばらく待ってから再試行してください。詳細: %s", response.Error.Message))
+		default:
+			return "", NewGeneralError(fmt.Sprintf("Google API error: %s", response.Error.Message))
+		}
+	}
+
+	if len(response.Candidates) == 0 {
+		return "", fmt.Errorf("no candidates returned from Google API")
+	}
+
+	candidate := response.Candidates[0]
+	fmt.Printf("🔍 Candidate info: FinishReason=%s, Parts count=%d\n", candidate.FinishReason, len(candidate.Content.Parts))
+	
+	if candidate.FinishReason == "MAX_TOKENS" {
+		fmt.Printf("⚠️ Google API response truncated due to MAX_TOKENS\n")
+		return "", NewTokenLimitError("生成されるレスポンスが長すぎます。より短いプロンプトを使用するか、MaxOutputTokensを増やしてください。")
+	}
+
+	if len(candidate.Content.Parts) == 0 {
+		return "", fmt.Errorf("no content parts returned from Google API. FinishReason: %s", candidate.FinishReason)
+	}
+
+	content := candidate.Content.Parts[0].Text
+	fmt.Printf("🔍 Content extracted: '%s' (length: %d)\n", content, len(content))
+	
+	if content == "" {
+		return "", fmt.Errorf("empty content returned from Google API. FinishReason: %s, Parts count: %d", candidate.FinishReason, len(candidate.Content.Parts))
+	}
+
+	fmt.Printf("✅ Google API response with history received (length: %d, finishReason: %s)\n", len(content), candidate.FinishReason)
+
+	return content, nil
+}

@@ -33,59 +33,11 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
     return text;
   };
 
-  // 高度な数学記号の変換を行う関数（HTML版）
-  const renderAdvancedMathSymbols = (text: string): string => {
-    if (!text) return '';
-    
-    return text
-      // LaTeX数式ブロック（$$...$$）の処理
-      .replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
-        return `<div class="math-block">${renderLatexToHtml(formula.trim())}</div>`;
-      })
-      // LaTeXインライン数式（$...$）の処理  
-      .replace(/\$([^$\n]+)\$/g, (match, formula) => {
-        return `<span class="math-inline">${renderLatexToHtml(formula.trim())}</span>`;
-      })
-      // ベクトル記号の改善（LaTeX形式 \overrightarrow{AB}）
-      .replace(/\\overrightarrow\{([^}]+)\}/g, '<span class="math-vector">$1→</span>')
-      // ベクトル記号（通常の矢印付き）
-      .replace(/([A-Z]{1,3})⃗/g, '<span class="math-vector">$1→</span>')
-      // ルート記号の変換
-      .replace(/√(\d+)/g, '<span class="math-symbol">√$1</span>')
-      .replace(/√\(([^)]+)\)/g, '<span class="math-symbol">√($1)</span>')
-      .replace(/√([a-zA-Z]+)/g, '<span class="math-symbol">√$1</span>')
-      // 上付き文字の変換（数学表記）
-      .replace(/(\w+)²/g, '$1<sup>2</sup>')
-      .replace(/(\w+)³/g, '$1<sup>3</sup>')
-      .replace(/(\w+)⁴/g, '$1<sup>4</sup>')
-      .replace(/(\w+)⁵/g, '$1<sup>5</sup>')
-      // 角度記号の変換
-      .replace(/∠([A-Z]+)/g, '<span class="math-symbol">∠$1</span>')
-      // 分数の変換（分数表示）
-      .replace(/(\d+)\/(\d+)/g, '<span class="math-fraction"><sup>$1</sup><span class="fraction-line">⁄</span><sub>$2</sub></span>')
-      // その他の数学記号
-      .replace(/×/g, '<span class="math-symbol">×</span>')
-      .replace(/÷/g, '<span class="math-symbol">÷</span>')
-      .replace(/°/g, '<span class="math-symbol">°</span>')
-      .replace(/π/g, '<span class="math-symbol">π</span>')
-      .replace(/∞/g, '<span class="math-symbol">∞</span>')
-      .replace(/±/g, '<span class="math-symbol">±</span>')
-      .replace(/≤/g, '<span class="math-symbol">≤</span>')
-      .replace(/≥/g, '<span class="math-symbol">≥</span>')
-      .replace(/≠/g, '<span class="math-symbol">≠</span>')
-      .replace(/≈/g, '<span class="math-symbol">≈</span>')
-      .replace(/≅/g, '<span class="math-symbol">≅</span>')
-      .replace(/∽/g, '<span class="math-symbol">∽</span>')
-      // 矢印記号
-      .replace(/→/g, '<span class="math-symbol">→</span>')
-      .replace(/←/g, '<span class="math-symbol">←</span>');
-  };
-
   // LaTeX記法をHTMLに変換する関数
   const renderLatexToHtml = (latex: string): string => {
     return latex
       // 分数 \frac{a}{b}
-      .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<span class="math-fraction-block"><span class="numerator">$1</span><span class="fraction-line-block">─</span><span class="denominator">$2</span></span>')
+      .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<span class="math-fraction-block"><span class="numerator">$1</span><span class="fraction-line-block">/</span><span class="denominator">$2</span></span>')
       // 平方根 \sqrt{x}
       .replace(/\\sqrt\{([^}]+)\}/g, '<span class="math-symbol">√<span class="sqrt-content">$1</span></span>')
       // ベクトル \vec{a}
@@ -135,6 +87,76 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       .replace(/\\omega/g, 'ω');
   };
 
+  // 高度な数学記号の変換を行う関数（HTML版）
+  const renderAdvancedMathSymbols = (text: string): string => {
+    if (!text) return '';
+    
+    // LaTeX数式を一時的に保護するためのプレースホルダー
+    const mathPlaceholders: string[] = [];
+    let placeholderIndex = 0;
+    
+    // LaTeX数式を一時的に置き換え
+    let processedText = text
+      // LaTeX数式ブロック（$$...$$）を保護
+      .replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+        const placeholder = `__MATH_BLOCK_${placeholderIndex}__`;
+        mathPlaceholders[placeholderIndex] = `<div class="math-block">${renderLatexToHtml(formula.trim())}</div>`;
+        placeholderIndex++;
+        return placeholder;
+      })
+      // LaTeXインライン数式（$...$）を保護
+      .replace(/\$([^$\n]+)\$/g, (match, formula) => {
+        const placeholder = `__MATH_INLINE_${placeholderIndex}__`;
+        mathPlaceholders[placeholderIndex] = `<span class="math-inline">${renderLatexToHtml(formula.trim())}</span>`;
+        placeholderIndex++;
+        return placeholder;
+      });
+    
+    // LaTeX数式以外の部分を変換
+    processedText = processedText
+      // ベクトル記号の改善（LaTeX形式 \overrightarrow{AB}）
+      .replace(/\\overrightarrow\{([^}]+)\}/g, '<span class="math-vector">$1→</span>')
+      // ベクトル記号（通常の矢印付き）
+      .replace(/([A-Z]{1,3})⃗/g, '<span class="math-vector">$1→</span>')
+      // ルート記号の変換
+      .replace(/√(\d+)/g, '<span class="math-symbol">√$1</span>')
+      .replace(/√\(([^)]+)\)/g, '<span class="math-symbol">√($1)</span>')
+      .replace(/√([a-zA-Z]+)/g, '<span class="math-symbol">√$1</span>')
+      // 上付き文字の変換（数学表記）
+      .replace(/(\w+)²/g, '$1<sup>2</sup>')
+      .replace(/(\w+)³/g, '$1<sup>3</sup>')
+      .replace(/(\w+)⁴/g, '$1<sup>4</sup>')
+      .replace(/(\w+)⁵/g, '$1<sup>5</sup>')
+      // 角度記号の変換
+      .replace(/∠([A-Z]+)/g, '<span class="math-symbol">∠$1</span>')
+      // 分数の変換（分数表示）- LaTeX数式以外の部分のみ
+      .replace(/(\d+)\/(\d+)/g, '<span class="math-fraction"><sup>$1</sup>/<sub>$2</sub></span>')
+      // その他の数学記号
+      .replace(/×/g, '<span class="math-symbol">×</span>')
+      .replace(/÷/g, '<span class="math-symbol">÷</span>')
+      .replace(/°/g, '<span class="math-symbol">°</span>')
+      .replace(/π/g, '<span class="math-symbol">π</span>')
+      .replace(/∞/g, '<span class="math-symbol">∞</span>')
+      .replace(/±/g, '<span class="math-symbol">±</span>')
+      .replace(/≤/g, '<span class="math-symbol">≤</span>')
+      .replace(/≥/g, '<span class="math-symbol">≥</span>')
+      .replace(/≠/g, '<span class="math-symbol">≠</span>')
+      .replace(/≈/g, '<span class="math-symbol">≈</span>')
+      .replace(/≅/g, '<span class="math-symbol">≅</span>')
+      .replace(/∽/g, '<span class="math-symbol">∽</span>')
+      // 矢印記号
+      .replace(/→/g, '<span class="math-symbol">→</span>')
+      .replace(/←/g, '<span class="math-symbol">←</span>');
+    
+    // プレースホルダーを元に戻す
+    mathPlaceholders.forEach((replacement, index) => {
+      processedText = processedText.replace(`__MATH_BLOCK_${index}__`, replacement);
+      processedText = processedText.replace(`__MATH_INLINE_${index}__`, replacement);
+    });
+    
+    return processedText;
+  };
+
   // Markdownの基本的な変換
   const renderBasicMarkdown = (text: string): string => {
     return text
@@ -155,6 +177,11 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
   // まず解答・解説部分のみを抽出してから処理
   const extractedContent = extractFinalSolution(content);
   const processedContent = renderBasicMarkdown(renderAdvancedMathSymbols(extractedContent));
+  
+  // デバッグ用：処理後のHTMLを確認
+  if (processedContent.includes('math-fraction')) {
+    console.log('🔍 [MarkdownRenderer] Processed HTML:', processedContent.substring(0, 500));
+  }
 
   return (
     <>
@@ -182,27 +209,38 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
           color: #374151;
         }
         .math-fraction-block {
-          display: inline-block;
+          display: inline-flex;
+          flex-direction: column;
           vertical-align: middle;
           text-align: center;
           font-family: 'Times New Roman', serif;
           margin: 0 4px;
+          align-items: center;
         }
         .numerator {
           display: block;
           font-size: 0.9em;
-          line-height: 1.2;
+          line-height: 1;
+          padding: 0 2px;
         }
         .fraction-line-block {
           display: block;
-          border-top: 1px solid #374151;
+          border-top: 1.5px solid #374151;
           margin: 1px 0;
-          font-size: 0.8em;
+          width: 100%;
+          min-width: 20px;
+          height: 0;
+          line-height: 0;
+        }
+        .fraction-line-block::before {
+          content: '';
+          display: block;
         }
         .denominator {
           display: block;
           font-size: 0.9em;
-          line-height: 1.2;
+          line-height: 1;
+          padding: 0 2px;
         }
         .sqrt-content {
           border-top: 1px solid #374151;

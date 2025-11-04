@@ -316,3 +316,110 @@ func (c *claudeClient) GenerateMultimodalContent(ctx context.Context, prompt str
 
 	return content, nil
 }
+
+func (c *claudeClient) GenerateWithHistory(ctx context.Context, messages []ChatMessage) (string, error) {
+	if c.apiKey == "" {
+		return "", fmt.Errorf("Claude API key not configured")
+	}
+
+	if c.model == "" {
+		return "", fmt.Errorf("Claude model not specified. Please configure your AI settings in the settings page")
+	}
+
+	fmt.Printf("🤖 Using Claude API with model: %s (with %d messages in history)\n", c.model, len(messages))
+
+	// ChatMessageをClaudeのMessage形式に変換
+	claudeMessages := make([]Message, 0, len(messages))
+	for _, msg := range messages {
+		claudeMessages = append(claudeMessages, Message{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+
+	request := ClaudeRequest{
+		Model:     c.model,
+		MaxTokens: 5000,
+		Messages:  claudeMessages,
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", c.apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errorData map[string]interface{}
+		if err := json.Unmarshal(body, &errorData); err == nil {
+			if errorObj, exists := errorData["error"]; exists {
+				if errorMap, ok := errorObj.(map[string]interface{}); ok {
+					errorType := ""
+					errorMessage := ""
+					if t, exists := errorMap["type"]; exists {
+						if typeStr, ok := t.(string); ok {
+							errorType = typeStr
+						}
+					}
+					if m, exists := errorMap["message"]; exists {
+						if msgStr, ok := m.(string); ok {
+							errorMessage = msgStr
+						}
+					}
+
+					switch errorType {
+					case "invalid_request_error":
+						if strings.Contains(errorMessage, "maximum context length") || strings.Contains(errorMessage, "too many tokens") {
+							return "", NewTokenLimitError(fmt.Sprintf("会話履歴が長すぎます。履歴を短くして再度お試しください。詳細: %s", errorMessage))
+						}
+						return "", NewGeneralError(fmt.Sprintf("Claude API リクエストエラー: %s", errorMessage))
+					case "authentication_error":
+						return "", NewInvalidAPIKeyError(fmt.Sprintf("設定を確認してください。詳細: %s", errorMessage))
+					case "permission_error":
+						return "", NewInvalidAPIKeyError(fmt.Sprintf("APIキーの権限を確認してください。詳細: %s", errorMessage))
+					case "rate_limit_error":
+						return "", NewRateLimitError(fmt.Sprintf("しばらく待ってから再試行してください。詳細: %s", errorMessage))
+					case "api_error", "overloaded_error":
+						return "", NewGeneralError(fmt.Sprintf("Claude APIサーバーエラー: %s", errorMessage))
+					default:
+						return "", NewGeneralError(fmt.Sprintf("Claude API error (%s): %s", errorType, errorMessage))
+					}
+				}
+			}
+		}
+		return "", NewGeneralError(fmt.Sprintf("Claude API error (status %d): %s", resp.StatusCode, string(body)))
+	}
+
+	var claudeResp ClaudeResponse
+	if err := json.Unmarshal(body, &claudeResp); err != nil {
+		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if len(claudeResp.Content) == 0 {
+		return "", fmt.Errorf("no content returned from Claude API")
+	}
+
+	content := claudeResp.Content[0].Text
+	fmt.Printf("✅ Claude API response with history received (length: %d)\n", len(content))
+
+	return content, nil
+}

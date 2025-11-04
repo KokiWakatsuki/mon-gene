@@ -427,22 +427,123 @@ export default function ProblemPreviewModal({
               {!isEditMode && (
                 <button
                   onClick={() => {
+                    // MarkdownRendererと同じ処理を使用してHTMLを生成
+                    const renderLatexToHtml = (latex: string): string => {
+                      return latex
+                        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<span class="math-fraction-block"><span class="numerator">$1</span><span class="fraction-line-block">/</span><span class="denominator">$2</span></span>')
+                        .replace(/\\sqrt\{([^}]+)\}/g, '<span class="math-symbol">√<span class="sqrt-content">$1</span></span>')
+                        .replace(/\\vec\{([^}]+)\}/g, '<span class="math-vector">$1→</span>')
+                        .replace(/\\overrightarrow\{([^}]+)\}/g, '<span class="math-vector">$1→</span>')
+                        .replace(/\\times/g, '×')
+                        .replace(/\\cdot/g, '·')
+                        .replace(/\\pi/g, 'π')
+                        .replace(/\\infty/g, '∞')
+                        .replace(/\\pm/g, '±')
+                        .replace(/\\leq/g, '≤')
+                        .replace(/\\geq/g, '≥')
+                        .replace(/\\neq/g, '≠')
+                        .replace(/\\approx/g, '≈')
+                        .replace(/\\rightarrow/g, '→')
+                        .replace(/\\leftarrow/g, '←');
+                    };
+
+                    const renderAdvancedMathSymbols = (text: string): string => {
+                      if (!text) return '';
+                      
+                      const mathPlaceholders: string[] = [];
+                      let placeholderIndex = 0;
+                      
+                      let processedText = text
+                        .replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+                          const placeholder = `__MATH_BLOCK_${placeholderIndex}__`;
+                          mathPlaceholders[placeholderIndex] = `<div class="math-block">${renderLatexToHtml(formula.trim())}</div>`;
+                          placeholderIndex++;
+                          return placeholder;
+                        })
+                        .replace(/\$([^$\n]+)\$/g, (match, formula) => {
+                          const placeholder = `__MATH_INLINE_${placeholderIndex}__`;
+                          mathPlaceholders[placeholderIndex] = `<span class="math-inline">${renderLatexToHtml(formula.trim())}</span>`;
+                          placeholderIndex++;
+                          return placeholder;
+                        });
+                      
+                      processedText = processedText
+                        .replace(/\\overrightarrow\{([^}]+)\}/g, '<span class="math-vector">$1→</span>')
+                        .replace(/([A-Z]{1,3})⃗/g, '<span class="math-vector">$1→</span>')
+                        .replace(/√(\d+)/g, '<span class="math-symbol">√$1</span>')
+                        .replace(/√\(([^)]+)\)/g, '<span class="math-symbol">√($1)</span>')
+                        .replace(/√([a-zA-Z]+)/g, '<span class="math-symbol">√$1</span>')
+                        .replace(/(\w+)²/g, '$1<sup>2</sup>')
+                        .replace(/(\w+)³/g, '$1<sup>3</sup>')
+                        .replace(/(\w+)⁴/g, '$1<sup>4</sup>')
+                        .replace(/(\w+)⁵/g, '$1<sup>5</sup>')
+                        .replace(/∠([A-Z]+)/g, '<span class="math-symbol">∠$1</span>')
+                        .replace(/(\d+)\/(\d+)/g, '<span class="math-fraction"><sup>$1</sup>/<sub>$2</sub></span>')
+                        .replace(/×/g, '<span class="math-symbol">×</span>')
+                        .replace(/÷/g, '<span class="math-symbol">÷</span>')
+                        .replace(/°/g, '<span class="math-symbol">°</span>')
+                        .replace(/π/g, '<span class="math-symbol">π</span>')
+                        .replace(/∞/g, '<span class="math-symbol">∞</span>')
+                        .replace(/±/g, '<span class="math-symbol">±</span>')
+                        .replace(/≤/g, '<span class="math-symbol">≤</span>')
+                        .replace(/≥/g, '<span class="math-symbol">≥</span>')
+                        .replace(/≠/g, '<span class="math-symbol">≠</span>')
+                        .replace(/≈/g, '<span class="math-symbol">≈</span>')
+                        .replace(/≅/g, '<span class="math-symbol">≅</span>')
+                        .replace(/∽/g, '<span class="math-symbol">∽</span>')
+                        .replace(/→/g, '<span class="math-symbol">→</span>')
+                        .replace(/←/g, '<span class="math-symbol">←</span>');
+                      
+                      mathPlaceholders.forEach((replacement, index) => {
+                        processedText = processedText.replace(`__MATH_BLOCK_${index}__`, replacement);
+                        processedText = processedText.replace(`__MATH_INLINE_${index}__`, replacement);
+                      });
+                      
+                      return processedText;
+                    };
+
+                    const renderBasicMarkdown = (text: string): string => {
+                      return text
+                        .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mb-2 text-gray-700">$1</h3>')
+                        .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold mb-3 text-gray-800">$1</h2>')
+                        .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mb-4 text-gray-900">$1</h1>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-900">$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
+                        .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">$1</code>')
+                        .replace(/\n/g, '<br />');
+                    };
+
+                    const processContent = (content: string): string => {
+                      return renderBasicMarkdown(renderAdvancedMathSymbols(content));
+                    };
+
                     // 印刷用の新しいウィンドウを開く
                     const printWindow = window.open('', '_blank');
                     if (printWindow) {
+                      const rawContent = editedContent || problemContent || '';
+                      const rawSolution = editedSolution || solutionText || '';
+                      
+                      console.log('🔍 [Print] Raw content:', rawContent.substring(0, 200));
+                      console.log('🔍 [Print] Raw solution:', rawSolution.substring(0, 200));
+                      
+                      const processedContent = processContent(rawContent);
+                      const processedSolution = rawSolution ? processContent(rawSolution) : '';
+                      
+                      console.log('🔍 [Print] Processed content:', processedContent.substring(0, 200));
+                      console.log('🔍 [Print] Processed solution:', processedSolution.substring(0, 200));
+                      
                       const imageHtml = (currentImageBase64 || imageBase64)
                         ? `<div style="text-align: center; margin: 20px 0;">
-                             <img src="data:image/png;base64,${currentImageBase64 || imageBase64}" 
-                                  style="max-width: 100%; height: auto; border: 1px solid #ddd;" 
+                             <img src="data:image/png;base64,${currentImageBase64 || imageBase64}"
+                                  style="max-width: 100%; height: auto; border: 1px solid #ddd;"
                                   alt="問題図形" />
                            </div>`
                         : '';
                       
-                      // 解答・解説がある場合は別ページに追加
-                      const solutionHtml = (editedSolution || solutionText)
+                      const solutionHtml = processedSolution
                         ? `<div style="page-break-before: always;">
                              <h1>解答・解説</h1>
-                             <div class="content">${editedSolution || solutionText}</div>
+                             <div class="content">${processedSolution}</div>
                            </div>`
                         : '';
                       
@@ -453,7 +554,7 @@ export default function ProblemPreviewModal({
                           <title>${problemTitle}</title>
                           <style>
                             body {
-                              font-family: Arial, sans-serif;
+                              font-family: 'Times New Roman', Arial, sans-serif;
                               margin: 20px;
                               line-height: 1.6;
                             }
@@ -464,9 +565,94 @@ export default function ProblemPreviewModal({
                               padding-bottom: 10px;
                             }
                             .content {
-                              white-space: pre-wrap;
                               font-size: 14px;
                               margin-bottom: 20px;
+                            }
+                            .math-symbol {
+                              font-family: 'Times New Roman', serif;
+                              font-weight: normal;
+                              color: #1f2937;
+                              font-size: 1.1em;
+                            }
+                            .math-vector {
+                              font-family: 'Times New Roman', serif;
+                              font-weight: bold;
+                              color: #1f2937;
+                              font-size: 1.05em;
+                            }
+                            .math-fraction {
+                              display: inline-block;
+                              vertical-align: middle;
+                              font-family: 'Times New Roman', serif;
+                              margin: 0 2px;
+                            }
+                            .fraction-line {
+                              font-size: 1.2em;
+                              color: #374151;
+                            }
+                            .math-fraction-block {
+                              display: inline-flex;
+                              flex-direction: column;
+                              vertical-align: middle;
+                              text-align: center;
+                              font-family: 'Times New Roman', serif;
+                              margin: 0 4px;
+                              align-items: center;
+                            }
+                            .numerator {
+                              display: block;
+                              font-size: 0.9em;
+                              line-height: 1;
+                              padding: 0 2px;
+                            }
+                            .fraction-line-block {
+                              display: block;
+                              border-top: 1.5px solid #374151;
+                              margin: 1px 0;
+                              width: 100%;
+                              min-width: 20px;
+                              height: 0;
+                              line-height: 0;
+                            }
+                            .fraction-line-block::before {
+                              content: '';
+                              display: block;
+                            }
+                            .denominator {
+                              display: block;
+                              font-size: 0.9em;
+                              line-height: 1;
+                              padding: 0 2px;
+                            }
+                            .sqrt-content {
+                              border-top: 1px solid #374151;
+                              padding: 0 2px;
+                            }
+                            .math-block {
+                              display: block;
+                              text-align: center;
+                              margin: 12px 0;
+                              padding: 8px;
+                              background-color: #f9fafb;
+                              border: 1px solid #e5e7eb;
+                              border-radius: 4px;
+                              font-family: 'Times New Roman', serif;
+                              font-size: 1.1em;
+                            }
+                            .math-inline {
+                              font-family: 'Times New Roman', serif;
+                              font-size: 1.05em;
+                              color: #1f2937;
+                            }
+                            sup {
+                              font-size: 0.75em;
+                              vertical-align: super;
+                              line-height: 0;
+                            }
+                            sub {
+                              font-size: 0.75em;
+                              vertical-align: sub;
+                              line-height: 0;
                             }
                             .image-container {
                               text-align: center;
@@ -486,7 +672,7 @@ export default function ProblemPreviewModal({
                         </head>
                         <body>
                           <h1>${problemTitle}</h1>
-                          <div class="content">${editedContent || problemContent || ''}</div>
+                          <div class="content">${processedContent}</div>
                           ${imageHtml}
                           ${solutionHtml}
                         </body>

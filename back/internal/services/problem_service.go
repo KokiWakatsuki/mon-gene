@@ -26,6 +26,7 @@ type ProblemService interface {
 	
 	// 5段階生成メソッド（高精度）
 	GenerateProblemFiveStage(ctx context.Context, req models.FiveStageGenerationRequest, userSchoolCode string) (*models.FiveStageGenerationResponse, error)
+	GenerateProblemFiveStageWithProgress(ctx context.Context, req models.FiveStageGenerationRequest, userSchoolCode string, progressCallback func(stage int, message string)) (*models.FiveStageGenerationResponse, error)
 	GenerateStage1(ctx context.Context, req models.Stage1Request, userSchoolCode string) (*models.Stage1Response, error)
 	GenerateStage2(ctx context.Context, req models.Stage2Request, userSchoolCode string) (*models.Stage2Response, error)
 	GenerateStage3(ctx context.Context, req models.Stage3Request, userSchoolCode string) (*models.Stage3Response, error)
@@ -105,22 +106,22 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 	fmt.Printf("🤖 AI設定 - API: %s, モデル: %s (ユーザー: %s)\n", preferredAPI, preferredModel, userSchoolCode)
 	
 	// 2. ユーザーの設定に基づいて適切なAIクライアントを選択
-	enhancedPrompt := s.enhancePromptForGeometry(req.Prompt)
-	fmt.Printf("🔍 Enhanced prompt: %s\n", enhancedPrompt)
+	// 注: GenerateProblemは旧方式のため、プロンプトをそのまま使用
+	fmt.Printf("🔍 User prompt: %s\n", req.Prompt)
 	
 	var content string
 	switch preferredAPI {
 	case "openai", "chatgpt":
 		// ユーザーの設定に基づいて新しいクライアントを作成
 		dynamicClient := clients.NewOpenAIClient(preferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, enhancedPrompt)
+		content, err = dynamicClient.GenerateContent(ctx, req.Prompt)
 		if err != nil {
 			return nil, fmt.Errorf("OpenAI APIでの問題生成に失敗しました: %w", err)
 		}
 	case "google", "gemini":
 		// ユーザーの設定に基づいて新しいクライアントを作成
 		dynamicClient := clients.NewGoogleClient(preferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, enhancedPrompt)
+		content, err = dynamicClient.GenerateContent(ctx, req.Prompt)
 		if err != nil {
 			return nil, fmt.Errorf("Google APIでの問題生成に失敗しました: %w", err)
 		}
@@ -128,7 +129,7 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 		// ユーザーの設定に基づいて新しいクライアントを作成
 		// laboratoryもClaudeとして扱う
 		dynamicClient := clients.NewClaudeClient(preferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, enhancedPrompt)
+		content, err = dynamicClient.GenerateContent(ctx, req.Prompt)
 		if err != nil {
 			return nil, fmt.Errorf("Claude APIでの問題生成に失敗しました: %w", err)
 		}
@@ -264,181 +265,23 @@ func (s *problemService) createGeometryRegenerationPrompt(problemText string) st
 	return prompt
 }
 
-// enhancePromptForGeometry enhances the prompt to include geometry generation instructions
-func (s *problemService) enhancePromptForGeometry(prompt string) string {
-	// 会話形式が要求されているかチェック
-	isConversationRequested := s.isConversationFormatRequested(prompt)
-	
-	if isConversationRequested {
-		fmt.Printf("💬 [ConversationFormat] Conversation format requested by user\n")
-		return s.createConversationPrompt(prompt)
-	} else {
-		fmt.Printf("📝 [StandardFormat] Standard problem format will be used\n")
-		return s.createStandardPrompt(prompt)
-	}
-}
 
-// isConversationFormatRequested ユーザーのプロンプトに会話文形式の要求があるかチェック
-func (s *problemService) isConversationFormatRequested(prompt string) bool {
-	conversationKeywords := []string{
-		"会話文", "会話形式", "登場人物", "やり取り", "対話", 
-		"条件を抽出", "条件抽出", "会話から", "話し合い",
-		"二人の", "2人の", "キャラクター", "人物",
-	}
-	
-	promptLower := strings.ToLower(prompt)
-	for _, keyword := range conversationKeywords {
-		if strings.Contains(promptLower, keyword) {
-			return true
-		}
-	}
-	return false
-}
-
-// createConversationPrompt 会話文形式の問題生成プロンプトを作成
-func (s *problemService) createConversationPrompt(prompt string) string {
-	promptText, err := s.promptLoader.LoadConversationFormatPrompt(prompt)
+// createFiveStageInitialPrompt 5段階生成の初期プロンプトを作成（全ステージの指示を含む）
+func (s *problemService) createFiveStageInitialPrompt(userPrompt, subject, opinionProfile string) string {
+	promptText, err := s.promptLoader.LoadFiveStageInitialPrompt(userPrompt, subject, opinionProfile)
 	if err != nil {
-		fmt.Printf("⚠️ Failed to load conversation format prompt: %v\n", err)
-		// フォールバック：エラー時は基本プロンプトを返す
-		return "会話形式プロンプトの読み込みに失敗しました: " + err.Error()
+		fmt.Printf("⚠️ Failed to load five stage initial prompt: %v\n", err)
+		return "5段階生成初期プロンプトの読み込みに失敗しました: " + err.Error()
 	}
 	return promptText
 }
 
-// createStandardPrompt 通常の問題生成プロンプトを作成
-func (s *problemService) createStandardPrompt(prompt string) string {
-	promptText, err := s.promptLoader.LoadStandardFormatPrompt(prompt)
+// loadStageTrigger ステージトリガーを読み込む
+func (s *problemService) loadStageTrigger() string {
+	promptText, err := s.promptLoader.LoadStageTrigger()
 	if err != nil {
-		fmt.Printf("⚠️ Failed to load standard format prompt: %v\n", err)
-		// フォールバック：エラー時は基本プロンプトを返す
-		return "標準形式プロンプトの読み込みに失敗しました: " + err.Error()
-	}
-	return promptText
-}
-
-// createStage1Prompt 1段階目用のプロンプトを作成（問題文のみ）
-func (s *problemService) createStage1Prompt(userPrompt, subject string) string {
-	promptText, err := s.promptLoader.LoadStage1PromptWithSamples(userPrompt, subject)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load stage1 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadStage1Prompt(userPrompt, subject)
-		if err != nil {
-			return "1段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
-	}
-	return promptText
-}
-
-// createStage3Prompt 3段階目用のプロンプト（解答手順のみ）
-func (s *problemService) createStage3Prompt(problemText, geometryCode string) string {
-	promptText, err := s.promptLoader.LoadStage3PromptWithSamples(problemText, geometryCode)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load stage3 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadStage3Prompt(problemText, geometryCode)
-		if err != nil {
-			return "3段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
-	}
-	return promptText
-}
-
-// createStage4Prompt 4段階目用のプロンプト（数値計算プログラム生成）
-func (s *problemService) createStage4Prompt(problemText, solutionSteps string) string {
-	promptText, err := s.promptLoader.LoadStage4PromptWithSamples(problemText, solutionSteps)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load stage4 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadStage4Prompt(problemText, solutionSteps)
-		if err != nil {
-			return "4段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
-	}
-	return promptText
-}
-
-// createStage5Prompt 5段階目用のプロンプト（最終解説生成）
-func (s *problemService) createStage5Prompt(problemText, solutionSteps, calculationResults string) string {
-	promptText, err := s.promptLoader.LoadStage5PromptWithSamples(problemText, solutionSteps, calculationResults)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load stage5 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadStage5Prompt(problemText, solutionSteps, calculationResults)
-		if err != nil {
-			return "5段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
-	}
-	return promptText
-}
-
-// createNewStage1Prompt 新しい1段階目用のプロンプト（解答プロセス生成）
-func (s *problemService) createNewStage1Prompt(userPrompt, subject string) string {
-	promptText, err := s.promptLoader.LoadNewStage1PromptWithSamples(userPrompt, subject)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load new stage1 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadNewStage1Prompt(userPrompt, subject)
-		if err != nil {
-			return "新しい1段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
-	}
-	return promptText
-}
-
-// createNewStage2Prompt 新しい2段階目用のプロンプト（完全な問題生成）
-func (s *problemService) createNewStage2Prompt(subProblemsAndProcess string) string {
-	promptText, err := s.promptLoader.LoadNewStage2PromptWithSamples(subProblemsAndProcess)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load new stage2 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadNewStage2Prompt(subProblemsAndProcess)
-		if err != nil {
-			return "新しい2段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
-	}
-	return promptText
-}
-
-// createNewStage3Prompt 新しい3段階目用のプロンプト（数値計算プログラム生成）
-func (s *problemService) createNewStage3Prompt(solutionProcess string) string {
-	promptText, err := s.promptLoader.LoadNewStage3PromptWithSamples(solutionProcess)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load new stage3 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadNewStage3Prompt(solutionProcess)
-		if err != nil {
-			return "新しい3段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
-	}
-	return promptText
-}
-
-// createNewStage4Prompt 新しい4段階目用のプロンプト（問題文生成）
-func (s *problemService) createNewStage4Prompt(solutionProcess string) string {
-	promptText, err := s.promptLoader.LoadNewStage4PromptWithSamples(solutionProcess)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load new stage4 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadNewStage4Prompt(solutionProcess)
-		if err != nil {
-			return "新しい4段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
-	}
-	return promptText
-}
-
-// createNewStage5Prompt 新しい5段階目用のプロンプト（完全な解答・解説生成）
-func (s *problemService) createNewStage5Prompt(solutionProcess, calculationResults string) string {
-	promptText, err := s.promptLoader.LoadNewStage5PromptWithSamples(solutionProcess, calculationResults)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load new stage5 prompt with samples: %v\n", err)
-		// フォールバック：サンプルなしでプロンプトを読み込み
-		promptText, err = s.promptLoader.LoadNewStage5Prompt(solutionProcess, calculationResults)
-		if err != nil {
-			return "新しい5段階目プロンプトの読み込みに失敗しました: " + err.Error()
-		}
+		fmt.Printf("⚠️ Failed to load stage trigger: %v\n", err)
+		return "次のステージに進んでください。"
 	}
 	return promptText
 }
@@ -475,6 +318,7 @@ func (s *problemService) extractProblemText(content string) string {
 
 // extractPythonCode extracts Python code from the content
 func (s *problemService) extractPythonCode(content string) string {
+	// パターン1: 旧形式のマーカー
 	re := regexp.MustCompile(`(?s)---GEOMETRY_CODE_START---(.*?)---GEOMETRY_CODE_END---`)
 	matches := re.FindStringSubmatch(content)
 	if len(matches) > 1 {
@@ -483,6 +327,19 @@ func (s *problemService) extractPythonCode(content string) string {
 		pythonCode = s.removeImportStatements(pythonCode)
 		return pythonCode
 	}
+	
+	// パターン2: ```python```コードブロック（Stage 3の新形式）
+	re = regexp.MustCompile("(?s)```python\\s*\\n(.*?)\\n```")
+	matches = re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		pythonCode := strings.TrimSpace(matches[1])
+		fmt.Printf("✅ [extractPythonCode] Extracted Python code from ```python``` block (length: %d)\n", len(pythonCode))
+		// import文を除去
+		pythonCode = s.removeImportStatements(pythonCode)
+		return pythonCode
+	}
+	
+	fmt.Printf("❌ [extractPythonCode] No Python code found in content (length: %d)\n", len(content))
 	return ""
 }
 
@@ -650,7 +507,7 @@ func (s *problemService) UpdateProblem(ctx context.Context, req models.UpdatePro
 	return &updatedProblem, nil
 }
 
-// RegenerateGeometry 問題の図形を再生成
+// RegenerateGeometry 問題の図形を再生成（会話履歴を使用）
 func (s *problemService) RegenerateGeometry(ctx context.Context, req models.RegenerateGeometryRequest, userID int64) (string, error) {
 	if s.problemRepo == nil {
 		return "", fmt.Errorf("problem repository is not initialized")
@@ -688,16 +545,68 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 
 	var imageBase64 string
 
-	// 問題生成時と同じフローを適用：AIで図形コード生成→実行
-	fmt.Printf("🤖 [RegenerateGeometry] Generating matplotlib code with AI\n")
-	
-	// 図形生成専用のプロンプトを構築
-	geometryPrompt := s.createGeometryPromptWithSamples(contentToAnalyze)
-	fmt.Printf("🔍 [RegenerateGeometry] Enhanced prompt created\n")
-	
-	// ユーザーの設定に基づいてAIクライアントを選択
-	preferredAPI := user.PreferredAPI
-	preferredModel := user.PreferredModel
+	// 会話履歴がある場合は、それを使用して図形を再生成
+	if problem.ConversationHistory != nil && len(problem.ConversationHistory.Messages) > 0 {
+		fmt.Printf("💬 [RegenerateGeometry] Using conversation history (%d messages) for geometry regeneration\n", len(problem.ConversationHistory.Messages))
+		
+		// 会話履歴に図形再生成のトリガーを追加
+		history := problem.ConversationHistory
+		trigger := s.loadStageTrigger()
+		s.buildConversationHistory(history, trigger, "", 5)
+		
+		// 会話履歴を使用してAPI呼び出し
+		var content string
+		clientMessages := s.convertToClientMessages(history)
+		
+		switch user.PreferredAPI {
+		case "openai", "chatgpt":
+			dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
+			content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+		case "google", "gemini":
+			dynamicClient := clients.NewGoogleClient(user.PreferredModel)
+			content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+		case "claude", "laboratory":
+			dynamicClient := clients.NewClaudeClient(user.PreferredModel)
+			content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+		default:
+			return "", fmt.Errorf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
+		}
+		
+		if err != nil {
+			fmt.Printf("⚠️ [RegenerateGeometry] Failed to regenerate with conversation history: %v\n", err)
+			fmt.Printf("🔄 [RegenerateGeometry] Falling back to standard method\n")
+		} else {
+			fmt.Printf("✅ [RegenerateGeometry] AI response generated from conversation history\n")
+			
+			// AIからPythonコードを抽出
+			pythonCode := s.extractPythonCode(content)
+			fmt.Printf("🐍 [RegenerateGeometry] Python code extracted: %t\n", pythonCode != "")
+			
+			if pythonCode != "" {
+				fmt.Printf("🎨 [RegenerateGeometry] Generating custom geometry with Python code\n")
+				imageBase64, err = s.coreClient.GenerateCustomGeometry(ctx, pythonCode, contentToAnalyze)
+				if err != nil {
+					fmt.Printf("❌ [RegenerateGeometry] Custom geometry generation failed: %v\n", err)
+				} else {
+					fmt.Printf("✅ [RegenerateGeometry] Custom geometry generated successfully from conversation history\n")
+				}
+			}
+		}
+	} else {
+		fmt.Printf("ℹ️ [RegenerateGeometry] No conversation history found, using standard method\n")
+	}
+
+	// 会話履歴による図形生成が失敗した場合、または会話履歴がない場合は標準の方法を使用
+	if imageBase64 == "" {
+		fmt.Printf("🤖 [RegenerateGeometry] Generating matplotlib code with AI (standard method)\n")
+		
+		// 図形生成専用のプロンプトを構築
+		geometryPrompt := s.createGeometryPromptWithSamples(contentToAnalyze)
+		fmt.Printf("🔍 [RegenerateGeometry] Enhanced prompt created\n")
+		
+		// ユーザーの設定に基づいてAIクライアントを選択
+		preferredAPI := user.PreferredAPI
+		preferredModel := user.PreferredModel
 	
 	if preferredAPI == "" || preferredModel == "" {
 		return "", fmt.Errorf("AI設定が不完全です。設定ページでAPIとモデルを選択してください")
@@ -739,10 +648,10 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 				fmt.Printf("✅ [RegenerateGeometry] Custom geometry generated successfully\n")
 			}
 		}
-	}
+		}
 
-	// AIによる図形生成が失敗した場合、従来の分析方法にフォールバック
-	if imageBase64 == "" {
+		// AIによる図形生成が失敗した場合、従来の分析方法にフォールバック
+		if imageBase64 == "" {
 		fmt.Printf("🔍 [RegenerateGeometry] Falling back to problem analysis\n")
 		
 		analysis, err := s.coreClient.AnalyzeProblem(ctx, contentToAnalyze, nil)
@@ -769,6 +678,7 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 			}
 		} else {
 			return "", fmt.Errorf("no geometry needed for this problem")
+		}
 		}
 	}
 
@@ -825,160 +735,27 @@ func (s *problemService) GenerateStage4(ctx context.Context, req models.Stage4Re
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 4段階目用のプロンプトを作成（完全な解答・解説生成）
-	prompt := s.createNewStage5Prompt(req.SubProblemsAndProcess, req.CalculationResults)
-	logBuilder.WriteString("📝 4段階目用プロンプト（完全な解答・解説生成）を作成しました\n")
-	
-	// AIクライアントを選択してAPI呼び出し
-	var content string
-	switch user.PreferredAPI {
-	case "openai", "chatgpt":
-		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	case "google", "gemini":
-		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	case "claude", "laboratory":
-		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	default:
-		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage4Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	if err != nil {
-		errorMsg := fmt.Sprintf("%s APIでの完全な解答・解説生成に失敗しました: %v", user.PreferredAPI, err)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage4Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, err
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
-	
-	// 完全な解答を抽出
-	completeAnswer := s.extractFinalSolution(content)
-	if completeAnswer == "" {
-		completeAnswer = strings.TrimSpace(content) // フォールバック：全体を完全な解答として使用
-	}
-	
-	if completeAnswer == "" {
-		errorMsg := "完全な解答・解説の抽出に失敗しました"
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage4Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("📚 完全な解答・解説を抽出しました (長さ: %d文字)\n", len(completeAnswer)))
-	logBuilder.WriteString("✅ [Stage4] 4段階目（完全な解答・解説生成）が完了しました\n")
+	// 4段階目は非推奨（会話形式を使用してください）
+	logBuilder.WriteString("⚠️ 個別ステージの呼び出しは非推奨です\n")
 	
 	return &models.Stage4Response{
-		Success:        true,
-		FinalExplanation: completeAnswer,
-		Log:            logBuilder.String(),
-	}, nil
+		Success: false,
+		Error:   "個別ステージの呼び出しは非推奨です。GenerateProblemFiveStageを使用してください。",
+		Log:     logBuilder.String(),
+	}, fmt.Errorf("deprecated: use GenerateProblemFiveStage instead")
 }
 
 
-// GenerateStage5 5段階目：図形描画プログラム生成（新しいプロセス）
+// GenerateStage5 5段階目：図形描画プログラム生成（非推奨）
 func (s *problemService) GenerateStage5(ctx context.Context, req models.Stage5Request, userSchoolCode string) (*models.Stage5Response, error) {
-	logBuilder := strings.Builder{}
-	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage5] 5段階目を開始：図形描画プログラム生成 (ユーザー: %s)\n", userSchoolCode))
-	
-	// ユーザー情報を取得
-	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
-	if err != nil {
-		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage5Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, err
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
-	
-	// 5段階目用のプロンプトを作成（図形描画プログラム生成）
-	prompt := s.createGeometryPromptWithSamples(req.CompleteProblem)
-	logBuilder.WriteString("📝 5段階目用プロンプト（図形描画プログラム生成）を作成しました\n")
-	
-	// AIクライアントを選択してAPI呼び出し
-	var content string
-	switch user.PreferredAPI {
-	case "openai", "chatgpt":
-		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	case "google", "gemini":
-		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	case "claude", "laboratory":
-		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	default:
-		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage5Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	if err != nil {
-		logBuilder.WriteString(fmt.Sprintf("⚠️ AIによる図形コード生成に失敗: %v\n", err))
-		// フォールバックとして図形なしで続行
-		logBuilder.WriteString("ℹ️ この問題は図形なしで続行します\n")
-		logBuilder.WriteString("✅ [Stage5] 5段階目が完了しました（図形なし）\n")
-		
-		return &models.Stage5Response{
-			Success:      true,
-			GeometryCode: "",
-			ImageBase64:  "",
-			Log:          logBuilder.String(),
-		}, nil
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
-	
-	// 図形コードを抽出
-	geometryCode := s.extractPythonCode(content)
-	logBuilder.WriteString(fmt.Sprintf("🐍 図形コードの抽出: %t (長さ: %d文字)\n", geometryCode != "", len(geometryCode)))
-	
-	// 図形を実際に生成
-	var imageBase64 string
-	if geometryCode != "" {
-		logBuilder.WriteString("🎨 図形を生成中...\n")
-		imageBase64, err = s.coreClient.GenerateCustomGeometry(ctx, geometryCode, req.CompleteProblem)
-		if err != nil {
-			logBuilder.WriteString(fmt.Sprintf("⚠️ 図形生成に失敗: %v\n", err))
-		} else {
-			logBuilder.WriteString("✅ 図形を生成しました\n")
-		}
-	} else {
-		logBuilder.WriteString("ℹ️ この問題には図形は必要ありません\n")
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("🖼️ 最終的な図形データの長さ: %d\n", len(imageBase64)))
-	logBuilder.WriteString("✅ [Stage5] 5段階目（図形描画）が完了しました\n")
-	
 	return &models.Stage5Response{
-		Success:      true,
-		GeometryCode: geometryCode,
-		ImageBase64:  imageBase64,
-		Log:          logBuilder.String(),
-	}, nil
+		Success: false,
+		Error:   "個別ステージの呼び出しは非推奨です。GenerateProblemFiveStageを使用してください。",
+		Log:     "⚠️ このAPIは非推奨です。5段階生成プロセス全体を実行するGenerateProblemFiveStageを使用してください。\n",
+	}, fmt.Errorf("deprecated: use GenerateProblemFiveStage instead")
 }
+	
+	
 
 
 // extractSolutionSteps 解答手順を抽出
@@ -1039,6 +816,13 @@ func (s *problemService) extractSubProblemsAndProcess(content string) string {
 func (s *problemService) extractCompleteProblem(content string) string {
 	re := regexp.MustCompile(`(?s)---COMPLETE_PROBLEM_START---(.*?)---COMPLETE_PROBLEM_END---`)
 	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	// Stage 4のマーカーを探す
+	re = regexp.MustCompile(`(?s)---STAGE4_START---(.*?)---STAGE4_END---`)
+	matches = re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
 	}
@@ -1157,6 +941,13 @@ func (s *problemService) extractFinalSolution(content string) string {
 		return strings.TrimSpace(matches[1])
 	}
 	
+	// Stage 5のマーカーを探す
+	re = regexp.MustCompile(`(?s)---STAGE5_START---(.*?)---STAGE5_END---`)
+	matches = re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
 	// フォールバック：【最終解答】を探す
 	re = regexp.MustCompile(`(?s)【最終解答】(.*?)(?:---|\n\n|\z)`)
 	matches = re.FindStringSubmatch(content)
@@ -1167,15 +958,6 @@ func (s *problemService) extractFinalSolution(content string) string {
 	return ""
 }
 
-// createThirdStagePrompt 3回目API呼び出し用のプロンプトを作成（解答手順と計算結果の統合）
-func (s *problemService) createThirdStagePrompt(problemText, solutionSteps, calculationResults string) string {
-	promptText, err := s.promptLoader.LoadStage5Prompt(problemText, solutionSteps, calculationResults)
-	if err != nil {
-		fmt.Printf("⚠️ Failed to load third stage prompt: %v\n", err)
-		return "統合解説プロンプトの読み込みに失敗しました: " + err.Error()
-	}
-	return promptText
-}
 
 // executeCalculationProgram 数値計算プログラムを実行
 func (s *problemService) executeCalculationProgram(ctx context.Context, program string) (string, error) {
@@ -1218,10 +1000,21 @@ import math
 
 // 5段階生成システムの実装（新しいプロセス）
 
-// GenerateProblemFiveStage 全体の5段階生成プロセスを実行（新しい順序）
+// GenerateProblemFiveStage 全体の5段階生成プロセスを実行（会話形式）
 func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req models.FiveStageGenerationRequest, userSchoolCode string) (*models.FiveStageGenerationResponse, error) {
-	fmt.Printf("🚀 [FiveStage] Starting NEW five-stage problem generation for user: %s\n", userSchoolCode)
+	return s.GenerateProblemFiveStageWithProgress(ctx, req, userSchoolCode, nil)
+}
+
+// GenerateProblemFiveStageWithProgress 全体の5段階生成プロセスを実行（進捗コールバック付き）
+func (s *problemService) GenerateProblemFiveStageWithProgress(ctx context.Context, req models.FiveStageGenerationRequest, userSchoolCode string, progressCallback func(stage int, message string)) (*models.FiveStageGenerationResponse, error) {
+	fmt.Printf("🚀 [FiveStage] Starting NEW five-stage problem generation (CONVERSATION MODE) for user: %s\n", userSchoolCode)
 	fmt.Printf("🔍 [FiveStage] Request details: Prompt length=%d, Subject=%s\n", len(req.Prompt), req.Subject)
+	
+	// 会話履歴を初期化
+	conversationHistory := &models.ConversationHistory{
+		Messages: make([]models.ConversationMessage, 0),
+	}
+	fmt.Printf("💬 [FiveStage] Initialized conversation history\n")
 	
 	// ユーザー情報を取得して生成制限をチェック
 	fmt.Printf("📋 [FiveStage] Fetching user info for: %s\n", userSchoolCode)
@@ -1275,13 +1068,15 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		}
 	}
 	
-	// 新しいプロセス：1段階目：小問構成と解答プロセス生成
+	// 新しいプロセス：1段階目：小問構成と解答プロセス生成（会話形式）
+	fmt.Printf("💬 [FiveStage] Stage 1: Starting with conversation history (messages: %d)\n", len(conversationHistory.Messages))
 	stage1Req := models.Stage1Request{
-		Prompt:    req.Prompt,
-		Subject:   req.Subject,
-		SkipCount: true, // FiveStage全体呼び出し時は既にカウント済みなのでスキップ
+		Prompt:         req.Prompt,
+		Subject:        req.Subject,
+		OpinionProfile: req.OpinionProfile,
+		SkipCount:      true, // FiveStage全体呼び出し時は既にカウント済みなのでスキップ
 	}
-	stage1Resp, err := s.GenerateStage1(ctx, stage1Req, userSchoolCode)
+	stage1Resp, err := s.GenerateStage1WithHistory(ctx, stage1Req, userSchoolCode, conversationHistory)
 	if err != nil || !stage1Resp.Success {
 		return &models.FiveStageGenerationResponse{
 			Success:   false,
@@ -1290,54 +1085,76 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		}, nil
 	}
 	
-	// 新しいプロセス：2段階目：完全な問題生成
+	// Stage 1完了を通知
+	if progressCallback != nil {
+		progressCallback(1, "Stage 1完了：小問構成と解答プロセスを生成しました")
+	}
+	
+	// 新しいプロセス：2段階目：パラメータ設定と動的検証（数値計算）（会話形式）
+	fmt.Printf("💬 [FiveStage] Stage 2: Continuing conversation (messages: %d)\n", len(conversationHistory.Messages))
 	stage2Req := models.Stage2Request{
 		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
 	}
-	stage2Resp, err := s.GenerateStage2(ctx, stage2Req, userSchoolCode)
+	stage2Resp, err := s.GenerateStage2WithHistory(ctx, stage2Req, userSchoolCode, conversationHistory)
 	if err != nil || !stage2Resp.Success {
 		return &models.FiveStageGenerationResponse{
 			Success:               false,
-			Error:                 fmt.Sprintf("2段階目（完全な問題生成）に失敗しました: %v", err),
+			Error:                 fmt.Sprintf("2段階目（パラメータ設定と動的検証）に失敗しました: %v", err),
 			SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
 			Stage1Log:             stage1Resp.Log,
 			Stage2Log:             stage2Resp.Log,
 		}, nil
 	}
 	
-	// 新しいプロセス：3段階目：数値計算プログラム生成・実行
+	// Stage 2完了を通知
+	if progressCallback != nil {
+		progressCallback(2, "Stage 2完了：パラメータ設定と動的検証を実行しました")
+	}
+	
+	// 新しいプロセス：3段階目：問題文用の図形描画（会話形式）
+	fmt.Printf("💬 [FiveStage] Stage 3: Continuing conversation (messages: %d)\n", len(conversationHistory.Messages))
+	fmt.Printf("🔍 [FiveStage] Stage 3: About to call GenerateStage3WithHistory\n")
 	stage3Req := models.Stage3Request{
 		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
-		CompleteProblem:       stage2Resp.CompleteProblem,
+		CompleteProblem:       stage2Resp.CompleteProblem, // Stage2の検証済みパラメータ
 	}
-	stage3Resp, err := s.GenerateStage3(ctx, stage3Req, userSchoolCode)
+	fmt.Printf("🔍 [FiveStage] Stage 3: Request prepared, calling GenerateStage3WithHistory...\n")
+	stage3Resp, err := s.GenerateStage3WithHistory(ctx, stage3Req, userSchoolCode, conversationHistory)
+	fmt.Printf("🔍 [FiveStage] Stage 3: GenerateStage3WithHistory returned, success=%t, err=%v\n", stage3Resp != nil && stage3Resp.Success, err)
 	if err != nil || !stage3Resp.Success {
 		return &models.FiveStageGenerationResponse{
 			Success:               false,
-			Error:                 fmt.Sprintf("3段階目（数値計算プログラム生成・実行）に失敗しました: %v", err),
+			Error:                 fmt.Sprintf("3段階目（図形描画）に失敗しました: %v", err),
 			SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
-			CompleteProblem:       stage2Resp.CompleteProblem,
+			CalculationProgram:    stage2Resp.CompleteProblem,
+			CalculationResults:    stage2Resp.CompleteProblem,
 			Stage1Log:             stage1Resp.Log,
 			Stage2Log:             stage2Resp.Log,
 			Stage3Log:             stage3Resp.Log,
 		}, nil
 	}
 	
-	// 新しいプロセス：4段階目：完全な解答・解説生成
+	// Stage 3完了を通知
+	if progressCallback != nil {
+		progressCallback(3, "Stage 3完了：問題文用の図形を描画しました")
+	}
+	
+	// 新しいプロセス：4段階目：完全な問題文の生成（会話形式）
+	fmt.Printf("💬 [FiveStage] Stage 4: Continuing conversation (messages: %d)\n", len(conversationHistory.Messages))
 	stage4Req := models.Stage4Request{
 		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
-		CompleteProblem:       stage2Resp.CompleteProblem,
-		CalculationResults:    stage3Resp.CalculationResults,
+		CompleteProblem:       stage2Resp.CompleteProblem, // Stage2の検証済みパラメータ
+		CalculationResults:    stage2Resp.CompleteProblem, // Stage2の検証済みパラメータ
 	}
-	stage4Resp, err := s.GenerateStage4(ctx, stage4Req, userSchoolCode)
+	stage4Resp, err := s.GenerateStage4WithHistory(ctx, stage4Req, userSchoolCode, conversationHistory)
 	if err != nil || !stage4Resp.Success {
 		return &models.FiveStageGenerationResponse{
 			Success:               false,
-			Error:                 fmt.Sprintf("4段階目（完全な解答・解説生成）に失敗しました: %v", err),
+			Error:                 fmt.Sprintf("4段階目（完全な問題文の生成）に失敗しました: %v", err),
 			SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
-			CompleteProblem:       stage2Resp.CompleteProblem,
-			CalculationProgram:    stage3Resp.CalculationProgram,
-			CalculationResults:    stage3Resp.CalculationResults,
+			CalculationProgram:    stage2Resp.CompleteProblem,
+			CalculationResults:    stage2Resp.CompleteProblem,
+			GeometryCode:          stage3Resp.CalculationProgram,
 			Stage1Log:             stage1Resp.Log,
 			Stage2Log:             stage2Resp.Log,
 			Stage3Log:             stage3Resp.Log,
@@ -1345,20 +1162,26 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		}, nil
 	}
 	
-	// 新しいプロセス：5段階目：図形描画プログラム生成
-	stage5Req := models.Stage5Request{
-		CompleteProblem: stage2Resp.CompleteProblem,
+	// Stage 4完了を通知
+	if progressCallback != nil {
+		progressCallback(4, "Stage 4完了：完全な問題文を生成しました")
 	}
-	stage5Resp, err := s.GenerateStage5(ctx, stage5Req, userSchoolCode)
+	
+	// 新しいプロセス：5段階目：完全な解答・解説の生成（会話形式）
+	fmt.Printf("💬 [FiveStage] Stage 5: Continuing conversation (messages: %d)\n", len(conversationHistory.Messages))
+	stage5Req := models.Stage5Request{
+		CompleteProblem: stage4Resp.FinalExplanation, // Stage4の完全な問題文
+	}
+	stage5Resp, err := s.GenerateStage5WithHistory(ctx, stage5Req, userSchoolCode, conversationHistory)
 	if err != nil || !stage5Resp.Success {
 		return &models.FiveStageGenerationResponse{
 			Success:               false,
-			Error:                 fmt.Sprintf("5段階目（図形描画）に失敗しました: %v", err),
+			Error:                 fmt.Sprintf("5段階目（完全な解答・解説の生成）に失敗しました: %v", err),
 			SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
-			CompleteProblem:       stage2Resp.CompleteProblem,
-			CalculationProgram:    stage3Resp.CalculationProgram,
-			CalculationResults:    stage3Resp.CalculationResults,
-			FinalExplanation: stage4Resp.FinalExplanation,
+			CalculationProgram:    stage2Resp.CompleteProblem,
+			CalculationResults:    stage2Resp.CompleteProblem,
+			GeometryCode:          stage3Resp.CalculationProgram,
+			CompleteProblem:       stage4Resp.FinalExplanation,
 			Stage1Log:             stage1Resp.Log,
 			Stage2Log:             stage2Resp.Log,
 			Stage3Log:             stage3Resp.Log,
@@ -1367,20 +1190,31 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		}, nil
 	}
 	
-	// 5段階生成完了後、問題をproblemsテーブルに保存
-	fmt.Printf("💾 [FiveStage] Saving generated problem to database\n")
+	// Stage 5完了を通知
+	if progressCallback != nil {
+		progressCallback(5, "Stage 5完了：完全な解答・解説を生成しました")
+	}
 	
+	// 5段階生成完了後、問題をproblemsテーブルに保存（会話履歴も含む）
+	fmt.Printf("💾 [FiveStage] Saving generated problem to database\n")
+	fmt.Printf("💬 [FiveStage] Conversation history messages: %d\n", len(conversationHistory.Messages))
+	
+	// 正しいマッピング:
+	// - Content: Stage 4の完全な問題文
+	// - Solution: Stage 5の完全な解答・解説
+	// - ImageBase64: Stage 3の図形画像
 	problem := &models.Problem{
-		UserID:           user.ID,
-		Subject:          req.Subject,
-		Prompt:           req.Prompt,
-		Content:          stage2Resp.CompleteProblem,   // Stage2で生成された完全な問題
-		Solution:         stage4Resp.FinalExplanation,   // Stage4で生成された完全な解答・解説
-		ImageBase64:      stage5Resp.ImageBase64,      // Stage5で生成された図形
-		OpinionProfile:   req.OpinionProfile,          // レガシー（後方互換性）
-		OpinionProfileV2: req.OpinionProfileV2,        // 新基準（Ver.2）
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		UserID:              user.ID,
+		Subject:             req.Subject,
+		Prompt:              req.Prompt,
+		Content:             stage4Resp.FinalExplanation,     // Stage 4: 完全な問題文
+		Solution:            stage5Resp.GeometryCode,         // Stage 5: 完全な解答・解説
+		ImageBase64:         stage3Resp.CalculationResults,   // Stage 3: 図形画像（Base64）
+		OpinionProfile:      req.OpinionProfile,              // レガシー（後方互換性）
+		OpinionProfileV2:    req.OpinionProfileV2,            // 新基準（Ver.2）
+		ConversationHistory: conversationHistory,             // 5段階生成プロセスの会話履歴
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
 	}
 
 	// リポジトリが実装されている場合のみ保存
@@ -1395,17 +1229,24 @@ func (s *problemService) GenerateProblemFiveStage(ctx context.Context, req model
 		fmt.Printf("⚠️ [FiveStage] Problem repository is not initialized, skipping database save\n")
 	}
 	
-	fmt.Printf("✅ [FiveStage] NEW Five-stage problem generation completed successfully\n")
+	fmt.Printf("✅ [FiveStage] NEW Five-stage problem generation (CONVERSATION MODE) completed successfully\n")
+	fmt.Printf("💬 [FiveStage] Total conversation messages: %d\n", len(conversationHistory.Messages))
 	
+	// レスポンスの正しいマッピング:
+	// - complete_problem: Stage 4の完全な問題文
+	// - final_explanation: Stage 5の完全な解答・解説
+	// - image_base64: Stage 3の図形画像
+	// - conversation_history: 5段階生成プロセスの会話履歴
 	return &models.FiveStageGenerationResponse{
 		Success:               true,
-		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,
-		CompleteProblem:       stage2Resp.CompleteProblem,
-		CalculationProgram:    stage3Resp.CalculationProgram,
-		CalculationResults:    stage3Resp.CalculationResults,
-		FinalExplanation: stage4Resp.FinalExplanation,
-		GeometryCode:          stage5Resp.GeometryCode,
-		ImageBase64:           stage5Resp.ImageBase64,
+		SubProblemsAndProcess: stage1Resp.SubProblemsAndProcess,        // Stage 1: 小問構成と解答プロセス
+		CalculationProgram:    stage2Resp.CompleteProblem,              // Stage 2: 検証済みパラメータ（数値計算結果）
+		CalculationResults:    stage2Resp.CompleteProblem,              // Stage 2: 検証済みパラメータ（数値計算結果）
+		GeometryCode:          stage3Resp.CalculationProgram,           // Stage 3: 図形コード
+		CompleteProblem:       stage4Resp.FinalExplanation,             // Stage 4: 完全な問題文
+		FinalExplanation:      stage5Resp.GeometryCode,                 // Stage 5: 完全な解答・解説
+		ImageBase64:           stage3Resp.CalculationResults,           // Stage 3: 図形画像（Base64）
+		ConversationHistory:   conversationHistory,                     // 会話履歴
 		Stage1Log:             stage1Resp.Log,
 		Stage2Log:             stage2Resp.Log,
 		Stage3Log:             stage3Resp.Log,
@@ -1471,22 +1312,98 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 1段階目用のプロンプトを作成（小問構成と解答プロセス生成）
-	prompt := s.createNewStage1Prompt(req.Prompt, req.Subject)
-	logBuilder.WriteString("📝 1段階目用プロンプト（小問構成と解答プロセス生成）を作成しました\n")
+	// 1段階目は非推奨（会話形式を使用してください）
+	logBuilder.WriteString("⚠️ 個別ステージの呼び出しは非推奨です\n")
 	
-	// AIクライアントを選択してAPI呼び出し
+	return &models.Stage1Response{
+		Success: false,
+		Error:   "個別ステージの呼び出しは非推奨です。GenerateProblemFiveStageを使用してください。",
+		Log:     logBuilder.String(),
+	}, fmt.Errorf("deprecated: use GenerateProblemFiveStage instead")
+}
+
+// GenerateStage1WithHistory 1段階目：小問構成と解答プロセス生成（会話履歴付き）
+func (s *problemService) GenerateStage1WithHistory(ctx context.Context, req models.Stage1Request, userSchoolCode string, history *models.ConversationHistory) (*models.Stage1Response, error) {
+	logBuilder := strings.Builder{}
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage1-Chat] 1段階目を開始：小問構成と解答プロセス生成（会話形式） (ユーザー: %s)\n", userSchoolCode))
+	
+	// ユーザー情報を取得
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage1Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
+	}
+	
+	// 個別呼び出し時のみカウント処理を実行
+	if !req.SkipCount {
+		logBuilder.WriteString(fmt.Sprintf("🔢 現在の生成回数: %d/%d\n", user.ProblemGenerationCount, user.ProblemGenerationLimit))
+		
+		if user.ProblemGenerationLimit >= 0 && user.ProblemGenerationCount >= user.ProblemGenerationLimit {
+			errorMsg := fmt.Sprintf("問題生成回数の上限（%d回）に達しました", user.ProblemGenerationLimit)
+			logBuilder.WriteString(fmt.Sprintf("🚫 %s\n", errorMsg))
+			return &models.Stage1Response{
+				Success: false,
+				Error:   errorMsg,
+				Log:     logBuilder.String(),
+			}, fmt.Errorf(errorMsg)
+		}
+		
+		oldCount := user.ProblemGenerationCount
+		user.ProblemGenerationCount++
+		user.UpdatedAt = time.Now()
+		
+		logBuilder.WriteString(fmt.Sprintf("📝 生成回数を更新: %d → %d\n", oldCount, user.ProblemGenerationCount))
+		
+		if err := s.userRepo.Update(ctx, user); err != nil {
+			errorMsg := fmt.Sprintf("問題生成カウントの更新に失敗しました: %v", err)
+			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+			return &models.Stage1Response{
+				Success: false,
+				Error:   errorMsg,
+				Log:     logBuilder.String(),
+			}, fmt.Errorf(errorMsg)
+		}
+		
+		logBuilder.WriteString(fmt.Sprintf("✅ 問題生成カウントを更新: %s = %d/%d\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit))
+	} else {
+		logBuilder.WriteString("ℹ️ カウント処理をスキップ（FiveStage全体呼び出し時）\n")
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
+	
+	// OpinionProfileをJSON文字列に変換
+	var opinionProfileStr string
+	if req.OpinionProfile != nil {
+		opinionProfileStr = fmt.Sprintf("%+v", req.OpinionProfile)
+	}
+	
+	// Stage 1では詳細な初期プロンプトを作成（全ステージの指示を含む）
+	prompt := s.createFiveStageInitialPrompt(req.Prompt, req.Subject, opinionProfileStr)
+	logBuilder.WriteString("📝 5段階生成の初期プロンプト（全ステージの指示を含む）を作成しました\n")
+	
+	// 会話履歴にユーザーメッセージを追加
+	s.buildConversationHistory(history, prompt, "", 1)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴を更新（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	// 会話履歴を使用してAPI呼び出し
 	var content string
+	clientMessages := s.convertToClientMessages(history)
+	
 	switch user.PreferredAPI {
 	case "openai", "chatgpt":
 		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
 	case "google", "gemini":
 		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
 	case "claude", "laboratory":
 		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
 	default:
 		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
 		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
@@ -1509,10 +1426,14 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 	
 	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
 	
+	// 会話履歴にアシスタントメッセージを追加
+	s.buildConversationHistory(history, "", content, 1)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴にアシスタントの応答を追加（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
 	// 小問構成と解答プロセスを抽出
 	subProblemsAndProcess := s.extractSubProblemsAndProcess(content)
 	if subProblemsAndProcess == "" {
-		subProblemsAndProcess = strings.TrimSpace(content) // フォールバック：全体を小問構成と解答プロセスとして使用
+		subProblemsAndProcess = strings.TrimSpace(content)
 	}
 	
 	if subProblemsAndProcess == "" {
@@ -1526,12 +1447,387 @@ func (s *problemService) GenerateStage1(ctx context.Context, req models.Stage1Re
 	}
 	
 	logBuilder.WriteString(fmt.Sprintf("📝 小問構成と解答プロセスを抽出しました (長さ: %d文字)\n", len(subProblemsAndProcess)))
-	logBuilder.WriteString("✅ [Stage1] 1段階目（小問構成と解答プロセス生成）が完了しました\n")
+	logBuilder.WriteString("✅ [Stage1-Chat] 1段階目（会話形式）が完了しました\n")
 	
 	return &models.Stage1Response{
 		Success:               true,
 		SubProblemsAndProcess: subProblemsAndProcess,
 		Log:                   logBuilder.String(),
+	}, nil
+}
+
+// GenerateStage2WithHistory 2段階目：パラメータ設定と動的検証（数値計算）（会話履歴付き）
+func (s *problemService) GenerateStage2WithHistory(ctx context.Context, req models.Stage2Request, userSchoolCode string, history *models.ConversationHistory) (*models.Stage2Response, error) {
+	logBuilder := strings.Builder{}
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage2-Chat] 2段階目を開始：パラメータ設定と動的検証（会話形式） (ユーザー: %s)\n", userSchoolCode))
+	
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage2Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
+	
+	// Stage 2以降はトリガーのみ送信
+	prompt := s.loadStageTrigger()
+	logBuilder.WriteString("📝 Stage 2トリガーを送信（次のステージに進む）\n")
+	
+	s.buildConversationHistory(history, prompt, "", 2)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴を更新（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	var content string
+	clientMessages := s.convertToClientMessages(history)
+	
+	switch user.PreferredAPI {
+	case "openai", "chatgpt":
+		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "google", "gemini":
+		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "claude", "laboratory":
+		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	default:
+		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage2Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	}
+	
+	if err != nil {
+		errorMsg := fmt.Sprintf("%s APIでのパラメータ設定と動的検証に失敗しました: %v", user.PreferredAPI, err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage2Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
+	
+	s.buildConversationHistory(history, "", content, 2)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴にアシスタントの応答を追加（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	// Stage 2では数値計算プログラムと結果を抽出
+	calculationProgram := s.extractCalculationProgram(content)
+	logBuilder.WriteString(fmt.Sprintf("🧮 計算プログラムの抽出: %t (長さ: %d文字)\n", calculationProgram != "", len(calculationProgram)))
+	
+	var calculationResults string
+	if calculationProgram != "" {
+		logBuilder.WriteString("🧮 数値計算プログラムを実行中...\n")
+		calculationResults, err = s.executeCalculationProgram(ctx, calculationProgram)
+		if err != nil {
+			logBuilder.WriteString(fmt.Sprintf("⚠️ 数値計算の実行に失敗: %v\n", err))
+			calculationResults = fmt.Sprintf("計算実行エラー: %v", err)
+		} else {
+			logBuilder.WriteString("✅ 数値計算を実行しました\n")
+		}
+	}
+	
+	// CompleteProblemフィールドに計算結果を格納（後方互換性のため）
+	completeProblem := calculationResults
+	if completeProblem == "" {
+		completeProblem = strings.TrimSpace(content)
+	}
+	logBuilder.WriteString("✅ [Stage2-Chat] 2段階目（会話形式）が完了しました\n")
+	
+	return &models.Stage2Response{
+		Success:         true,
+		CompleteProblem: completeProblem,
+		Log:             logBuilder.String(),
+	}, nil
+}
+
+// GenerateStage4WithHistory 4段階目：完全な問題文の生成（会話履歴付き）
+func (s *problemService) GenerateStage4WithHistory(ctx context.Context, req models.Stage4Request, userSchoolCode string, history *models.ConversationHistory) (*models.Stage4Response, error) {
+	logBuilder := strings.Builder{}
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage4-Chat] 4段階目を開始：完全な問題文の生成（会話形式） (ユーザー: %s)\n", userSchoolCode))
+	
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage4Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
+	
+	// Stage 4もトリガーのみ送信
+	prompt := s.loadStageTrigger()
+	logBuilder.WriteString("📝 Stage 4トリガーを送信（次のステージに進む）\n")
+	
+	s.buildConversationHistory(history, prompt, "", 4)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴を更新（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	var content string
+	clientMessages := s.convertToClientMessages(history)
+	
+	switch user.PreferredAPI {
+	case "openai", "chatgpt":
+		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "google", "gemini":
+		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "claude", "laboratory":
+		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	default:
+		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage4Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	}
+	
+	if err != nil {
+		errorMsg := fmt.Sprintf("%s APIでの完全な問題文の生成に失敗しました: %v", user.PreferredAPI, err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage4Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
+	
+	s.buildConversationHistory(history, "", content, 4)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴にアシスタントの応答を追加（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	completeProblem := s.extractCompleteProblem(content)
+	if completeProblem == "" {
+		completeProblem = strings.TrimSpace(content)
+	}
+	
+	if completeProblem == "" {
+		errorMsg := "完全な問題文の抽出に失敗しました"
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage4Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("📝 完全な問題文を抽出しました (長さ: %d文字)\n", len(completeProblem)))
+	logBuilder.WriteString("✅ [Stage4-Chat] 4段階目（会話形式）が完了しました\n")
+	
+	// FinalExplanationフィールドに完全な問題文を格納（フィールド名は後方互換性のため変更しない）
+	return &models.Stage4Response{
+		Success:          true,
+		FinalExplanation: completeProblem, // 実際は「完全な問題文」だが、フィールド名は変更しない
+		Log:              logBuilder.String(),
+	}, nil
+}
+
+// GenerateStage5WithHistory 5段階目：完全な解答・解説の生成（会話履歴付き）
+func (s *problemService) GenerateStage5WithHistory(ctx context.Context, req models.Stage5Request, userSchoolCode string, history *models.ConversationHistory) (*models.Stage5Response, error) {
+	logBuilder := strings.Builder{}
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage5-Chat] 5段階目を開始：完全な解答・解説の生成（会話形式） (ユーザー: %s)\n", userSchoolCode))
+	
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage5Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
+	
+	// Stage 5もトリガーのみ送信
+	prompt := s.loadStageTrigger()
+	logBuilder.WriteString("📝 Stage 5トリガーを送信（次のステージに進む）\n")
+	
+	s.buildConversationHistory(history, prompt, "", 5)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴を更新（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	var content string
+	clientMessages := s.convertToClientMessages(history)
+	
+	switch user.PreferredAPI {
+	case "openai", "chatgpt":
+		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "google", "gemini":
+		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "claude", "laboratory":
+		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	default:
+		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage5Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	}
+	
+	if err != nil {
+		errorMsg := fmt.Sprintf("%s APIでの完全な解答・解説生成に失敗しました: %v", user.PreferredAPI, err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage5Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
+	
+	s.buildConversationHistory(history, "", content, 5)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴にアシスタントの応答を追加（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	finalExplanation := s.extractFinalSolution(content)
+	if finalExplanation == "" {
+		finalExplanation = strings.TrimSpace(content)
+	}
+	
+	if finalExplanation == "" {
+		errorMsg := "完全な解答・解説の抽出に失敗しました"
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage5Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("📚 完全な解答・解説を抽出しました (長さ: %d文字)\n", len(finalExplanation)))
+	logBuilder.WriteString("✅ [Stage5-Chat] 5段階目（会話形式）が完了しました\n")
+	
+	// GeometryCodeフィールドに解答・解説を格納（フィールド名は後方互換性のため変更しない）
+	return &models.Stage5Response{
+		Success:      true,
+		GeometryCode: finalExplanation, // 実際は「完全な解答・解説」だが、フィールド名は変更しない
+		ImageBase64:  "",
+		Log:          logBuilder.String(),
+	}, nil
+}
+
+// GenerateStage3WithHistory 3段階目：問題文用の図形描画（会話履歴付き）
+func (s *problemService) GenerateStage3WithHistory(ctx context.Context, req models.Stage3Request, userSchoolCode string, history *models.ConversationHistory) (*models.Stage3Response, error) {
+	fmt.Printf("🎨 [Stage3-Chat] ===== STAGE 3 STARTED ===== (user: %s)\n", userSchoolCode)
+	fmt.Printf("🎨 [Stage3-Chat] History messages count: %d\n", len(history.Messages))
+	
+	logBuilder := strings.Builder{}
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Stage3-Chat] 3段階目を開始：問題文用の図形描画（会話形式） (ユーザー: %s)\n", userSchoolCode))
+	
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage3Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, err
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
+	
+	// Stage 3もトリガーのみ送信
+	prompt := s.loadStageTrigger()
+	logBuilder.WriteString("📝 Stage 3トリガーを送信（次のステージに進む）\n")
+	
+	s.buildConversationHistory(history, prompt, "", 3)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴を更新（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	var content string
+	clientMessages := s.convertToClientMessages(history)
+	
+	switch user.PreferredAPI {
+	case "openai", "chatgpt":
+		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "google", "gemini":
+		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "claude", "laboratory":
+		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	default:
+		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.Stage3Response{
+			Success: false,
+			Error:   errorMsg,
+			Log:     logBuilder.String(),
+		}, fmt.Errorf(errorMsg)
+	}
+	
+	if err != nil {
+		logBuilder.WriteString(fmt.Sprintf("⚠️ AIによる図形コード生成に失敗: %v\n", err))
+		logBuilder.WriteString("ℹ️ この問題は図形なしで続行します\n")
+		logBuilder.WriteString("✅ [Stage3-Chat] 3段階目（会話形式）が完了しました（図形なし）\n")
+		
+		return &models.Stage3Response{
+			Success:            true,
+			CalculationProgram: "",
+			CalculationResults: "",
+			Log:                logBuilder.String(),
+		}, nil
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
+	
+	s.buildConversationHistory(history, "", content, 3)
+	logBuilder.WriteString(fmt.Sprintf("💬 会話履歴にアシスタントの応答を追加（現在のメッセージ数: %d）\n", len(history.Messages)))
+	
+	geometryCode := s.extractPythonCode(content)
+	fmt.Printf("🐍 [Stage3-Chat] Geometry code extracted: %t (length: %d)\n", geometryCode != "", len(geometryCode))
+	logBuilder.WriteString(fmt.Sprintf("🐍 図形コードの抽出: %t (長さ: %d文字)\n", geometryCode != "", len(geometryCode)))
+	
+	var imageBase64 string
+	if geometryCode != "" {
+		fmt.Printf("🎨 [Stage3-Chat] Generating geometry with code...\n")
+		logBuilder.WriteString("🎨 図形を生成中...\n")
+		imageBase64, err = s.coreClient.GenerateCustomGeometry(ctx, geometryCode, req.CompleteProblem)
+		if err != nil {
+			fmt.Printf("❌ [Stage3-Chat] Geometry generation failed: %v\n", err)
+			logBuilder.WriteString(fmt.Sprintf("⚠️ 図形生成に失敗: %v\n", err))
+		} else {
+			fmt.Printf("✅ [Stage3-Chat] Geometry generated successfully (length: %d)\n", len(imageBase64))
+			logBuilder.WriteString("✅ 図形を生成しました\n")
+		}
+	} else {
+		fmt.Printf("ℹ️ [Stage3-Chat] No geometry code found, skipping geometry generation\n")
+		logBuilder.WriteString("ℹ️ この問題には図形は必要ありません\n")
+	}
+	
+	fmt.Printf("🖼️ [Stage3-Chat] Final image base64 length: %d\n", len(imageBase64))
+	logBuilder.WriteString(fmt.Sprintf("🖼️ 最終的な図形データの長さ: %d\n", len(imageBase64)))
+	logBuilder.WriteString("✅ [Stage3-Chat] 3段階目（会話形式）が完了しました\n")
+	
+	// CalculationProgramフィールドに図形コードを、CalculationResultsに画像を格納（後方互換性のため）
+	return &models.Stage3Response{
+		Success:            true,
+		CalculationProgram: geometryCode,
+		CalculationResults: imageBase64,
+		Log:                logBuilder.String(),
 	}, nil
 }
 
@@ -1555,68 +1851,14 @@ func (s *problemService) GenerateStage2(ctx context.Context, req models.Stage2Re
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 2段階目用のプロンプトを作成（完全な問題生成）
-	prompt := s.createNewStage2Prompt(req.SubProblemsAndProcess)
-	logBuilder.WriteString("📝 2段階目用プロンプト（完全な問題生成）を作成しました\n")
-	
-	// AIクライアントを選択してAPI呼び出し
-	var content string
-	switch user.PreferredAPI {
-	case "openai", "chatgpt":
-		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	case "google", "gemini":
-		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	case "claude", "laboratory":
-		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	default:
-		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage2Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	if err != nil {
-		errorMsg := fmt.Sprintf("%s APIでの完全な問題生成に失敗しました: %v", user.PreferredAPI, err)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage2Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, err
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
-	
-	// 完全な問題を抽出
-	completeProblem := s.extractCompleteProblem(content)
-	if completeProblem == "" {
-		completeProblem = strings.TrimSpace(content) // フォールバック：全体を完全な問題として使用
-	}
-	
-	if completeProblem == "" {
-		errorMsg := "完全な問題の抽出に失敗しました"
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage2Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("📝 完全な問題を抽出しました (長さ: %d文字)\n", len(completeProblem)))
-	logBuilder.WriteString("✅ [Stage2] 2段階目（完全な問題生成）が完了しました\n")
+	// 2段階目は非推奨（会話形式を使用してください）
+	logBuilder.WriteString("⚠️ 個別ステージの呼び出しは非推奨です\n")
 	
 	return &models.Stage2Response{
-		Success:         true,
-		CompleteProblem: completeProblem,
-		Log:             logBuilder.String(),
-	}, nil
+		Success: false,
+		Error:   "個別ステージの呼び出しは非推奨です。GenerateProblemFiveStageを使用してください。",
+		Log:     logBuilder.String(),
+	}, fmt.Errorf("deprecated: use GenerateProblemFiveStage instead")
 }
 
 // createStage2Prompt 2段階目用のプロンプト（図形生成専用）
@@ -1643,71 +1885,53 @@ func (s *problemService) GenerateStage3(ctx context.Context, req models.Stage3Re
 	
 	logBuilder.WriteString(fmt.Sprintf("🤖 使用するAPI: %s, モデル: %s\n", user.PreferredAPI, user.PreferredModel))
 	
-	// 3段階目用のプロンプトを作成（数値計算プログラム生成）
-	prompt := s.createNewStage3Prompt(req.SubProblemsAndProcess)
-	logBuilder.WriteString("📝 3段階目用プロンプト（数値計算プログラム生成）を作成しました\n")
-	
-	// AIクライアントを選択してAPI呼び出し
-	var content string
-	switch user.PreferredAPI {
-	case "openai", "chatgpt":
-		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	case "google", "gemini":
-		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	case "claude", "laboratory":
-		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
-		content, err = dynamicClient.GenerateContent(ctx, prompt)
-	default:
-		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage3Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, fmt.Errorf(errorMsg)
-	}
-	
-	if err != nil {
-		errorMsg := fmt.Sprintf("%s APIでの数値計算プログラム生成に失敗しました: %v", user.PreferredAPI, err)
-		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
-		return &models.Stage3Response{
-			Success: false,
-			Error:   errorMsg,
-			Log:     logBuilder.String(),
-		}, err
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
-	
-	// 数値計算プログラムを抽出
-	calculationProgram := s.extractCalculationProgram(content)
-	if calculationProgram == "" {
-		calculationProgram = strings.TrimSpace(content) // フォールバック：全体をプログラムとして使用
-	}
-	
-	logBuilder.WriteString(fmt.Sprintf("🧮 計算プログラムの抽出: %t (長さ: %d文字)\n", calculationProgram != "", len(calculationProgram)))
-	
-	// 数値計算プログラムを実行
-	var calculationResults string
-	if calculationProgram != "" {
-		logBuilder.WriteString("🧮 数値計算プログラムを実行中...\n")
-		calculationResults, err = s.executeCalculationProgram(ctx, calculationProgram)
-		if err != nil {
-			logBuilder.WriteString(fmt.Sprintf("⚠️ 数値計算の実行に失敗: %v\n", err))
-			calculationResults = fmt.Sprintf("計算実行エラー: %v", err)
-		} else {
-			logBuilder.WriteString("✅ 数値計算を実行しました\n")
-		}
-	}
-	
-	logBuilder.WriteString("✅ [Stage3] 3段階目（数値計算プログラム生成・実行）が完了しました\n")
+	// 3段階目は非推奨（会話形式を使用してください）
+	logBuilder.WriteString("⚠️ 個別ステージの呼び出しは非推奨です\n")
 	
 	return &models.Stage3Response{
-		Success:            true,
-		CalculationProgram: calculationProgram,
-		CalculationResults: calculationResults,
-		Log:                logBuilder.String(),
-	}, nil
+		Success: false,
+		Error:   "個別ステージの呼び出しは非推奨です。GenerateProblemFiveStageを使用してください。",
+		Log:     logBuilder.String(),
+	}, fmt.Errorf("deprecated: use GenerateProblemFiveStage instead")
+}
+
+// buildConversationHistory 会話履歴を構築
+func (s *problemService) buildConversationHistory(history *models.ConversationHistory, userMessage, assistantMessage string, stage int) {
+	if history == nil {
+		return
+	}
+	
+	// ユーザーメッセージを追加
+	if userMessage != "" {
+		history.Messages = append(history.Messages, models.ConversationMessage{
+			Role:    "user",
+			Content: userMessage,
+			Stage:   stage,
+		})
+	}
+	
+	// アシスタントメッセージを追加
+	if assistantMessage != "" {
+		history.Messages = append(history.Messages, models.ConversationMessage{
+			Role:    "assistant",
+			Content: assistantMessage,
+			Stage:   stage,
+		})
+	}
+}
+
+// convertToClientMessages 会話履歴をクライアント用メッセージに変換
+func (s *problemService) convertToClientMessages(history *models.ConversationHistory) []clients.ChatMessage {
+	if history == nil || len(history.Messages) == 0 {
+		return nil
+	}
+	
+	messages := make([]clients.ChatMessage, 0, len(history.Messages))
+	for _, msg := range history.Messages {
+		messages = append(messages, clients.ChatMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+	return messages
 }

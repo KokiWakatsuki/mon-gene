@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS problems (
     solution TEXT COMMENT '解答',
     image_base64 LONGTEXT COMMENT '図（Base64エンコード）',
     filters JSON COMMENT '生成パラメータ（フィルタ条件）',
+    conversation_history JSON COMMENT '5段階生成プロセスの会話履歴（図形再生成時に使用）',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id),

@@ -14,6 +14,7 @@ func NewRouter(
 	problemHandler *handlers.ProblemHandler,
 	healthHandler *handlers.HealthHandler,
 	chatHandler *handlers.ChatHandler,
+	sseHandler *handlers.SSEHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -65,6 +66,16 @@ func NewRouter(
 		switch r.Method {
 		case "POST", "OPTIONS":
 			problemHandler.GenerateProblemFiveStage(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+	
+	// SSEエンドポイント（リアルタイム進捗通知）
+	mux.HandleFunc("/api/generate-problem-five-stage-sse", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST", "OPTIONS":
+			sseHandler.GenerateProblemFiveStageSSE(w, r)
 		default:
 			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}

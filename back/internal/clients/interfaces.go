@@ -12,10 +12,17 @@ type FileContent struct {
 	MimeType string
 }
 
+// ChatMessage represents a message in a conversation
+type ChatMessage struct {
+	Role    string `json:"role"`    // "user" or "assistant"
+	Content string `json:"content"` // メッセージ内容
+}
+
 // AIClient defines the interface for AI API interactions
 type AIClient interface {
 	GenerateContent(ctx context.Context, prompt string) (string, error)
 	GenerateMultimodalContent(ctx context.Context, prompt string, files []FileContent) (string, error)
+	GenerateWithHistory(ctx context.Context, messages []ChatMessage) (string, error)
 }
 
 // ClaudeClient defines the interface for Claude API interactions

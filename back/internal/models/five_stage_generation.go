@@ -62,6 +62,18 @@ type FiveStageGenerationRequest struct {
 	OpinionProfileV2 *OpinionProfileV2 `json:"opinion_profile_v2,omitempty"` // 新基準
 }
 
+// ConversationHistory 会話履歴を保持する構造体
+type ConversationHistory struct {
+	Messages []ConversationMessage `json:"messages"`
+}
+
+// ConversationMessage 会話メッセージ
+type ConversationMessage struct {
+	Role    string `json:"role"`    // "user" or "assistant"
+	Content string `json:"content"` // メッセージ内容
+	Stage   int    `json:"stage"`   // どのステージのメッセージか（1-5）
+}
+
 // FiveStageGenerationResponse 5段階生成の最終レスポンス（修正版）
 type FiveStageGenerationResponse struct {
 	Success bool   `json:"success"`
@@ -76,6 +88,9 @@ type FiveStageGenerationResponse struct {
 	GeometryCode          string `json:"geometry_code"`           // Stage5: 図形描画プログラム
 	ImageBase64           string `json:"image_base64"`            // Stage5: 図形画像
 	
+	// 会話履歴
+	ConversationHistory *ConversationHistory `json:"conversation_history,omitempty"` // 5段階生成プロセスの会話履歴
+	
 	// 各段階のログ
 	Stage1Log string `json:"stage1_log"`
 	Stage2Log string `json:"stage2_log"`
@@ -86,9 +101,10 @@ type FiveStageGenerationResponse struct {
 
 // Stage1Request 1段階目のリクエスト（小問構成と解答プロセス生成）
 type Stage1Request struct {
-	Prompt    string `json:"prompt"`
-	Subject   string `json:"subject"`
-	SkipCount bool   `json:"skip_count,omitempty"` // FiveStage全体呼び出し時にtrueを設定（重複カウント防止）
+	Prompt         string          `json:"prompt"`
+	Subject        string          `json:"subject"`
+	OpinionProfile *OpinionProfile `json:"opinion_profile,omitempty"` // ユーザーの意見プロファイル
+	SkipCount      bool            `json:"skip_count,omitempty"`      // FiveStage全体呼び出し時にtrueを設定（重複カウント防止）
 }
 
 // Stage1Response 1段階目のレスポンス（小問構成と解答プロセス生成）

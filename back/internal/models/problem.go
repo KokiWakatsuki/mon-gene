@@ -11,10 +11,11 @@ type Problem struct {
 	Solution    string                 `json:"solution,omitempty" db:"solution"`             // 解答
 	ImageBase64 string                 `json:"image_base64,omitempty" db:"image_base64"`     // 図
 	// opinion.md基準の評価データ
-	OpinionProfile   *OpinionProfile   `json:"opinion_profile,omitempty" db:"opinion_profile"`     // opinion_ver1.md基準のプロファイル（レガシー）
-	OpinionProfileV2 *OpinionProfileV2 `json:"opinion_profile_v2,omitempty" db:"opinion_profile_v2"` // opinion_ver2.md基準のプロファイル
-	CreatedAt        time.Time         `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time         `json:"updated_at" db:"updated_at"`
+	OpinionProfile      *OpinionProfile      `json:"opinion_profile,omitempty" db:"opinion_profile"`           // opinion_ver1.md基準のプロファイル（レガシー）
+	OpinionProfileV2    *OpinionProfileV2    `json:"opinion_profile_v2,omitempty" db:"opinion_profile_v2"`     // opinion_ver2.md基準のプロファイル
+	ConversationHistory *ConversationHistory `json:"conversation_history,omitempty" db:"conversation_history"` // 5段階生成プロセスの会話履歴
+	CreatedAt           time.Time            `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time            `json:"updated_at" db:"updated_at"`
 }
 
 // OpinionProfile は opinion_ver1.md の評価基準に基づく問題プロファイル（レガシー）
