@@ -38,6 +38,7 @@ type OpenAIClient interface {
 // GoogleClient defines the interface for Google API interactions
 type GoogleClient interface {
 	AIClient
+	GenerateContentWithPDF(ctx context.Context, prompt string, pdfData []byte) (string, error)
 }
 
 // CoreClient defines the interface for Core API interactions

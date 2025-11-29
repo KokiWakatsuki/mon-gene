@@ -3,17 +3,22 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../../components/layout/Header';
 import Tabs from '../../components/features/problems/Tabs';
+import MainTabs from '../../components/features/problems/MainTabs';
 import OpinionProfileSettings from '../../components/features/problems/OpinionProfileSettings';
 import ProblemCard from '../../components/features/problems/ProblemCard';
 import BackgroundShapes from '../../components/layout/BackgroundShapes';
 import ProblemPreviewModal from '../../components/features/problems/ProblemPreviewModal';
 import LoadingModal from '../../components/ui/LoadingModal';
+import FileUpload from '../../components/features/problems/FileUpload';
+import SearchOptions from '../../components/features/problems/SearchOptions';
+import ThreeProblemsDisplay from '../../components/features/problems/ThreeProblemsDisplay';
 import { API_CONFIG } from '../../lib/config/api';
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [activeSubject, setActiveSubject] = useState('数学');
+  const [activeSubject] = useState('数学'); // 数学のみに固定
+  const [activeMainTab, setActiveMainTab] = useState<'list' | 'generate'>('list'); // メインタブの状態
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
   const [previewModal, setPreviewModal] = useState<{ 
     isOpen: boolean; 
@@ -49,8 +54,13 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
   const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('partial');
   
-  // 生成システム用の状態（デフォルトをインクリメンタルモデルに変更）
-  const [generationMode, setGenerationMode] = useState<'single' | 'five-stage'>('five-stage');
+  // 生成システム用の状態（5段階 or 3問生成）
+  const [generationMode, setGenerationMode] = useState<'five-stage' | 'three-problems'>('five-stage');
+  
+  // ファイルアップロード用の状態
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [filePreviewContent, setFilePreviewContent] = useState<string>('');
   
   // opinion.md基準での問題生成モード（Ver.2に移行）
   const [useOpinionCriteria] = useState<boolean>(true);
@@ -107,8 +117,15 @@ export default function Home() {
     stage4?: { finalExplanation: string; log: string };
     stage5?: { geometryCode: string; imageBase64: string; log: string };
   }>({});
-  const [currentStage, setCurrentStage] = useState<number>(0); // 0=未開始, 1-5=各段階
+  const [currentStage, setCurrentStage] = useState<number>(0); // 0=未開始, 1-5=各段階（5段階）, 1-15=各段階（3問生成）
   const [stageProgress, setStageProgress] = useState<number>(0); // 進捗率 0-100
+  
+  // 3問生成システム用の状態
+  const [threeProblemsResults, setThreeProblemsResults] = useState<{
+    patternA?: { id: string; title: string; content: string; solution: string; imageBase64?: string };
+    patternB?: { id: string; title: string; content: string; solution: string; imageBase64?: string };
+    patternC?: { id: string; title: string; content: string; solution: string; imageBase64?: string };
+  }>({});
 
   // ユーザー情報を取得する関数
   const fetchUserInfo = async () => {
@@ -189,7 +206,7 @@ export default function Home() {
   // 認証チェック中の表示
   if (isCheckingAuth) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-mongene-bg">
+      <div className="relative min-h-screen overflow-hidden">
         <BackgroundShapes />
         <div className="relative z-10 flex items-center justify-center min-h-screen">
           <div className="text-center">
@@ -207,7 +224,7 @@ export default function Home() {
     return null;
   }
 
-  const subjects = ['数学', '英語', '国語'];
+  const subjects = ['数学']; // 数学のみ
 
   // 科目別の単元データ
   const subjectUnits = {
@@ -380,15 +397,7 @@ export default function Home() {
     ];
   };
 
-  const handleSubjectChange = (subject: string) => {
-    setActiveSubject(subject);
-    // 科目が変わったら単元の選択をリセット
-    setSelectedFilters(prev => {
-      const newFilters = { ...prev };
-      delete newFilters['単元'];
-      return newFilters;
-    });
-  };
+  // 科目は「数学」に固定されているため、handleSubjectChangeは不要
 
   const handleFilterChange = (groupLabel: string, value: string, allowMultiple: boolean) => {
     setSelectedFilters(prev => {
@@ -902,8 +911,214 @@ export default function Home() {
     }
   };
 
+  // 3問生成システムの関数（SSE使用）
+  const handleGenerateThreeProblems = async () => {
+    // 上限チェック
+    if (isGenerationLimitReached()) {
+      alert(`問題生成回数の上限（${userInfo?.problem_generation_limit}回）に達しました。これ以上問題を生成することはできません。`);
+      return;
+    }
+
+    // ファイルアップロードチェック（3問生成では必須）
+    if (uploadedFiles.length === 0) {
+      alert('3問生成モードではファイルのアップロードが必須です。参考となる問題ファイルをアップロードしてください。');
+      return;
+    }
+
+    // opinion profile v2の必須項目チェック
+    if (opinionProfileV2.sub_problem_count === 0) {
+      alert('小問の数を設定してください');
+      return;
+    }
+    
+    setIsLoading(true);
+    setThreeProblemsResults({});
+    setCurrentStage(1);
+    setStageProgress(0);
+    
+    try {
+      const prompt = createPromptFromFilters();
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('認証トークンが見つかりません。再度ログインしてください。');
+      }
+
+      console.log('🚀 [ThreeProblems] 3問生成プロセス開始（SSE使用）');
+      
+      // PDFファイルがあるかチェック
+      const hasPDF = uploadedFiles.some(file => file.type === 'application/pdf');
+      
+      let response: Response;
+      
+      if (hasPDF) {
+        // PDFファイルがある場合：multipart/form-dataで送信
+        console.log('📄 [ThreeProblems] PDF file detected, using multipart/form-data');
+        
+        const formData = new FormData();
+        formData.append('subject', activeSubject);
+        
+        // 最初のPDFファイルのみを送信（複数ある場合は最初のもの）
+        const pdfFile = uploadedFiles.find(file => file.type === 'application/pdf');
+        if (pdfFile) {
+          formData.append('file', pdfFile);
+          console.log('📎 [ThreeProblems] Attached PDF file:', pdfFile.name, 'size:', pdfFile.size);
+        }
+        
+        // fetchでSSE接続（multipart/form-data）
+        response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-three-problems-sse`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            // Content-Typeは自動設定されるため指定しない
+          },
+          body: formData
+        });
+      } else {
+        // PDFファイルがない場合：従来通りテキストで送信
+        console.log('📝 [ThreeProblems] No PDF file, using text content');
+        
+        // ファイル内容を読み込んで1つの文字列に結合
+        const fileContents = await Promise.all(
+          uploadedFiles.map(async (file) => {
+            const text = await file.text();
+            return `【ファイル名: ${file.name}】\n${text}`;
+          })
+        );
+        
+        const uploadedProblemContent = fileContents.join('\n\n---\n\n');
+        console.log('📄 [ThreeProblems] Uploaded problem content length:', uploadedProblemContent.length);
+
+        // SSEを使用してリアルタイム進捗を取得
+        const requestBody = JSON.stringify({
+          uploaded_problem_content: uploadedProblemContent,
+          subject: activeSubject
+        });
+
+        // fetchでSSE接続（JSON）
+        response = await fetch(`${API_CONFIG.API_BASE_URL}/api/generate-three-problems-sse`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: requestBody
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error(`SSE接続エラー: ${response.status} ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalResult: any = null;
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const event = JSON.parse(data);
+              console.log('📨 [SSE] Event:', event);
+
+              if (event.type === 'stage_complete') {
+                console.log(`✅ [SSE] Stage ${event.stage} 完了`);
+                setCurrentStage(event.stage + 1);
+              } else if (event.type === 'stage_start') {
+                console.log(`🚀 [SSE] Stage ${event.stage} 開始`);
+                setCurrentStage(event.stage);
+              } else if (event.type === 'error') {
+                console.error('❌ [SSE] Error:', event.error);
+                throw new Error(event.error);
+              } else if (event.type === 'complete') {
+                console.log('✅ [SSE] 完了');
+                finalResult = JSON.parse(event.message);
+                setStageProgress(99);
+                setCurrentStage(15);
+              }
+            } catch (e) {
+              console.error('❌ [SSE] Parse error:', e);
+            }
+          }
+        }
+      }
+
+      if (!finalResult) {
+        throw new Error('3問生成の結果を取得できませんでした');
+      }
+
+      console.log('📦 [ThreeProblems] Final result:', finalResult);
+
+      // 結果を問題リストに追加（3問すべて）
+      const newProblems = [
+        {
+          id: String(problems.length + 1),
+          title: `パターンA: 数値変更 ${problems.length + 1}`,
+          content: finalResult.pattern_a?.content || '',
+          solution: finalResult.pattern_a?.solution || '',
+          imageBase64: finalResult.pattern_a?.image_base64 || undefined,
+        },
+        {
+          id: String(problems.length + 2),
+          title: `パターンB: 文脈変更 ${problems.length + 2}`,
+          content: finalResult.pattern_b?.content || '',
+          solution: finalResult.pattern_b?.solution || '',
+          imageBase64: finalResult.pattern_b?.image_base64 || undefined,
+        },
+        {
+          id: String(problems.length + 3),
+          title: `パターンC: 構造変更 ${problems.length + 3}`,
+          content: finalResult.pattern_c?.content || '',
+          solution: finalResult.pattern_c?.solution || '',
+          imageBase64: finalResult.pattern_c?.image_base64 || undefined,
+        }
+      ];
+
+      setProblems(prev => [...prev, ...newProblems]);
+      setThreeProblemsResults({
+        patternA: newProblems[0],
+        patternB: newProblems[1],
+        patternC: newProblems[2],
+      });
+
+      // ユーザー情報を更新
+      await fetchUserInfo();
+
+      setIsLoading(false);
+
+      // 最初の問題のプレビューモーダルを表示
+      setPreviewModal({
+        isOpen: true,
+        problemId: newProblems[0].id,
+        problemTitle: newProblems[0].title,
+        problemContent: newProblems[0].content,
+        imageBase64: newProblems[0].imageBase64,
+        solutionText: newProblems[0].solution,
+      });
+
+      console.log('✅ [ThreeProblems] 3問生成プロセス完全完了');
+      
+    } catch (error) {
+      setIsLoading(false);
+      setCurrentStage(0);
+      setStageProgress(0);
+      console.error('3問生成エラー:', error);
+      await handleGenerationError(error);
+    }
+  };
+
   const handleGenerate = async () => {
-    if (generationMode === 'five-stage') {
+    if (generationMode === 'three-problems') {
+      await handleGenerateThreeProblems();
+    } else if (generationMode === 'five-stage') {
       await handleGenerateFiveStage();
     } else {
       await handleGenerateSingle();
@@ -1067,6 +1282,14 @@ export default function Home() {
     
     filterTexts.push(`科目: ${activeSubject}`);
     filterTexts.push('評価基準: opinion_ver2.md に基づく空間図形問題の詳細指標');
+    
+    // アップロードされたファイルがある場合は参考資料として追加
+    if (uploadedFiles.length > 0) {
+      filterTexts.push(`\n【参考資料】`);
+      filterTexts.push(`- アップロードされたファイル数: ${uploadedFiles.length}件`);
+      filterTexts.push(`- ファイル名: ${uploadedFiles.map(f => f.name).join(', ')}`);
+      filterTexts.push('※これらのファイルを参考に問題を生成してください');
+    }
     
     // opinionProfileV2から詳細プロンプトを生成
     filterTexts.push(`\n【文章量・構成】`);
@@ -1351,255 +1574,260 @@ export default function Home() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-mongene-bg">
+    <div className="relative min-h-screen overflow-hidden">
       <BackgroundShapes />
       
       <div className="relative z-10 max-w-6xl mx-auto p-6">
         <Header />
         
-        <Tabs 
+        <Tabs
           subjects={subjects}
           activeSubject={activeSubject}
-          onSubjectChange={handleSubjectChange}
+          onSubjectChange={() => {}} // 数学のみなので何もしない
         />
         
-        {/* OpinionProfileSettings統合（Ver.4.0基準） */}
-        <div className="mb-6">
-          <OpinionProfileSettings
-            opinionProfile={opinionProfileV2}
-            onOpinionProfileChange={setOpinionProfileV2}
-          />
-        </div>
+        <MainTabs
+          activeTab={activeMainTab}
+          onTabChange={setActiveMainTab}
+        />
         
-        {/* 検索・履歴機能UI */}
-        <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
-          <h3 className="text-lg font-bold text-mongene-ink mb-4">🔍 問題検索・履歴</h3>
-          
-          {/* キーワード検索 */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <div className="flex-1">
+        {/* 問題一覧タブ */}
+        {activeMainTab === 'list' && (
+          <>
+            {/* キーワード検索バー */}
+            <div className="mb-6 flex gap-3">
               <input
                 type="text"
-                placeholder="キーワードを入力（例：図形、関数、確率...）"
+                placeholder="キーワード (例: 円錐, サイコロ, 座標...)"
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg border border-white/20 bg-white/10 text-mongene-ink placeholder-mongene-muted focus:outline-none focus:ring-2 focus:ring-mongene-blue"
+                className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onKeyDown={(e) => e.key === 'Enter' && searchProblems()}
               />
+              <button
+                onClick={searchProblems}
+                className="px-6 py-3 bg-blue-500 text-white rounded-lg font-bold hover:brightness-110 transition-all"
+              >
+                検索
+              </button>
             </div>
-            <button
-              onClick={searchProblems}
-              className="px-4 py-2 bg-mongene-blue text-white rounded-lg hover:brightness-110 transition-all"
-            >
-              キーワード検索
-            </button>
-          </div>
-
-          {/* 検索タイプ選択 */}
-          <div className="mb-3">
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-mongene-ink">検索タイプ:</span>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="searchMatchType"
-                  value="partial"
-                  checked={searchMatchType === 'partial'}
-                  onChange={(e) => setSearchMatchType(e.target.value as 'exact' | 'partial')}
-                  className="text-mongene-blue"
+            
+            {/* 検索オプション（アコーディオン） */}
+            <SearchOptions
+              opinionProfile={opinionProfileV2}
+              onOpinionProfileChange={setOpinionProfileV2}
+            />
+            
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6" aria-label="問題一覧">
+              {(isSearchMode ? searchResults : problems).map((problem) => (
+                <ProblemCard
+                  key={problem.id}
+                  id={problem.id}
+                  title={problem.title}
+                  content={problem.content}
+                  imageBase64={problem.imageBase64}
+                  onPreview={handlePreview}
+                  onPrint={handlePrint}
                 />
-                <span className="text-sm text-mongene-ink">部分一致（おすすめ）</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="searchMatchType"
-                  value="exact"
-                  checked={searchMatchType === 'exact'}
-                  onChange={(e) => setSearchMatchType(e.target.value as 'exact' | 'partial')}
-                  className="text-mongene-blue"
-                />
-                <span className="text-sm text-mongene-ink">完全一致</span>
-              </label>
-            </div>
-            <div className="text-xs text-mongene-muted mt-1">
-              {searchMatchType === 'partial' 
-                ? '条件の一部でも一致すれば検索結果に表示されます' 
-                : 'すべての条件が完全に一致する場合のみ検索結果に表示されます'
-              }
-            </div>
-          </div>
-
-          {/* パラメータ検索・履歴ボタン */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <button
-              onClick={searchProblemsByFilters}
-              className="px-4 py-2 bg-mongene-green text-white rounded-lg hover:brightness-110 transition-all"
-            >
-              📊 現在の条件で検索 ({searchMatchType === 'partial' ? '部分一致' : '完全一致'})
-            </button>
-            <button
-              onClick={searchProblemsByKeywordAndFilters}
-              className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:brightness-110 transition-all"
-            >
-              🔍📊 キーワード+条件で検索
-            </button>
-            <button
-              onClick={fetchProblemHistory}
-              className="px-4 py-2 bg-mongene-muted text-white rounded-lg hover:brightness-110 transition-all"
-            >
-              📚 履歴表示
-            </button>
-          </div>
-          
-          {/* 現在の表示モード */}
-          <div className="text-sm text-mongene-muted">
-            {isSearchMode ? (
-              <div className="flex items-center gap-2">
-                <span>🔍 検索結果: "{searchKeyword}" ({searchResults.length}件)</span>
-                <button 
-                  onClick={() => {
-                    setIsSearchMode(false);
-                    setSearchKeyword('');
-                    fetchProblemHistory();
-                  }}
-                  className="text-mongene-blue hover:underline"
+              ))}
+            </section>
+          </>
+        )}
+        
+        {/* 問題生成タブ */}
+        {activeMainTab === 'generate' && (
+          <>
+            {/* 生成モード選択 */}
+            <div className="mb-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">生成モード選択</h3>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setGenerationMode('five-stage')}
+                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
+                    generationMode === 'five-stage'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
                 >
-                  履歴に戻る
+                  <div className="text-center">
+                    <div className="text-lg mb-1">🔥 5段階生成</div>
+                    <div className="text-xs">1問を5段階で生成</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setGenerationMode('three-problems')}
+                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
+                    generationMode === 'three-problems'
+                      ? 'border-green-500 bg-green-50 text-green-700 font-semibold'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-lg mb-1">📚 3問生成</div>
+                    <div className="text-xs">類似問題を3パターン生成（ファイル必須）</div>
+                  </div>
                 </button>
               </div>
-            ) : (
-              <span>📚 問題履歴 ({problems.length}件)</span>
-            )}
-          </div>
-        </div>
-        
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-7" aria-label="問題一覧">
-          {/* 検索モードの場合は検索結果を表示、そうでなければ履歴を表示 */}
-          {(isSearchMode ? searchResults : problems).map((problem) => (
-            <ProblemCard
-              key={problem.id}
-              id={problem.id}
-              title={problem.title}
-              content={problem.content}
-              imageBase64={problem.imageBase64}
-              onPreview={handlePreview}
-              onPrint={handlePrint}
+            </div>
+
+            <FileUpload
+              uploadedFiles={uploadedFiles}
+              onFilesChange={setUploadedFiles}
             />
-          ))}
-        </section>
-        
-        {/* ユーザー情報表示 */}
-        {userInfo && (
-          <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
-            <div className="flex items-center justify-between">
-              <div className="text-mongene-ink">
-                <span className="font-medium">塾コード: {userInfo.school_code}</span>
-                <span className="ml-4">
-                  問題生成回数: {userInfo.problem_generation_count}/
-                  {userInfo.problem_generation_limit === -1 ? '無制限' : userInfo.problem_generation_limit}
-                </span>
+            
+            {/* 3問生成モードの場合はファイル必須の注意書き */}
+            {generationMode === 'three-problems' && uploadedFiles.length === 0 && (
+              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <div className="flex items-start gap-2">
+                  <span className="text-yellow-600 text-xl">⚠️</span>
+                  <div>
+                    <div className="font-semibold text-yellow-800 mb-1">ファイルアップロードが必須です</div>
+                    <div className="text-sm text-yellow-700">
+                      3問生成モードでは、参考となる問題ファイルのアップロードが必要です。
+                      アップロードした問題を基に、3つの類似パターンを生成します。
+                    </div>
+                  </div>
+                </div>
               </div>
+            )}
+            
+            {/* OpinionProfileSettingsは5段階モードでのみ表示 */}
+            {generationMode === 'five-stage' && (
+              <div className="mt-6">
+                <OpinionProfileSettings
+                  opinionProfile={opinionProfileV2}
+                  onOpinionProfileChange={setOpinionProfileV2}
+                />
+              </div>
+            )}
+            
+            {/* 3問生成結果の表示 */}
+            {generationMode === 'three-problems' && Object.keys(threeProblemsResults).length > 0 && (
+              <ThreeProblemsDisplay
+                problems={threeProblemsResults}
+                onPreview={handlePreview}
+                onPrint={handlePrint}
+              />
+            )}
+            
+            {/* ユーザー情報表示 */}
+            {userInfo && (
+              <div className="mt-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="text-gray-800">
+                    <span className="font-medium">塾コード: {userInfo.school_code}</span>
+                    <span className="ml-4">
+                      問題生成回数: {userInfo.problem_generation_count}/
+                      {userInfo.problem_generation_limit === -1 ? '無制限' : userInfo.problem_generation_limit}
+                    </span>
+                  </div>
+                  {isGenerationLimitReached() && (
+                    <div className="text-red-600 font-bold">
+                      ⚠️ 生成上限に達しました
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            <div className="text-center mt-8">
               {isGenerationLimitReached() && (
-                <div className="text-red-600 font-bold">
-                  ⚠️ 生成上限に達しました
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-center max-w-md mx-auto">
+                  <div className="font-bold mb-2">🚫 問題生成上限に達しました</div>
+                  <div className="text-sm">
+                    問題生成回数の上限（{userInfo?.problem_generation_limit}回）に達したため、
+                    これ以上問題を生成することはできません。
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-
-        {/* 5段階生成システムの選択UI */}
-        <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
-          <h3 className="text-lg font-bold text-mongene-ink mb-4">🚀 問題生成方式</h3>
-          
-          {/* 生成モード選択 */}
-          <div className="mb-4">
-            <div className="flex flex-col gap-3 mb-3">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="generationMode"
-                  value="single"
-                  checked={generationMode === 'single'}
-                  onChange={(e) => setGenerationMode(e.target.value as 'single' | 'five-stage')}
-                  className="text-mongene-blue"
-                />
-                <span className="text-sm font-medium text-mongene-ink">ワンショットモデルクエリ（簡単な問題向け）</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="generationMode"
-                  value="five-stage"
-                  checked={generationMode === 'five-stage'}
-                  onChange={(e) => setGenerationMode(e.target.value as 'single' | 'five-stage')}
-                  className="text-mongene-blue"
-                />
-                <span className="text-sm font-medium text-mongene-ink">インクリメンタルモデルクエリ（複雑な問題向け）</span>
-              </label>
-            </div>
-            <div className="text-xs text-mongene-muted">
-              {generationMode === 'single'
-                ? '問題文と解答を1回のAPI呼び出しで生成します\n※計算はLLMが行います'
-                : '5段階に分けて生成します：①小問構成→②数値計算→③図形描画→④問題文→⑤解答解説\n※計算はプログラムで行います'
-              }
-            </div>
-          </div>
-
-
-          {/* 5段階生成の場合の説明 */}
-          {generationMode === 'five-stage' && (
-            <div className="border-t border-white/20 pt-4">
-              <h4 className="font-bold text-mongene-ink mb-3">🔥 5段階生成プロセス（最高精度）</h4>
-              <p className="text-sm text-mongene-muted mb-3">
-                問題生成を5つのステージに分けて実行します：
-              </p>
-              <ol className="text-sm text-mongene-muted space-y-1 ml-4">
-                <li>1️⃣ 小問構成と解答プロセスの設計</li>
-                <li>2️⃣ パラメータ設定と動的検証（数値計算）</li>
-                <li>3️⃣ 問題文用の図形描画</li>
-                <li>4️⃣ 完全な問題文の生成</li>
-                <li>5️⃣ 完全な解答・解説の生成</li>
-              </ol>
-              <p className="text-xs text-mongene-muted mt-3">
-                ※進捗はローディング画面で確認できます
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col items-center">
-          {/* 上限に達した場合の専用メッセージ */}
-          {isGenerationLimitReached() && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-center max-w-md">
-              <div className="font-bold mb-2">🚫 問題生成上限に達しました</div>
-              <div className="text-sm">
-                問題生成回数の上限（{userInfo?.problem_generation_limit}回）に達したため、
-                これ以上問題を生成することはできません。
+              
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  className={`text-base font-bold px-7 py-3.5 rounded-xl transition-all shadow-[0_4px_15px_rgba(141,219,57,0.4)] ${
+                    isGenerationLimitReached()
+                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      : 'bg-mongene-green text-gray-800 hover:brightness-105 hover:-translate-y-0.5 cursor-pointer'
+                  }`}
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={isGenerationLimitReached()}
+                >
+                  {isGenerationLimitReached() ? '生成上限に達しました' : '生成'}
+                </button>
+                
+                {/* アップロードした問題の概要表示ボタン */}
+                {uploadedFiles.length > 0 && (
+                  <button
+                    className="text-base font-bold px-6 py-3.5 rounded-xl transition-all bg-blue-500 text-white hover:brightness-110 hover:-translate-y-0.5 shadow-[0_4px_15px_rgba(59,130,246,0.4)]"
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        console.log('📄 Loading file contents...', uploadedFiles);
+                        setIsLoading(true);
+                        
+                        // ファイル内容を読み込む
+                        const fileContents = await Promise.all(
+                          uploadedFiles.map(async (file) => {
+                            console.log('Processing file:', file.name, 'type:', file.type, 'size:', file.size);
+                            
+                            if (file.type === 'application/pdf') {
+                              // PDFファイルの場合：バックエンドAPIを呼び出してテキストを抽出
+                              console.log('📄 Extracting PDF content via API...');
+                              
+                              const token = localStorage.getItem('token');
+                              if (!token) {
+                                throw new Error('認証トークンが見つかりません');
+                              }
+                              
+                              const formData = new FormData();
+                              formData.append('file', file);
+                              
+                              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/preview-pdf`, {
+                                method: 'POST',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                },
+                                body: formData
+                              });
+                              
+                              if (!response.ok) {
+                                throw new Error(`PDF抽出エラー: ${response.status}`);
+                              }
+                              
+                              const data = await response.json();
+                              console.log('✅ PDF content extracted:', data.content.substring(0, 200));
+                              
+                              return `【PDFファイル】\nファイル名: ${file.name}\nサイズ: ${(file.size / 1024).toFixed(2)} KB\n\n【抽出された内容】\n${data.content}`;
+                            } else {
+                              const text = await file.text();
+                              console.log('Text file content length:', text.length);
+                              const preview = text.substring(0, 1000);
+                              return `【ファイル名: ${file.name}】\nサイズ: ${(file.size / 1024).toFixed(2)} KB\n\n${preview}${text.length > 1000 ? '\n\n... (以下省略)' : ''}`;
+                            }
+                          })
+                        );
+                        
+                        const summary = fileContents.join('\n\n' + '='.repeat(50) + '\n\n');
+                        console.log('File summary generated:', summary.substring(0, 200));
+                        
+                        setFilePreviewContent(summary);
+                        setShowFilePreview(true);
+                        setIsLoading(false);
+                      } catch (error) {
+                        console.error('ファイル読み込みエラー:', error);
+                        setIsLoading(false);
+                        alert('ファイルの読み込みに失敗しました: ' + (error as Error).message);
+                      }
+                    }}
+                  >
+                    📄 問題概要を表示
+                  </button>
+                )}
               </div>
             </div>
-          )}
-          
-          <button
-            className={`appearance-none border-0 rounded-xl px-5 py-3 font-bold transition-all focus:outline-none focus:ring-3 focus:ring-offset-2 ${
-              isGenerationLimitReached()
-                ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                : 'bg-mongene-green text-mongene-ink shadow-lg hover:brightness-98 hover:-translate-y-0.5 cursor-pointer focus:ring-mongene-green/25'
-            }`}
-            type="button"
-            onClick={handleGenerate}
-            disabled={isGenerationLimitReached()}
-          >
-            {isGenerationLimitReached() 
-              ? '生成上限に達しました' 
-              : generationMode === 'five-stage'
-                ? '🔥 5段階生成を実行'
-                : '問題を新しく生成'
-            }
-          </button>
-        </div>
+          </>
+        )}
+        
       </div>
 
       <ProblemPreviewModal
@@ -1652,18 +1880,51 @@ export default function Home() {
       <LoadingModal
         isOpen={isLoading}
         message={
-          generationMode === 'five-stage'
+          generationMode === 'three-problems'
+            ? '📚 3問生成プロセスを実行中...'
+            : generationMode === 'five-stage'
             ? '🔥 5段階生成プロセスを実行中...'
             : 'AIが問題を生成しています...'
         }
-        showProgress={generationMode === 'five-stage'}
+        showProgress={generationMode === 'five-stage' || generationMode === 'three-problems'}
         estimatedDuration={60000}
         currentStage={currentStage}
+        maxStages={generationMode === 'three-problems' ? 15 : 5}
         onStageChange={(stage) => {
           setCurrentStage(stage);
           console.log(`📊 [Frontend] Stage ${stage} に移行`);
         }}
       />
+
+      {/* ファイルプレビューモーダル */}
+      {showFilePreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] flex flex-col">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-800">📄 アップロードした問題の概要</h2>
+              <button
+                onClick={() => setShowFilePreview(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <pre className="whitespace-pre-wrap font-mono text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                {filePreviewContent}
+              </pre>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowFilePreview(false)}
+                className="px-6 py-2 bg-blue-500 text-white rounded-lg font-bold hover:brightness-110 transition-all"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

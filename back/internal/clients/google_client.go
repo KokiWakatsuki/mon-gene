@@ -9,6 +9,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
+	
+	"github.com/google/generative-ai-go/genai"
+	"google.golang.org/api/option"
 )
 
 type googleClient struct {
@@ -26,7 +30,13 @@ type GoogleContent struct {
 }
 
 type GooglePart struct {
-	Text string `json:"text"`
+	Text       string              `json:"text,omitempty"`
+	InlineData *GoogleInlineData   `json:"inlineData,omitempty"`
+}
+
+type GoogleInlineData struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"` // Base64エンコードされたデータ
 }
 
 type GoogleGenerationConfig struct {
@@ -96,8 +106,8 @@ func (c *googleClient) GenerateContent(ctx context.Context, prompt string) (stri
 
 	// 推論トークンの設定
 	// 用途: 1段階生成（旧方式）- 単一プロンプトから問題を一度に生成
-	thinkingBudget := int32(10000)
-	maxOutputTokens := 10000 + int(thinkingBudget) // 推論トークン + 10000
+	thinkingBudget := int32(20000)
+	maxOutputTokens := 20000 + int(thinkingBudget) // 推論トークン + 20000
 
 	request := GoogleRequest{
 		Contents: []GoogleContent{
@@ -268,8 +278,8 @@ func (c *googleClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 	// 推論トークンの設定
 	// 用途: 5段階生成（新方式）- 会話履歴を使った段階的な問題生成
 	// Stage 1-5の各段階で会話の文脈を理解し、適切な応答を生成
-	thinkingBudget := int32(10000)
-	baseOutputTokens := 10000
+	thinkingBudget := int32(20000)
+	baseOutputTokens := 20000
 	maxOutputTokens := baseOutputTokens + int(thinkingBudget) // 基本出力トークン + 推論トークン
 
 	request := GoogleRequest{
@@ -389,6 +399,100 @@ func (c *googleClient) GenerateWithHistory(ctx context.Context, messages []ChatM
 	}
 
 	fmt.Printf("✅ Google API response with history received (length: %d, finishReason: %s)\n", len(content), candidate.FinishReason)
+
+	return content, nil
+}
+
+// GenerateContentWithPDF PDFファイルを使用してコンテンツを生成（Google Generative AI SDK使用）
+func (c *googleClient) GenerateContentWithPDF(ctx context.Context, prompt string, pdfData []byte) (string, error) {
+	if c.apiKey == "" {
+		return "", fmt.Errorf("Google API key not configured")
+	}
+
+	if c.model == "" {
+		return "", fmt.Errorf("Google model not specified")
+	}
+
+	fmt.Printf("🤖 [PDF] Using Google Generative AI SDK with model: %s\n", c.model)
+	fmt.Printf("📄 [PDF] PDF data size: %d bytes\n", len(pdfData))
+
+	// Google Generative AI クライアントを作成
+	client, err := genai.NewClient(ctx, option.WithAPIKey(c.apiKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to create genai client: %w", err)
+	}
+	defer client.Close()
+
+	// モデル名から "models/" プレフィックスを削除
+	modelName := strings.TrimPrefix(c.model, "models/")
+	fmt.Printf("🔧 [PDF] Using model name: %s\n", modelName)
+
+	// モデルを取得
+	model := client.GenerativeModel(modelName)
+
+	// PDFファイルをアップロード
+	fmt.Printf("📤 [PDF] Uploading PDF file...\n")
+	
+	// バイトデータからReaderを作成
+	reader := bytes.NewReader(pdfData)
+	
+	// UploadFileOptionsを作成
+	opts := &genai.UploadFileOptions{
+		DisplayName: "uploaded_problem.pdf",
+		MIMEType:    "application/pdf",
+	}
+	
+	file, err := client.UploadFile(ctx, "", reader, opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload PDF: %w", err)
+	}
+	fmt.Printf("✅ [PDF] PDF uploaded successfully: %s\n", file.Name)
+
+	// ファイルの処理が完了するまで待機
+	fmt.Printf("⏳ [PDF] Waiting for file processing...\n")
+	for file.State == genai.FileStateProcessing {
+		time.Sleep(2 * time.Second)
+		var err error
+		file, err = client.GetFile(ctx, file.Name)
+		if err != nil {
+			return "", fmt.Errorf("failed to get file status: %w", err)
+		}
+	}
+
+	if file.State != genai.FileStateActive {
+		return "", fmt.Errorf("file processing failed, state: %v", file.State)
+	}
+	fmt.Printf("✅ [PDF] File processing completed\n")
+
+	// プロンプトとPDFファイルを組み合わせてコンテンツを生成
+	fmt.Printf("🔄 [PDF] Generating content with PDF...\n")
+	resp, err := model.GenerateContent(ctx,
+		genai.FileData{URI: file.URI},
+		genai.Text(prompt),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate content: %w", err)
+	}
+
+	// レスポンスからテキストを抽出
+	if len(resp.Candidates) == 0 {
+		return "", fmt.Errorf("no candidates returned")
+	}
+
+	candidate := resp.Candidates[0]
+	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
+		return "", fmt.Errorf("no content parts returned")
+	}
+
+	var result strings.Builder
+	for _, part := range candidate.Content.Parts {
+		if text, ok := part.(genai.Text); ok {
+			result.WriteString(string(text))
+		}
+	}
+
+	content := result.String()
+	fmt.Printf("✅ [PDF] Content generated successfully (length: %d)\n", len(content))
 
 	return content, nil
 }

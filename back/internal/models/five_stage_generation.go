@@ -195,3 +195,59 @@ type ProgressUpdate struct {
 	IsCompleted bool    `json:"is_completed"`
 	Error       string  `json:"error,omitempty"`
 }
+
+// ThreeProblemGenerationRequest 3問生成のリクエスト
+type ThreeProblemGenerationRequest struct {
+	UploadedProblemContent string `json:"uploaded_problem_content"` // アップロードされた問題の内容（テキスト形式）
+	UploadedProblemPDF     []byte `json:"-"`                        // アップロードされた問題のPDFバイナリデータ（JSONには含めない）
+	Subject                string `json:"subject"`
+}
+
+// ThreeProblemGenerationResponse 3問生成のレスポンス（15段階プロセス）
+type ThreeProblemGenerationResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+	
+	// パターンA（数値だけ違う）の結果
+	PatternA PatternResult `json:"pattern_a"`
+	
+	// パターンB（必要な公式は同じだが、問題自体は違う）の結果
+	PatternB PatternResult `json:"pattern_b"`
+	
+	// パターンC（全体的な構成は同じだが、問われている部分が違う）の結果
+	PatternC PatternResult `json:"pattern_c"`
+	
+	// 会話履歴（大ステップ用）
+	MainConversationHistory *ConversationHistory `json:"main_conversation_history,omitempty"`
+	
+	// ログ
+	Log string `json:"log"`
+}
+
+// PatternResult 1つのパターンの生成結果（5段階プロセス）
+type PatternResult struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+	
+	// 5段階の結果
+	Stage1Result string `json:"stage1_result"` // 骨組み設計
+	Stage2Result string `json:"stage2_result"` // パラメータ設定と動的検証
+	Stage3Result string `json:"stage3_result"` // 図形描画コード
+	Stage4Result string `json:"stage4_result"` // 完全な問題文
+	Stage5Result string `json:"stage5_result"` // 完全な解答・解説
+	
+	// 最終的な問題データ
+	Content     string `json:"content"`      // 問題文（Stage4の結果）
+	Solution    string `json:"solution"`     // 解答・解説（Stage5の結果）
+	ImageBase64 string `json:"image_base64"` // 図形画像（Stage3から生成）
+	
+	// 会話履歴（小ステップ用）
+	ConversationHistory *ConversationHistory `json:"conversation_history,omitempty"`
+	
+	// 各段階のログ
+	Stage1Log string `json:"stage1_log"`
+	Stage2Log string `json:"stage2_log"`
+	Stage3Log string `json:"stage3_log"`
+	Stage4Log string `json:"stage4_log"`
+	Stage5Log string `json:"stage5_log"`
+}

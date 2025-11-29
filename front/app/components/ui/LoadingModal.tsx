@@ -6,24 +6,25 @@ interface LoadingModalProps {
   isOpen: boolean;
   message?: string;
   showProgress?: boolean;
-  estimatedDuration?: number; // 各ステージの推定時間（ミリ秒）
-  currentStage?: number; // 外部から渡される現在のステージ
-  onStageChange?: (stage: number) => void; // ステージ変更時のコールバック
+  estimatedDuration?: number;
+  currentStage?: number;
+  maxStages?: number; // 最大ステージ数（5 or 15）
+  onStageChange?: (stage: number) => void;
 }
 
 export default function LoadingModal({
   isOpen,
   message = '問題を生成しています...',
   showProgress = false,
-  estimatedDuration = 60000, // デフォルト60秒（各ステージ）
+  estimatedDuration = 60000,
   currentStage: externalStage,
+  maxStages = 5,
   onStageChange
 }: LoadingModalProps) {
   const [progress, setProgress] = useState(0);
   const [currentStage, setCurrentStage] = useState(1);
   const stageStartTimeRef = useRef<number>(Date.now());
   const previousStageRef = useRef<number>(1);
-  const stageTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // 外部からステージが渡された場合は同期
   useEffect(() => {
@@ -32,8 +33,7 @@ export default function LoadingModal({
     }
   }, [externalStage]);
 
-  // 60秒ごとに自動的にステージを進める
-  // 外部からステージが変更されたときの処理
+  // 進捗バー表示ロジック（5段階 or 15段階対応）
   useEffect(() => {
     if (!isOpen || !showProgress) {
       setProgress(0);
@@ -43,51 +43,52 @@ export default function LoadingModal({
       return;
     }
 
-    // 各ステージを20%ずつ進める（Stage 1: 0-19%, Stage 2: 20-39%, ...）
+    // 各ステージの進捗率を計算（maxStagesに応じて調整）
+    const progressPerStage = 100 / maxStages;
+    
     const interval = setInterval(() => {
       const currentStageNum = currentStage;
-      const stageBaseProgress = (currentStageNum - 1) * 20; // ステージの開始位置（0%, 20%, 40%, 60%, 80%）
+      const stageBaseProgress = (currentStageNum - 1) * progressPerStage;
       
-      // ステージの最大値を設定（19%, 39%, 59%, 79%, 99%）
       let stageMaxProgress: number;
-      if (currentStageNum === 5) {
-        stageMaxProgress = 99; // Stage 5は99%まで
+      if (currentStageNum === maxStages) {
+        stageMaxProgress = 99;
       } else {
-        stageMaxProgress = currentStageNum * 20 - 1; // 他のステージは19%, 39%, 59%, 79%まで
+        stageMaxProgress = currentStageNum * progressPerStage - 1;
       }
       
       const elapsed = Date.now() - stageStartTimeRef.current;
-      const stageProgress = Math.min((elapsed / estimatedDuration) * 20, 20); // 各ステージで0-20%進む
+      const stageProgress = Math.min((elapsed / estimatedDuration) * progressPerStage, progressPerStage);
       const calculatedProgress = Math.min(stageBaseProgress + stageProgress, stageMaxProgress);
       
       setProgress(calculatedProgress);
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isOpen, showProgress, estimatedDuration, currentStage]);
+  }, [isOpen, showProgress, estimatedDuration, currentStage, maxStages]);
 
-  // ステージが変わったら開始時刻をリセットし、そのステージの開始位置に強制移行
+  // ステージが変わったら開始時刻をリセット
   useEffect(() => {
     if (currentStage !== previousStageRef.current && currentStage > 1) {
-      // 前のステージの最大値（19%, 39%, 59%, 79%）に到達していない場合は強制移行
-      const prevStageMax = (previousStageRef.current) * 20 - 1;
+      const progressPerStage = 100 / maxStages;
+      const prevStageMax = (previousStageRef.current) * progressPerStage - 1;
       if (progress < prevStageMax) {
         setProgress(prevStageMax);
       }
       
-      // 新しいステージの開始位置に移行
-      const newStageStart = (currentStage - 1) * 20;
+      const newStageStart = (currentStage - 1) * progressPerStage;
       setProgress(newStageStart);
       stageStartTimeRef.current = Date.now();
       previousStageRef.current = currentStage;
       
       console.log(`📊 [LoadingModal] Stage ${previousStageRef.current} → ${currentStage}: ${prevStageMax}% → ${newStageStart}%`);
     }
-  }, [currentStage, progress]);
+  }, [currentStage, progress, maxStages]);
 
   if (!isOpen) return null;
 
-  const stageMessages = [
+  // ステージメッセージ（5段階 or 15段階）
+  const stageMessages5 = [
     '小問構成と解答プロセスを生成中...',
     'パラメータ設定と動的検証を実行中...',
     '問題文用の図形を描画中...',
@@ -95,39 +96,81 @@ export default function LoadingModal({
     '完全な解答・解説を生成中...'
   ];
 
+  const stageMessages15 = [
+    'パターンA: 骨組み設計中...',
+    'パターンA: パラメータ設定中...',
+    'パターンA: 図形描画中...',
+    'パターンA: 問題文生成中...',
+    'パターンA: 解答生成中...',
+    'パターンB: 骨組み設計中...',
+    'パターンB: パラメータ設定中...',
+    'パターンB: 図形描画中...',
+    'パターンB: 問題文生成中...',
+    'パターンB: 解答生成中...',
+    'パターンC: 骨組み設計中...',
+    'パターンC: パラメータ設定中...',
+    'パターンC: 図形描画中...',
+    'パターンC: 問題文生成中...',
+    'パターンC: 解答生成中...'
+  ];
+
+  const stageMessages = maxStages === 15 ? stageMessages15 : stageMessages5;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
-        <div className="text-center">
-          <div className="mb-4">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-mongene-green"></div>
-          </div>
-          <h3 className="text-lg font-semibold text-mongene-ink mb-2">
-            {message}
-          </h3>
-          
-          {showProgress && (
-            <div className="mt-4 mb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-mongene-ink">Stage {currentStage}/5</span>
-                <span className="text-sm text-mongene-muted">{progress.toFixed(0)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 h-2.5 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-              <p className="text-xs text-mongene-muted mt-2">
-                {stageMessages[currentStage - 1]}
-              </p>
-            </div>
-          )}
-          
-          <p className="text-sm text-mongene-muted">
-            {showProgress ? '5段階生成プロセスを実行中です。しばらくお待ちください。' : 'Claude AIが問題を生成中です。しばらくお待ちください。'}
-          </p>
+    <div 
+      className="fixed top-0 left-0 w-full h-full bg-white/80 backdrop-blur-[5px] z-[9999] flex items-center justify-center opacity-0 animate-[fadeIn_0.3s_forwards]"
+      style={{
+        animation: 'fadeIn 0.3s forwards'
+      }}
+    >
+      <style jsx>{`
+        @keyframes fadeIn {
+          to { opacity: 1; }
+        }
+        @keyframes spin {
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+      
+      <div className="bg-white px-10 py-10 rounded-[20px] shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-200 text-center w-[90%] max-w-[400px]">
+        <div className="mb-4">
+          <svg 
+            width="48" 
+            height="48" 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            strokeWidth="2" 
+            stroke="currentColor"
+            className="inline-block text-blue-500 animate-[spin_1.5s_linear_infinite]"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
         </div>
+        
+        <h3 className="m-0 mb-5 text-lg text-gray-800">
+          {showProgress ? '準備中...' : message}
+        </h3>
+        
+        {showProgress && (
+          <>
+            <div className="w-full h-2 bg-gray-100 rounded mb-3 overflow-hidden">
+              <div
+                className="h-full bg-mongene-green rounded transition-[width] duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+            
+            <p className="text-[13px] text-gray-500 m-0">
+              {stageMessages[currentStage - 1] || 'AIが思考しています'}
+            </p>
+          </>
+        )}
+        
+        {!showProgress && (
+          <p className="text-[13px] text-gray-500 m-0">
+            AIが思考しています
+          </p>
+        )}
       </div>
     </div>
   );

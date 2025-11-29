@@ -90,6 +90,7 @@ func main() {
 	log.Printf("  - POST /api/generate-problem")
 	log.Printf("  - POST /api/generate-problem-five-stage")
 	log.Printf("  - POST /api/generate-problem-five-stage-sse (SSE)")
+	log.Printf("  - POST /api/generate-three-problems-sse (SSE)")
 	log.Printf("  - POST /api/generate-pdf")
 	log.Printf("  - GET  /api/problems/search?keyword=<keyword>")
 	log.Printf("  - GET  /api/problems/history")

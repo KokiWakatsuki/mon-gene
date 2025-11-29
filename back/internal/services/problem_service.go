@@ -32,6 +32,10 @@ type ProblemService interface {
 	GenerateStage3(ctx context.Context, req models.Stage3Request, userSchoolCode string) (*models.Stage3Response, error)
 	GenerateStage4(ctx context.Context, req models.Stage4Request, userSchoolCode string) (*models.Stage4Response, error)
 	GenerateStage5(ctx context.Context, req models.Stage5Request, userSchoolCode string) (*models.Stage5Response, error)
+	
+	// 3問生成メソッド（15段階プロセス）
+	GenerateThreeProblems(ctx context.Context, req models.ThreeProblemGenerationRequest, userSchoolCode string) (*models.ThreeProblemGenerationResponse, error)
+	GenerateThreeProblemsWithProgress(ctx context.Context, req models.ThreeProblemGenerationRequest, userSchoolCode string, progressCallback func(stage int, message string)) (*models.ThreeProblemGenerationResponse, error)
 }
 
 type problemService struct {
@@ -1962,4 +1966,402 @@ func (s *problemService) convertToClientMessages(history *models.ConversationHis
 		})
 	}
 	return messages
+}
+
+// 3問生成システムの実装（15段階プロセス）
+
+// GenerateThreeProblems 3問生成プロセス全体を実行
+func (s *problemService) GenerateThreeProblems(ctx context.Context, req models.ThreeProblemGenerationRequest, userSchoolCode string) (*models.ThreeProblemGenerationResponse, error) {
+	return s.GenerateThreeProblemsWithProgress(ctx, req, userSchoolCode, nil)
+}
+
+// GenerateThreeProblemsWithProgress 3問生成プロセス全体を実行（進捗コールバック付き）
+func (s *problemService) GenerateThreeProblemsWithProgress(ctx context.Context, req models.ThreeProblemGenerationRequest, userSchoolCode string, progressCallback func(stage int, message string)) (*models.ThreeProblemGenerationResponse, error) {
+	fmt.Printf("🚀 [ThreeProblems] Starting three-problem generation (15-stage process) for user: %s\n", userSchoolCode)
+	fmt.Printf("🔍 [ThreeProblems] Uploaded problem content length: %d, PDF data length: %d\n", len(req.UploadedProblemContent), len(req.UploadedProblemPDF))
+	
+	// 1. ユーザー情報を取得して生成制限をチェック
+	fmt.Printf("📋 [ThreeProblems] Fetching user info for: %s\n", userSchoolCode)
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		fmt.Printf("❌ [ThreeProblems] Failed to get user info: %v\n", err)
+		return &models.ThreeProblemGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err),
+		}, nil
+	}
+	
+	// 1.5. PDFデータがある場合は、Google Files APIを使用してテキストを抽出
+	var uploadedProblemContent string
+	if len(req.UploadedProblemPDF) > 0 {
+		fmt.Printf("📄 [ThreeProblems] PDF data detected, using Google Files API for extraction\n")
+		
+		// Google Clientを使用してPDFを処理
+		if user.PreferredAPI != "google" && user.PreferredAPI != "gemini" {
+			fmt.Printf("⚠️ [ThreeProblems] PDF upload requires Google API, but user prefers %s\n", user.PreferredAPI)
+			return &models.ThreeProblemGenerationResponse{
+				Success: false,
+				Error:   "PDFファイルのアップロードにはGoogle API（Gemini）が必要です。設定ページでAPIをGoogleに変更してください。",
+			}, nil
+		}
+		
+		// PDFからテキストを抽出するための簡単なプロンプト
+		extractPrompt := "このPDFファイルに含まれる問題文を正確に抽出してください。数式、図形の説明、問題番号などすべての情報を含めてください。"
+		
+		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
+		extractedText, err := dynamicClient.GenerateContentWithPDF(ctx, extractPrompt, req.UploadedProblemPDF)
+		if err != nil {
+			fmt.Printf("❌ [ThreeProblems] Failed to extract text from PDF: %v\n", err)
+			return &models.ThreeProblemGenerationResponse{
+				Success: false,
+				Error:   fmt.Sprintf("PDFからのテキスト抽出に失敗しました: %v", err),
+			}, nil
+		}
+		
+		uploadedProblemContent = extractedText
+		fmt.Printf("✅ [ThreeProblems] Successfully extracted text from PDF (length: %d)\n", len(uploadedProblemContent))
+	} else {
+		// テキストコンテンツを使用
+		uploadedProblemContent = req.UploadedProblemContent
+		fmt.Printf("📝 [ThreeProblems] Using text content (length: %d)\n", len(uploadedProblemContent))
+	}
+	
+	fmt.Printf("👤 [ThreeProblems] User found: ID=%d, SchoolCode=%s\n", user.ID, user.SchoolCode)
+	fmt.Printf("🔢 [ThreeProblems] Current generation count: %d (limit: %d)\n", user.ProblemGenerationCount, user.ProblemGenerationLimit)
+	
+	// 2. 生成制限チェック（-1は制限なし）
+	if user.ProblemGenerationLimit >= 0 && user.ProblemGenerationCount >= user.ProblemGenerationLimit {
+		fmt.Printf("🚫 [ThreeProblems] Generation limit reached: %d/%d\n", user.ProblemGenerationCount, user.ProblemGenerationLimit)
+		return &models.ThreeProblemGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("問題生成回数の上限（%d回）に達しました", user.ProblemGenerationLimit),
+		}, nil
+	}
+	
+	// 3. 問題生成回数を更新（3問で1回とカウント）
+	oldCount := user.ProblemGenerationCount
+	user.ProblemGenerationCount++
+	user.UpdatedAt = time.Now()
+	
+	fmt.Printf("📝 [ThreeProblems] Updating generation count from %d to %d\n", oldCount, user.ProblemGenerationCount)
+	
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		fmt.Printf("❌ [ThreeProblems] Failed to update user generation count: %v\n", err)
+		return &models.ThreeProblemGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("問題生成カウントの更新に失敗しました: %v", err),
+		}, nil
+	}
+	
+	fmt.Printf("✅ [ThreeProblems] Successfully updated generation count: %s = %d/%d\n", userSchoolCode, user.ProblemGenerationCount, user.ProblemGenerationLimit)
+	
+	// 4. 大ステップ会話履歴を初期化
+	mainHistory := &models.ConversationHistory{
+		Messages: make([]models.ConversationMessage, 0),
+	}
+	fmt.Printf("💬 [ThreeProblems] Initialized main conversation history\n")
+	
+	// 5. パターンA生成（Stage 1-5）
+	fmt.Printf("🎯 [ThreeProblems] Starting Pattern A generation (stages 1-5)\n")
+	patternA, err := s.generateSinglePattern(ctx, "パターンA: 数値だけ違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 1)
+	if err != nil || !patternA.Success {
+		errorMsg := fmt.Sprintf("パターンA生成に失敗しました: %v", err)
+		if patternA != nil && patternA.Error != "" {
+			errorMsg = patternA.Error
+		}
+		return &models.ThreeProblemGenerationResponse{
+			Success:                 false,
+			Error:                   errorMsg,
+			PatternA:                *patternA,
+			MainConversationHistory: mainHistory,
+		}, nil
+	}
+	fmt.Printf("✅ [ThreeProblems] Pattern A generation completed\n")
+	
+	// 6. パターンB生成（Stage 6-10）
+	fmt.Printf("🎯 [ThreeProblems] Starting Pattern B generation (stages 6-10)\n")
+	patternB, err := s.generateSinglePattern(ctx, "パターンB: 必要な公式は同じだが、問題自体は違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 6)
+	if err != nil || !patternB.Success {
+		errorMsg := fmt.Sprintf("パターンB生成に失敗しました: %v", err)
+		if patternB != nil && patternB.Error != "" {
+			errorMsg = patternB.Error
+		}
+		return &models.ThreeProblemGenerationResponse{
+			Success:                 false,
+			Error:                   errorMsg,
+			PatternA:                *patternA,
+			PatternB:                *patternB,
+			MainConversationHistory: mainHistory,
+		}, nil
+	}
+	fmt.Printf("✅ [ThreeProblems] Pattern B generation completed\n")
+	
+	// 7. パターンC生成（Stage 11-15）
+	fmt.Printf("🎯 [ThreeProblems] Starting Pattern C generation (stages 11-15)\n")
+	patternC, err := s.generateSinglePattern(ctx, "パターンC: 全体的な構成は同じだが、問われている部分が違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 11)
+	if err != nil || !patternC.Success {
+		errorMsg := fmt.Sprintf("パターンC生成に失敗しました: %v", err)
+		if patternC != nil && patternC.Error != "" {
+			errorMsg = patternC.Error
+		}
+		return &models.ThreeProblemGenerationResponse{
+			Success:                 false,
+			Error:                   errorMsg,
+			PatternA:                *patternA,
+			PatternB:                *patternB,
+			PatternC:                *patternC,
+			MainConversationHistory: mainHistory,
+		}, nil
+	}
+	fmt.Printf("✅ [ThreeProblems] Pattern C generation completed\n")
+	
+	// 8. データベースに3問を保存
+	fmt.Printf("💾 [ThreeProblems] Saving 3 problems to database\n")
+	
+	// パターンA保存
+	problemA := &models.Problem{
+		UserID:              user.ID,
+		Subject:             req.Subject,
+		Prompt:              "パターンA: 数値だけ違う（元問題参照）",
+		Content:             patternA.Content,
+		Solution:            patternA.Solution,
+		ImageBase64:         patternA.ImageBase64,
+		ConversationHistory: patternA.ConversationHistory,
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
+	}
+	
+	if s.problemRepo != nil {
+		if err := s.problemRepo.Create(ctx, problemA); err != nil {
+			fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern A: %v\n", err)
+		} else {
+			fmt.Printf("✅ [ThreeProblems] Pattern A saved with ID: %d\n", problemA.ID)
+		}
+	}
+	
+	// パターンB保存
+	problemB := &models.Problem{
+		UserID:              user.ID,
+		Subject:             req.Subject,
+		Prompt:              "パターンB: 必要な公式は同じだが、問題自体は違う（元問題参照）",
+		Content:             patternB.Content,
+		Solution:            patternB.Solution,
+		ImageBase64:         patternB.ImageBase64,
+		ConversationHistory: patternB.ConversationHistory,
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
+	}
+	
+	if s.problemRepo != nil {
+		if err := s.problemRepo.Create(ctx, problemB); err != nil {
+			fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern B: %v\n", err)
+		} else {
+			fmt.Printf("✅ [ThreeProblems] Pattern B saved with ID: %d\n", problemB.ID)
+		}
+	}
+	
+	// パターンC保存
+	problemC := &models.Problem{
+		UserID:              user.ID,
+		Subject:             req.Subject,
+		Prompt:              "パターンC: 全体的な構成は同じだが、問われている部分が違う（元問題参照）",
+		Content:             patternC.Content,
+		Solution:            patternC.Solution,
+		ImageBase64:         patternC.ImageBase64,
+		ConversationHistory: patternC.ConversationHistory,
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
+	}
+	
+	if s.problemRepo != nil {
+		if err := s.problemRepo.Create(ctx, problemC); err != nil {
+			fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern C: %v\n", err)
+		} else {
+			fmt.Printf("✅ [ThreeProblems] Pattern C saved with ID: %d\n", problemC.ID)
+		}
+	}
+	
+	fmt.Printf("✅ [ThreeProblems] Three-problem generation (15-stage process) completed successfully\n")
+	
+	return &models.ThreeProblemGenerationResponse{
+		Success:                 true,
+		PatternA:                *patternA,
+		PatternB:                *patternB,
+		PatternC:                *patternC,
+		MainConversationHistory: mainHistory,
+		Log:                     "3問生成が完了しました",
+	}, nil
+}
+
+// generateSinglePattern 1つのパターンを5段階プロセスで生成
+func (s *problemService) generateSinglePattern(
+	ctx context.Context,
+	patternName string,
+	uploadedProblemContent string,
+	userSchoolCode string,
+	mainHistory *models.ConversationHistory,
+	progressCallback func(stage int, message string),
+	baseStage int, // 1, 6, 11
+) (*models.PatternResult, error) {
+	fmt.Printf("🎨 [Pattern] Starting pattern generation: %s (base stage: %d)\n", patternName, baseStage)
+	
+	logBuilder := strings.Builder{}
+	logBuilder.WriteString(fmt.Sprintf("⭐ [Pattern] %s の生成を開始\n", patternName))
+	
+	// 1. 小ステップ会話履歴を初期化
+	patternHistory := &models.ConversationHistory{
+		Messages: make([]models.ConversationMessage, 0),
+	}
+	fmt.Printf("💬 [Pattern] Initialized pattern conversation history\n")
+	
+	// 2. 初期プロンプトを作成
+	initialPrompt, err := s.promptLoader.LoadThreeProblemGenerationPrompt(uploadedProblemContent, patternName)
+	if err != nil {
+		errorMsg := fmt.Sprintf("プロンプトの読み込みに失敗しました: %v", err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return &models.PatternResult{
+			Success: false,
+			Error:   errorMsg,
+		}, err
+	}
+	
+	// 初期プロンプトを会話履歴に追加
+	s.buildConversationHistory(patternHistory, initialPrompt, "", 1)
+	logBuilder.WriteString("📝 初期プロンプトを作成しました\n")
+	
+	result := &models.PatternResult{
+		Success:             true,
+		ConversationHistory: patternHistory,
+	}
+	
+	// 3. Stage 1-5を順次実行
+	for stage := 1; stage <= 5; stage++ {
+		globalStage := baseStage + stage - 1
+		fmt.Printf("🔄 [Pattern] Executing stage %d (global stage %d)\n", stage, globalStage)
+		
+		if progressCallback != nil {
+			progressCallback(globalStage, fmt.Sprintf("%s - Stage %d を実行中", patternName, stage))
+		}
+		
+		// ステージを実行
+		stageResult, stageLog, err := s.executePatternStage(ctx, stage, patternHistory, userSchoolCode)
+		if err != nil {
+			errorMsg := fmt.Sprintf("Stage %d の実行に失敗しました: %v", stage, err)
+			logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+			result.Success = false
+			result.Error = errorMsg
+			return result, err
+		}
+		
+		logBuilder.WriteString(stageLog)
+		
+		// 結果を格納
+		switch stage {
+		case 1:
+			result.Stage1Result = stageResult
+			result.Stage1Log = stageLog
+		case 2:
+			result.Stage2Result = stageResult
+			result.Stage2Log = stageLog
+		case 3:
+			result.Stage3Result = stageResult
+			result.Stage3Log = stageLog
+			// Stage 3では図形を生成
+			pythonCode := s.extractPythonCode(stageResult)
+			if pythonCode != "" {
+				fmt.Printf("🎨 [Pattern] Generating geometry from Python code\n")
+				imageBase64, err := s.coreClient.GenerateCustomGeometry(ctx, pythonCode, uploadedProblemContent)
+				if err != nil {
+					fmt.Printf("⚠️ [Pattern] Geometry generation failed: %v\n", err)
+					logBuilder.WriteString(fmt.Sprintf("⚠️ 図形生成に失敗: %v\n", err))
+				} else {
+					result.ImageBase64 = imageBase64
+					fmt.Printf("✅ [Pattern] Geometry generated successfully\n")
+					logBuilder.WriteString("✅ 図形を生成しました\n")
+				}
+			}
+		case 4:
+			result.Stage4Result = stageResult
+			result.Stage4Log = stageLog
+			result.Content = s.extractCompleteProblem(stageResult)
+			if result.Content == "" {
+				result.Content = strings.TrimSpace(stageResult)
+			}
+		case 5:
+			result.Stage5Result = stageResult
+			result.Stage5Log = stageLog
+			result.Solution = s.extractFinalSolution(stageResult)
+			if result.Solution == "" {
+				result.Solution = strings.TrimSpace(stageResult)
+			}
+		}
+		
+		fmt.Printf("✅ [Pattern] Stage %d completed\n", stage)
+	}
+	
+	fmt.Printf("✅ [Pattern] Pattern generation completed: %s\n", patternName)
+	
+	return result, nil
+}
+
+// executePatternStage パターンの1つのステージを実行
+func (s *problemService) executePatternStage(
+	ctx context.Context,
+	stage int,
+	history *models.ConversationHistory,
+	userSchoolCode string,
+) (string, string, error) {
+	logBuilder := strings.Builder{}
+	logBuilder.WriteString(fmt.Sprintf("🔄 [Stage%d] ステージ%dを開始\n", stage, stage))
+	
+	// ユーザー情報を取得
+	user, err := s.userRepo.GetBySchoolCode(ctx, userSchoolCode)
+	if err != nil {
+		errorMsg := fmt.Sprintf("ユーザー情報の取得に失敗しました: %v", err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return "", logBuilder.String(), err
+	}
+	
+	// Stage 2以降はトリガーを送信
+	if stage > 1 {
+		trigger := s.loadStageTrigger()
+		s.buildConversationHistory(history, trigger, "", stage)
+		logBuilder.WriteString("📝 次のステージへのトリガーを送信しました\n")
+	}
+	
+	// AI呼び出し
+	clientMessages := s.convertToClientMessages(history)
+	var content string
+	
+	switch user.PreferredAPI {
+	case "openai", "chatgpt":
+		dynamicClient := clients.NewOpenAIClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "google", "gemini":
+		dynamicClient := clients.NewGoogleClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	case "claude", "laboratory":
+		dynamicClient := clients.NewClaudeClient(user.PreferredModel)
+		content, err = dynamicClient.GenerateWithHistory(ctx, clientMessages)
+	default:
+		errorMsg := fmt.Sprintf("サポートされていないAPI「%s」が指定されています", user.PreferredAPI)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return "", logBuilder.String(), fmt.Errorf(errorMsg)
+	}
+	
+	if err != nil {
+		errorMsg := fmt.Sprintf("%s APIでの生成に失敗しました: %v", user.PreferredAPI, err)
+		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
+		return "", logBuilder.String(), err
+	}
+	
+	logBuilder.WriteString(fmt.Sprintf("✅ AIからのレスポンスを受信しました (長さ: %d文字)\n", len(content)))
+	
+	// 会話履歴にアシスタントメッセージを追加
+	s.buildConversationHistory(history, "", content, stage)
+	logBuilder.WriteString("💬 会話履歴にアシスタントの応答を追加しました\n")
+	
+	logBuilder.WriteString(fmt.Sprintf("✅ [Stage%d] ステージ%dが完了しました\n", stage, stage))
+	
+	return content, logBuilder.String(), nil
 }

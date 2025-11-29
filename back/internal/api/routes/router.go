@@ -81,6 +81,26 @@ func NewRouter(
 		}
 	})
 	
+	// 3問生成システムのエンドポイント（15段階プロセス）
+	mux.HandleFunc("/api/generate-three-problems-sse", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST", "OPTIONS":
+			sseHandler.GenerateThreeProblemsSSE(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+	
+	// PDFプレビューエンドポイント
+	mux.HandleFunc("/api/preview-pdf", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST", "OPTIONS":
+			sseHandler.PreviewPDFContent(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+	
 	mux.HandleFunc("/api/generate-stage1", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST", "OPTIONS":

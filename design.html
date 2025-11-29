@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mongene</title>
+<style>
+  /* =========================================
+     1. 変数定義 (Design Tokens)
+     ========================================= */
+  :root {
+    /* --- Primitive Colors (基本色) --- */
+    --white: #ffffff;
+    --black: #000000;
+    
+    /* Grays (Tailwind-like) */
+    --gray-50:  #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-500: #6b7280;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+
+    /* Brand & Functional Colors */
+    --blue-50:   #eff6ff;
+    --blue-400:  #60a5fa;
+    --blue-500:  #3b82f6;
+    --green-500: #8DDB39;
+    --red-500:   #ef4444;
+    --purple-500:#8b5cf6;
+
+    /* Background Block Colors (積み木の色) */
+    --block-green:  #86C85A;
+    --block-yellow: #FFDE00;
+    --block-blue:   #00A9E2;
+    --block-pink:   #E78EA1;
+
+    /* --- Semantic Colors (意味づけされた色) --- */
+    /* テキスト */
+    --text-main:   var(--gray-800);
+    --text-muted:  var(--gray-500);
+    --text-danger: var(--red-500);
+
+    /* 背景 */
+    --bg-body:     var(--gray-50);
+    --bg-panel:    var(--white);
+    --bg-hover:    var(--gray-100);
+    --bg-active:   var(--blue-50);
+    
+    /* ボーダー */
+    --border-default: var(--gray-200);
+
+    /* ステータス */
+    --primary: var(--blue-500);
+    --success: var(--green-500);
+    --danger:  var(--red-500);
+    --accent:  var(--purple-500);
+  }
+  
+  /* =========================================
+     2. Base & Reset
+     ========================================= */
+  * { box-sizing: border-box; }
+  
+  body {
+    margin: 0;
+    font-family: "Noto Sans JP", sans-serif;
+    color: var(--text-main);
+    min-height: 100vh;
+    /* 背景色は #bg-container で管理するため指定なし */
+  }
+  
+  .wrap { max-width: 1024px; margin: 0 auto; padding: 0 16px; }
+
+  /* =========================================
+     3. Layout Components (Header, etc.)
+     ========================================= */
+  .header {
+    position: relative; 
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 0; background: var(--bg-panel);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    padding-left: calc((100vw - 1024px) / 2 + 16px);
+    padding-right: calc((100vw - 1024px) / 2 + 16px);
+    z-index: 50;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 24px; font-weight: 800; color: var(--text-main); text-decoration: none;
+  }
+  .logo-icon { 
+    width: 36px; height: 36px; border-radius: 50%; 
+    background: var(--blue-400); 
+  }
+  
+  .user-actions { position: relative; }
+  .user-actions .icon-btn {
+    width: 40px; height: 40px; border-radius: 50%; background: none;
+    border: none; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; transition: background-color .2s;
+  }
+  .user-actions .icon-btn:hover { background-color: var(--bg-hover); }
+  .user-actions .icon-btn svg { width: 24px; height: 24px; color: var(--text-muted); }
+
+  /* --- Account Modal --- */
+  .account-modal {
+    position: absolute; top: 50px; right: 0; z-index: 100;
+    width: 200px; background: var(--bg-panel);
+    border: 1px solid var(--border-default); border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 8px 0; display: flex; flex-direction: column;
+  }
+  .account-modal[hidden] { display: none; }
+  .account-modal .modal-link {
+    padding: 10px 16px; text-decoration: none; color: var(--text-main);
+    font-size: 14px; font-weight: 500; transition: background-color .15s;
+  }
+  .account-modal .modal-link:hover { background-color: var(--bg-hover); }
+  .account-modal .modal-link-logout {
+    color: var(--text-danger); border-top: 1px solid var(--border-default);
+    margin-top: 4px; padding-top: 12px;
+  }
+
+  /* =========================================
+     4. UI Components (Tabs, Cards, Forms)
+     ========================================= */
+  /* Tabs */
+  .subject-tabs-container {
+    display: flex; gap: 24px; padding: 24px 0 0 0;
+    max-width: 1024px; margin: 0 auto; padding-left: 16px; padding-right: 16px;
+  }
+  .subject-tab {
+    position: relative; font-family: inherit; font-size: 18px; font-weight: 600;
+    color: var(--text-muted); background: none; border: none; padding: 8px 4px; cursor: pointer;
+  }
+  .subject-tab:hover, .subject-tab.active { color: var(--text-main); }
+  .subject-tab.active::after {
+    content: ""; position: absolute; bottom: -2px; left: 0; right: 0;
+    height: 4px; background: var(--success); border-radius: 2px;
+  }
+
+  .main-tabs-container {
+    display: flex; gap: 4px; border-bottom: 2px solid var(--border-default);
+    margin: 24px auto; max-width: 1024px;
+    padding-left: 16px; padding-right: 16px;
+  }
+  .main-tab {
+    font-family: inherit; font-size: 16px; font-weight: 700; color: var(--text-muted);
+    background: none; border: none; padding: 12px 20px;
+    border-bottom: 3px solid transparent; cursor: pointer; transform: translateY(2px); 
+  }
+  .main-tab.active { color: var(--text-main); border-bottom-color: var(--primary); }
+  .main-tab:hover:not(.active) { color: var(--text-main); background-color: var(--bg-hover); }
+
+  .tab-content {
+    max-width: 1024px; margin: 0 auto;
+    padding-left: 16px; padding-right: 16px; padding-bottom: 48px;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  
+  /* Panels & Cards */
+  .section { margin-bottom: 24px; }
+  .panel {
+    background: var(--bg-panel); border: 1px solid var(--border-default);
+    border-radius: 12px; padding: 24px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+  }
+  .panel-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 18px; font-weight: 600; margin: 0 0 16px 0;
+  }
+
+  /* Buttons & Inputs */
+  .btn {
+    font-family: inherit; font-size: 14px; font-weight: 700; border: none;
+    border-radius: 8px; padding: 10px 16px; cursor: pointer; transition: all .15s ease;
+  }
+  .btn-blue { background: var(--primary); color: var(--white); }
+  .btn-blue:hover { filter: brightness(1.1); }
+  
+  .form-input {
+    flex: 1; font-family: inherit; font-size: 15px; border: 1px solid var(--border-default);
+    border-radius: 8px; padding: 12px 14px; background: var(--white);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Filter Accordion */
+  .accordion-header {
+    display: flex; justify-content: space-between; align-items: center; width: 100%;
+    background: var(--bg-panel); border: 1px solid var(--border-default); border-radius: 12px;
+    padding: 20px 24px; font-family: inherit; font-size: 18px; font-weight: 600;
+    color: var(--text-main); cursor: pointer; transition: all .2s;
+  }
+  .accordion-header:hover { background: var(--bg-hover); }
+  .accordion-header .title-group { display: flex; align-items: center; gap: 8px; }
+  .accordion-header svg { transition: transform .18s ease; }
+  .accordion-header[aria-expanded="true"] svg { transform: rotate(180deg); }
+  
+  .accordion-panel-content {
+    background: var(--bg-panel); border: 1px solid var(--border-default); border-top: none;
+    border-radius: 0 0 12px 12px; padding: 24px; margin-top: -12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+  }
+  .accordion-panel-content[hidden] { display: none; }
+  
+  /* Filter Content */
+  .main-search-bar { display: flex; gap: 12px; }
+  .filter-search-input {
+    width: 100%; font-family: inherit; font-size: 15px;
+    border: 1px solid var(--border-default); border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 24px;
+  }
+  .filter-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; }
+  .filter-group h4 {
+    font-size: 16px; font-weight: 600; color: var(--text-main);
+    margin: 0 0 16px 0; padding-bottom: 12px; border-bottom: 1px solid var(--border-default);
+  }
+  .filter-group .checkbox-list { display: flex; flex-direction: column; gap: 12px; }
+  .filter-group label {
+    display: flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer;
+  }
+  .filter-group input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px; }
+  .filter-group .btn-more {
+    font-size: 14px; color: var(--primary); background: none;
+    border: none; cursor: pointer; padding: 0; margin-top: 12px;
+  }
+  .slider-group {
+    display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500;
+  }
+  .slider-group input[type="range"] { flex: 1; accent-color: var(--primary); }
+
+  /* Problem List */
+  .problem-list {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 24px; margin-top: 24px;
+  }
+  .problem-card {
+    background: var(--bg-panel); border: 1px solid var(--border-default); border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); display: flex; flex-direction: column;
+  }
+  .problem-card-content { padding: 20px; }
+  .problem-card h3 { margin-top: 0; color: var(--text-main); font-size: 18px; }
+  .problem-card-body {
+    font-size: 15px; color: var(--text-main); max-height: 100px; overflow: hidden;
+    text-overflow: ellipsis; white-space: pre-wrap;
+  }
+  .problem-card-actions {
+    border-top: 1px solid var(--border-default); padding: 12px 20px; display: flex;
+    gap: 10px; background: var(--bg-hover); border-radius: 0 0 12px 12px; margin-top: auto;
+  }
+
+  /* Upload & Generator */
+  .generate-button-container { text-align: center; padding: 20px 0; }
+  .btn-generate-main {
+    font-size: 16px; font-weight: 700; background: var(--success); color: var(--text-main);
+    padding: 14px 28px; border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(141, 219, 57, 0.4);
+    border: none; cursor: pointer; transition: all .2s;
+  }
+  .btn-generate-main:hover { filter: brightness(1.05); transform: translateY(-2px); }
+  
+  .upload-area {
+    border: 2px dashed var(--border-default); border-radius: 8px; padding: 32px;
+    text-align: center; background: var(--bg-hover); cursor: pointer;
+    transition: all .2s ease; position: relative; margin-bottom: 16px;
+  }
+  .upload-area:hover, .upload-area.dragover {
+    border-color: var(--primary); background: var(--bg-active);
+  }
+  .upload-icon-placeholder { color: var(--text-muted); margin-bottom: 12px; }
+  .upload-msg { font-size: 15px; font-weight: 600; color: var(--text-main); margin: 0 0 8px 0; line-height: 1.5; }
+  .upload-link { color: var(--primary); text-decoration: underline; }
+  .upload-hint { font-size: 12px; color: var(--text-muted); margin: 0; }
+
+  /* File Previews */
+  .preview-list {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px; margin-top: 16px;
+  }
+  .file-card {
+    position: relative; border: 1px solid var(--border-default); border-radius: 8px;
+    background: var(--white); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    display: flex; flex-direction: column; aspect-ratio: 1 / 1;
+  }
+  .file-card-thumb {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    background: var(--bg-hover); overflow: hidden;
+  }
+  .file-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  
+  .file-type-icon {
+    font-size: 12px; font-weight: 700; color: var(--white); background: var(--text-muted);
+    padding: 4px 8px; border-radius: 4px; text-transform: uppercase;
+  }
+  .file-type-icon.pdf { background: var(--danger); }
+  .file-type-icon.heic { background: var(--accent); }
+
+  .btn-remove-file {
+    position: absolute; top: 4px; right: 4px;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(0,0,0,0.6); color: var(--white); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; line-height: 1; transition: background .2s; z-index: 10;
+  }
+  .btn-remove-file:hover { background: rgba(0,0,0,0.8); }
+
+  .file-card-name {
+    font-size: 11px; color: var(--text-main); padding: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-align: center; border-top: 1px solid var(--border-default); background: var(--white);
+  }
+  
+  /* =========================================
+     5. Background Effects (Background & Overlay)
+     ========================================= */
+  
+  /* 積み木を表示するコンテナ */
+  #bg-container {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: -2; /* 一番奥 */
+    overflow: hidden;
+    pointer-events: none;
+    background-color: var(--bg-body); 
+  }
+
+  /* 白い半透明レイヤー (すりガラス風) */
+  .bg-overlay {
+    position: fixed;
+    /* 上下左右の余白 */
+    top: 20px; left: 20px; right: 20px; bottom: 20px;
+    
+    background-color: rgba(255, 255, 255, 0.75); /* 白 75% */
+    backdrop-filter: blur(4px); /* ぼかし */
+    border-radius: 20px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+    z-index: -1; /* 背景より手前、コンテンツより奥 */
+    pointer-events: none;
+  }
+  /* モバイル対応: 余白を狭める */
+  @media (max-width: 600px) {
+    .bg-overlay { top: 10px; left: 10px; right: 10px; bottom: 10px; }
+  }
+
+  /* 積み木シェイプ共通設定 */
+  .bg-shape {
+    position: absolute;
+    /* マスク設定 */
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-composite: source-over;
+    mask-composite: add;
+    
+    opacity: 0.6; /* オーバーレイ越しに見るので少し濃いめに設定 */
+    pointer-events: none;
+  }
+
+  /* 積み木の色バリエーション */
+  .color-green  { background-color: var(--block-green); }
+  .color-yellow { background-color: var(--block-yellow); }
+  .color-blue   { background-color: var(--block-blue); }
+  .color-pink   { background-color: var(--block-pink); }
+  /* --- 生成中モーダル --- */
+  .loading-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(255, 255, 255, 0.8); /* 背景を少し白く */
+    backdrop-filter: blur(5px); /* 背景をぼかす */
+    z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; animation: fadeIn 0.3s forwards; /* ふわっと表示 */
+  }
+  .loading-overlay[hidden] { display: none; }
+
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  .loading-card {
+    background: var(--white);
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    border: 1px solid var(--border-default);
+    text-align: center;
+    width: 90%; max-width: 400px;
+  }
+
+  .loading-icon svg {
+    width: 48px; height: 48px; color: var(--primary);
+    animation: spin 1.5s linear infinite; margin-bottom: 16px;
+  }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+
+  .loading-card h3 {
+    margin: 0 0 20px 0;
+    font-size: 18px; color: var(--text-main);
+  }
+
+  /* プログレスバー */
+  .progress-container {
+    width: 100%; height: 8px;
+    background-color: var(--gray-100);
+    border-radius: 4px; overflow: hidden; margin-bottom: 12px;
+  }
+  .progress-bar {
+    height: 100%; width: 0%;
+    background-color: var(--success); /* 緑色で進行 */
+    border-radius: 4px;
+    transition: width 0.5s ease-out; /* なめらかに動く */
+  }
+
+  .loading-subtext {
+    font-size: 13px; color: var(--text-muted); margin: 0;
+  }
+</style>
+</head>
+<body>
+  
+  <div id="bg-container"></div>
+  <div class="bg-overlay"></div>
+
+  <header class="header">
+    <a href="#" class="logo">
+      <span class="logo-icon"></span>
+      <span>Mongene</span>
+    </a>
+    <div class="user-actions">
+      <button class="icon-btn" title="ユーザー設定" id="accountToggle">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+      </button>
+      <div class="account-modal" id="accountModal" hidden>
+        <a href="#" class="modal-link">アカウント設定</a>
+        <a href="#" class="modal-link modal-link-logout">ログアウト</a>
+      </div>
+    </div>
+  </header>
+  
+  <div class="wrap">
+    <nav class="subject-tabs-container">
+      <button class="subject-tab active" type="button">数学</button>
+    </nav>
+    
+    <nav class="main-tabs-container">
+      <button class="main-tab active" type="button" data-tab="tab-list">問題一覧</button>
+      <button class="main-tab" type="button" data-tab="tab-gen">問題生成</button>
+    </nav>
+
+    <div class="tab-content">
+      
+      <div class="tab-panel active" id="tab-list">
+        
+        <div class="main-search-bar section">
+          <input type="text" placeholder="キーワード (例: 円錐, サイコロ, 座標...)" class="form-input">
+          <button class="btn btn-blue" type="button">検索</button>
+        </div>
+
+        <section class="section">
+          <button class="accordion-header" aria-expanded="false" aria-controls="filterPanel" id="filterToggle">
+            <span class="title-group">
+              <span>検索オプション</span>
+            </span>
+            <svg width="14" height="9" viewBox="0 0 14 9"><path d="M1 1l6 6 6-6" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          
+          <div class="accordion-panel-content" id="filterPanel" hidden>
+            <input type="text" placeholder="フィルター内を検索 (例: 相似, 円周角...)" class="filter-search-input">
+            
+            <div class="filter-grid">
+              <div class="filter-group">
+                <h4>主要な解法</h4>
+                <div class="checkbox-list">
+                  <label><input type="checkbox"> 三平方の定理</label>
+                  <label><input type="checkbox"> 相似</label>
+                  <label><input type="checkbox"> 円周角の定理</label>
+                  <label><input type="checkbox"> 解の公式</label>
+                </div>
+                <button type="button" class="btn-more">+ もっと見る</button>
+              </div>
+              <div class="filter-group">
+                <h4>出典 (年度)</h4>
+                <div class="checkbox-list">
+                  <label><input type="checkbox"> 新潟県 2024</label>
+                  <label><input type="checkbox"> 東京都 2024</label>
+                  <label><input type="checkbox"> AI生成</label>
+                </div>
+                <button type="button" class="btn-more">+ もっと見る</button>
+              </div>
+              <div class="filter-group">
+                <h4>問題構造</h4>
+                <div class="checkbox-list">
+                  <label><input type="checkbox"> 動点(点Pなど)を含む</label>
+                  <label><input type="checkbox"> 補助線が必要</label>
+                  <label><input type="checkbox"> 記述・証明問題</label>
+                </div>
+              </div>
+              <div class="filter-group">
+                <h4>難易度 (総合)</h4>
+                <div class="slider-group">
+                  <span>Lv1</span>
+                  <input type="range" min="1" max="5" value="3">
+                  <span>Lv5</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        
+        <section class="problem-list" aria-label="問題一覧">
+          <div class="problem-card">
+            <div class="problem-card-content">
+              <h3>問題 1 (履歴)</h3>
+              <div class="problem-card-body">...</div>
+            </div>
+            <div class="problem-card-actions">
+              <button class="btn btn-blue" style="padding: 8px 16px;">プレビュー</button>
+              <button class="btn" style="padding: 8px 16px; background: var(--bg-hover); color: var(--text-main);">印刷</button>
+            </div>
+          </div>
+        </section>
+      </div> 
+      
+      <div class="tab-panel" id="tab-gen">
+        <section class="section panel">
+          <h3 class="panel-title">画像アップロード</h3>
+          
+          <div class="upload-area" id="uploadArea">
+            <input type="file" id="fileInput" accept=".jpg, .jpeg, .png, .pdf, .heic, .heif" multiple hidden>
+            
+            <div class="upload-content">
+              <div class="upload-icon-placeholder">
+                <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                </svg>
+              </div>
+              <p class="upload-msg">ここにファイルをドラッグ＆ドロップ<br>または <span class="upload-link">ファイルを選択</span></p>
+              <p class="upload-hint">対応形式: JPG, PNG, PDF, HEIC (複数選択可)</p>
+            </div>
+          </div>
+
+          <div class="preview-list" id="previewList" hidden></div>
+        </section>
+
+        <div class="generate-button-container">
+          <button class="btn-generate-main" type="button">生成</button>
+        </div>
+      </div>
+      
+    </div> 
+  </div>
+  <div id="loadingModal" class="loading-overlay" hidden>
+    <div class="loading-card">
+      <div class="loading-icon">
+        <svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+        </svg>
+      </div>
+      
+      <h3 id="loadingText">準備中...</h3>
+      
+      <div class="progress-container">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+      
+      <p class="loading-subtext">AIが思考しています</p>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // --- 背景生成ロジック (グリッド配置) ---
+      const container = document.getElementById('bg-container');
+      
+      if (container) {
+        // データURI (SVG)
+        const shapeUrls = [
+          "data:image/svg+xml,%3Csvg viewBox='0 0 243 122' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M237.266,121.4l-231.731,0c-3.057,-0 -5.534,-2.478 -5.534,-5.534l0,-110.331c0,-3.057 2.478,-5.534 5.534,-5.534l231.731,0c3.057,0 5.534,2.478 5.534,5.534l0,110.331c-0,3.057 -2.478,5.534 -5.534,5.534Z' fill='black'/%3E%3C/svg%3E",
+          "data:image/svg+xml,%3Csvg viewBox='0 0 243 122' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M64.833,116.376c-0.25,2.838 -2.626,5.014 -5.475,5.014c-14.469,0.01 -53.823,0.01 -53.823,0.01c-3.057,-0 -5.534,-2.478 -5.534,-5.534l0,-110.331c0,-3.057 2.478,-5.534 5.534,-5.534l231.731,0c3.057,0 5.534,2.478 5.534,5.534l0,110.331c-0,3.057 -2.478,5.534 -5.534,5.534c-0,0 -39.356,0 -53.823,0c-2.854,-0 -5.235,-2.18 -5.485,-5.023c-2.537,-28.993 -26.909,-51.764 -56.557,-51.764c-29.649,0 -54.021,22.771 -56.567,51.763Z' fill='black'/%3E%3C/svg%3E",
+          "data:image/svg+xml,%3Csvg viewBox='0 0 113 57' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5.506,56.787c-1.565,-0 -3.056,-0.666 -4.1,-1.831c-1.044,-1.165 -1.544,-2.72 -1.373,-4.275c3.059,-28.474 27.192,-50.681 56.471,-50.681c29.279,0 53.412,22.207 56.462,50.682c0.17,1.553 -0.328,3.105 -1.371,4.268c-1.043,1.163 -2.531,1.828 -4.093,1.828c-19.479,0.009 -82.516,0.009 -101.995,0.009Z' fill='black'/%3E%3C/svg%3E",
+          "data:image/svg+xml,%3Csvg viewBox='0 0 122 122' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M115.866,0c3.057,0 5.534,2.478 5.534,5.534l0,110.331c-0,3.057 -2.478,5.534 -5.534,5.534l-110.331,0c-3.057,-0 -5.534,-2.478 -5.534,-5.534l-0,-110.331c0,-3.057 2.478,-5.534 5.534,-5.534l110.331,0Z' fill='black'/%3E%3C/svg%3E",
+          "data:image/svg+xml,%3Csvg viewBox='0 0 114 114' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M111.952,104.126c1.583,1.583 2.056,3.963 1.2,6.031c-0.857,2.068 -2.875,3.416 -5.113,3.416l-102.505,-0c-3.057,-0 -5.534,-2.478 -5.534,-5.534l0,-102.505c-0,-2.238 1.348,-4.256 3.416,-5.113c2.068,-0.857 4.448,-0.383 6.031,1.2c22.652,22.652 79.852,79.852 102.505,102.505Z' fill='black'/%3E%3C/svg%3E",
+          "data:image/svg+xml,%3Csvg viewBox='0 0 225 118' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7.968,117.416c-1.707,0.853 -3.734,0.762 -5.357,-0.241c-1.623,-1.003 -2.611,-2.775 -2.611,-4.684l-0,-106.985c0,-3.041 2.465,-5.506 5.506,-5.506c28.489,-0 159.911,-0 213.97,-0c2.554,-0 4.772,1.756 5.359,4.241c0.587,2.485 -0.612,5.048 -2.896,6.19c-51.054,25.527 -180.549,90.274 -213.97,106.985Z' fill='black'/%3E%3C/svg%3E",
+          "data:image/svg+xml,%3Csvg viewBox='0 0 114 114' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='56.787' cy='56.787' r='56.787' fill='black'/%3E%3C/svg%3E",
+        ];
+        
+        const colorClasses = ['color-green', 'color-yellow', 'color-blue', 'color-pink'];
+
+        // お団子防止のためグリッドシステムを使用
+        const cols = 6; 
+        const rows = 5; 
+        const xStep = 100 / cols; 
+        const yStep = 100 / rows;
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            // 50%の確率でスキップ（ランダムな空白を作る）
+            if (Math.random() > 0.5) continue;
+
+            const div = document.createElement('div');
+            div.classList.add('bg-shape');
+
+            const randomShapeUrl = shapeUrls[Math.floor(Math.random() * shapeUrls.length)];
+            div.style.webkitMaskImage = `url("${randomShapeUrl}")`;
+            div.style.maskImage = `url("${randomShapeUrl}")`;
+
+            const randomColorClass = colorClasses[Math.floor(Math.random() * colorClasses.length)];
+            div.classList.add(randomColorClass);
+
+            const baseX = c * xStep;
+            const baseY = r * yStep;
+            const jitterX = Math.random() * (xStep * 0.6); 
+            const jitterY = Math.random() * (yStep * 0.6);
+            const sizeBase = 4 + Math.random() * 4; 
+            const randomRotate = Math.random() * 360;
+
+            div.style.left = `${baseX + jitterX}%`;
+            div.style.top = `${baseY + jitterY}%`;
+            div.style.width = `${sizeBase}vw`; 
+            div.style.height = `${sizeBase}vw`;
+            div.style.transform = `rotate(${randomRotate}deg)`;
+
+            container.appendChild(div);
+          }
+        }
+      }
+
+      // --- アカウントモーダル ---
+      const accountToggle = document.getElementById('accountToggle');
+      const accountModal = document.getElementById('accountModal');
+      
+      if (accountToggle && accountModal) {
+        accountToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isHidden = accountModal.hasAttribute('hidden');
+          if (isHidden) {
+            accountModal.removeAttribute('hidden');
+          } else {
+            accountModal.setAttribute('hidden', 'hidden');
+          }
+        });
+        document.addEventListener('click', (e) => {
+          if (!accountModal.contains(e.target) && e.target !== accountToggle) {
+            accountModal.setAttribute('hidden', 'hidden');
+          }
+        });
+      }
+
+      // --- メインタブ切り替え ---
+      const mainTabButtons = document.querySelectorAll('.main-tab');
+      const mainTabPanels = document.querySelectorAll('.tab-panel');
+
+      mainTabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const targetTabId = button.getAttribute('data-tab');
+          mainTabButtons.forEach(btn => btn.classList.remove('active'));
+          mainTabPanels.forEach(panel => panel.classList.remove('active'));
+          button.classList.add('active');
+          document.getElementById(targetTabId).classList.add('active');
+        });
+      });
+
+      // --- 検索オプション（アコーディオン） ---
+      const filterToggle = document.getElementById('filterToggle');
+      const filterPanel = document.getElementById('filterPanel');
+      if (filterToggle && filterPanel) {
+        filterToggle.addEventListener('click', () => {
+          const expanded = filterToggle.getAttribute('aria-expanded') === 'true';
+          filterToggle.setAttribute('aria-expanded', String(!expanded));
+          filterPanel.hidden = expanded;
+        });
+      }
+
+      // --- ファイルアップロード ---
+      const uploadArea = document.getElementById('uploadArea');
+      const fileInput = document.getElementById('fileInput');
+      const previewList = document.getElementById('previewList');
+      
+      let uploadedFiles = [];
+
+      if (uploadArea && fileInput) {
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          uploadArea.addEventListener(eventName, (e) => {
+            e.preventDefault(); e.stopPropagation();
+          });
+        });
+
+        ['dragenter', 'dragover'].forEach(evt => uploadArea.addEventListener(evt, () => uploadArea.classList.add('dragover')));
+        ['dragleave', 'drop'].forEach(evt => uploadArea.addEventListener(evt, () => uploadArea.classList.remove('dragover')));
+
+        uploadArea.addEventListener('drop', (e) => {
+          const files = Array.from(e.dataTransfer.files);
+          addFiles(files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+          const files = Array.from(fileInput.files);
+          addFiles(files);
+          fileInput.value = '';
+        });
+
+        function addFiles(files) {
+          if (!files || files.length === 0) return;
+          uploadedFiles = [...uploadedFiles, ...files];
+          renderPreviews();
+        }
+
+        function renderPreviews() {
+          previewList.innerHTML = '';
+          if (uploadedFiles.length === 0) {
+            previewList.hidden = true;
+            return;
+          }
+          previewList.hidden = false;
+
+          uploadedFiles.forEach((file, index) => {
+            const card = document.createElement('div');
+            card.className = 'file-card';
+
+            const isImage = file.type.startsWith('image/');
+            const isPdf = file.type === 'application/pdf';
+            const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+            
+            let contentHtml = '';
+            if (isImage && !isHeic) {
+              const imgUrl = URL.createObjectURL(file);
+              contentHtml = `<img src="${imgUrl}" alt="preview">`;
+            } else if (isPdf) {
+              contentHtml = `<span class="file-type-icon pdf">PDF</span>`;
+            } else if (isHeic) {
+              contentHtml = `<span class="file-type-icon heic">HEIC</span>`;
+            } else {
+              contentHtml = `<span class="file-type-icon">FILE</span>`;
+            }
+
+            card.innerHTML = `
+              <div class="file-card-thumb">${contentHtml}</div>
+              <button type="button" class="btn-remove-file" data-index="${index}">×</button>
+              <div class="file-card-name" title="${file.name}">${file.name}</div>
+            `;
+            previewList.appendChild(card);
+          });
+
+          document.querySelectorAll('.btn-remove-file').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const idx = parseInt(e.target.dataset.index);
+              removeFile(idx);
+            });
+          });
+        }
+
+        function removeFile(index) {
+          uploadedFiles.splice(index, 1);
+          renderPreviews();
+        }
+      }
+      // --- 生成プロセスのシミュレーション ---
+    const generateBtn = document.querySelector('.btn-generate-main');
+    const loadingModal = document.getElementById('loadingModal');
+    const loadingText = document.getElementById('loadingText');
+    const progressBar = document.getElementById('progressBar');
+
+    if (generateBtn && loadingModal) {
+      generateBtn.addEventListener('click', async () => {
+        // 1. モーダルを表示
+        loadingModal.removeAttribute('hidden');
+        
+        // プロセス定義 (段階, 進捗%, 待ち時間ms)
+        const steps = [
+          { text: "問題を生成中...", percent: 25, delay: 1500 },
+          { text: "図形を描画中...", percent: 50, delay: 2000 },
+          { text: "解説を生成中...", percent: 75, delay: 1500 },
+          { text: "検算中...", percent: 95, delay: 1000 }
+        ];
+
+        // 各ステップを実行
+        for (const step of steps) {
+          loadingText.textContent = step.text;
+          progressBar.style.width = `${step.percent}%`;
+          
+          // 擬似的な待ち時間 (API通信の代わり)
+          await new Promise(resolve => setTimeout(resolve, step.delay));
+        }
+
+        // 完了処理
+        progressBar.style.width = '100%';
+        loadingText.textContent = "完了しました！";
+        
+        // 少し待ってから閉じる
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        loadingModal.setAttribute('hidden', 'hidden');
+        
+        // (ここで行う処理: 画面遷移や生成結果の表示など)
+        alert('生成が完了しました！(デモ)');
+        // プログレスバーをリセット
+        progressBar.style.width = '0%';
+      });
+    }
+    });
+  </script>
+</body>
+</html>

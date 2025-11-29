@@ -10,6 +10,12 @@
   --mongene-muted: #6b7280;
   --mongene-border: #e5e7eb;
   --mongene-bg: #ffffff;
+  
+  /* 積み木の色 */
+  --block-green: #86C85A;
+  --block-yellow: #FFDE00;
+  --block-blue: #00A9E2;
+  --block-pink: #E78EA1;
 }
 
 @theme inline {
@@ -36,38 +42,36 @@ body {
   box-sizing: border-box;
 }
 
-/* Background shapes utility classes */
+/* Background shapes utility classes - 積み木風 */
 .bg-shape {
   position: absolute;
-  opacity: 0.18;
-  filter: blur(0.5px);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+  opacity: 0.6;
+  pointer-events: none;
 }
 
-.bg-shape-circle {
-  width: 6rem;
-  height: 6rem;
-  border-radius: 9999px;
-  background: var(--mongene-green);
-  top: 3rem;
-  left: 3rem;
+/* 積み木の色バリエーション */
+.color-green {
+  background-color: var(--block-green);
 }
 
-.bg-shape-diamond {
-  width: 5rem;
-  height: 5rem;
-  background: var(--mongene-yellow);
-  transform: rotate(45deg);
-  top: 40%;
-  left: 33%;
+.color-yellow {
+  background-color: var(--block-yellow);
 }
 
-.bg-shape-triangle {
-  width: 8rem;
-  height: 8rem;
-  background: var(--mongene-blue);
-  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-  right: 4rem;
-  bottom: 5rem;
+.color-blue {
+  background-color: var(--block-blue);
+}
+
+.color-pink {
+  background-color: var(--block-pink);
 }
 
 /* 印刷用スタイル */

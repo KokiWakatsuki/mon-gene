@@ -345,3 +345,12 @@ func (p *PromptLoader) LoadStageTrigger() (string, error) {
 	}
 	return string(content), nil
 }
+
+// LoadThreeProblemGenerationPrompt 3問生成プロンプトを読み込み
+func (p *PromptLoader) LoadThreeProblemGenerationPrompt(uploadedProblemContent, currentPattern string) (string, error) {
+	variables := map[string]string{
+		"UPLOADED_PROBLEM_CONTENT": uploadedProblemContent,
+		"CURRENT_PATTERN":          currentPattern,
+	}
+	return p.LoadPrompt("three_problem_generation.txt", variables)
+}
