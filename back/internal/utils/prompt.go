@@ -350,7 +350,23 @@ func (p *PromptLoader) LoadStageTrigger() (string, error) {
 func (p *PromptLoader) LoadThreeProblemGenerationPrompt(uploadedProblemContent, currentPattern string) (string, error) {
 	variables := map[string]string{
 		"UPLOADED_PROBLEM_CONTENT": uploadedProblemContent,
+		"UPLOADED_SOLUTION_CONTENT": "(解答ファイルはアップロードされていません)",
 		"CURRENT_PATTERN":          currentPattern,
+	}
+	return p.LoadPrompt("three_problem_generation.txt", variables)
+}
+
+// LoadThreeProblemGenerationPromptWithSolution 3問生成プロンプトを読み込み（解答付き）
+func (p *PromptLoader) LoadThreeProblemGenerationPromptWithSolution(uploadedProblemContent, uploadedSolutionContent, currentPattern string) (string, error) {
+	solutionText := uploadedSolutionContent
+	if solutionText == "" {
+		solutionText = "(解答ファイルはアップロードされていません)"
+	}
+	
+	variables := map[string]string{
+		"UPLOADED_PROBLEM_CONTENT":  uploadedProblemContent,
+		"UPLOADED_SOLUTION_CONTENT": solutionText,
+		"CURRENT_PATTERN":           currentPattern,
 	}
 	return p.LoadPrompt("three_problem_generation.txt", variables)
 }

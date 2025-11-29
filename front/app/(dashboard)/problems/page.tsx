@@ -59,6 +59,7 @@ export default function Home() {
   
   // ファイルアップロード用の状態
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadedSolutionFiles, setUploadedSolutionFiles] = useState<File[]>([]);
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [filePreviewContent, setFilePreviewContent] = useState<string>('');
   
@@ -1673,6 +1674,8 @@ export default function Home() {
             <FileUpload
               uploadedFiles={uploadedFiles}
               onFilesChange={setUploadedFiles}
+              uploadedSolutionFiles={uploadedSolutionFiles}
+              onSolutionFilesChange={setUploadedSolutionFiles}
             />
             
             {/* 3問生成モードの場合はファイル必須の注意書き */}

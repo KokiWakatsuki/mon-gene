@@ -762,16 +762,17 @@ func (s *problemService) GenerateStage5(ctx context.Context, req models.Stage5Re
 	
 
 
-// extractSolutionSteps 解答手順を抽出
+// extractSolutionSteps 解答手順を抽出（Stage 2用）
 func (s *problemService) extractSolutionSteps(content string) string {
+	// 新形式: Stage 2の解法手順を抽出
 	re := regexp.MustCompile(`(?s)---SOLUTION_STEPS_START---(.*?)---SOLUTION_STEPS_END---`)
 	matches := re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
 	}
 	
-	// フォールバック：【解答の手順】を探す
-	re = regexp.MustCompile(`(?s)【解答の手順】(.*?)(?:---|\n\n|\z)`)
+	// フォールバック：【解法手順】を探す
+	re = regexp.MustCompile(`(?s)【解法手順（ユーザーに見せる）】(.*?)(?:---|\n\n|\z)`)
 	matches = re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
@@ -798,16 +799,24 @@ func (s *problemService) extractSolutionProcess(content string) string {
 	return ""
 }
 
-// extractSubProblemsAndProcess 小問構成と解答プロセスを抽出
+// extractSubProblemsAndProcess 小問構成と解答プロセスを抽出（Stage 1用）
 func (s *problemService) extractSubProblemsAndProcess(content string) string {
-	re := regexp.MustCompile(`(?s)---SUB_PROBLEMS_AND_PROCESS_START---(.*?)---SUB_PROBLEMS_AND_PROCESS_END---`)
+	// 新形式: Stage 1の問題文を抽出
+	re := regexp.MustCompile(`(?s)---PROBLEM_START---(.*?)---PROBLEM_END---`)
 	matches := re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
 	}
 	
-	// フォールバック：【小問構成と解答プロセス】を探す
-	re = regexp.MustCompile(`(?s)【小問構成と解答プロセス】(.*?)(?:---|\n\n|\z)`)
+	// 旧形式との互換性
+	re = regexp.MustCompile(`(?s)---SUB_PROBLEMS_AND_PROCESS_START---(.*?)---SUB_PROBLEMS_AND_PROCESS_END---`)
+	matches = re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	// フォールバック：【問題文】を探す
+	re = regexp.MustCompile(`(?s)【問題文（ユーザーに見せる）】(.*?)(?:---|\n\n|\z)`)
 	matches = re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
@@ -816,10 +825,18 @@ func (s *problemService) extractSubProblemsAndProcess(content string) string {
 	return ""
 }
 
-// extractCompleteProblem 完全な問題を抽出
+// extractCompleteProblem 完全な問題を抽出（Stage 4用 - 実際は解答・解説）
 func (s *problemService) extractCompleteProblem(content string) string {
-	re := regexp.MustCompile(`(?s)---COMPLETE_PROBLEM_START---(.*?)---COMPLETE_PROBLEM_END---`)
+	// 新形式: Stage 4の解答・解説を抽出
+	re := regexp.MustCompile(`(?s)---SOLUTION_START---(.*?)---SOLUTION_END---`)
 	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	// 旧形式との互換性
+	re = regexp.MustCompile(`(?s)---COMPLETE_PROBLEM_START---(.*?)---COMPLETE_PROBLEM_END---`)
+	matches = re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
 	}
@@ -831,8 +848,8 @@ func (s *problemService) extractCompleteProblem(content string) string {
 		return strings.TrimSpace(matches[1])
 	}
 	
-	// フォールバック：【完全な問題】を探す
-	re = regexp.MustCompile(`(?s)【完全な問題】(.*?)(?:---|\n\n|\z)`)
+	// フォールバック：【解答・解説】を探す
+	re = regexp.MustCompile(`(?s)【解答・解説（ユーザーに見せる）】(.*?)(?:---|\n\n|\z)`)
 	matches = re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
@@ -937,8 +954,21 @@ func (s *problemService) extractCalculationProgram(content string) string {
 	return ""
 }
 
-// extractFinalSolution 最終解答を抽出
+// extractFinalSolution 最終解答を抽出（Stage 5用 - 実際は図形コード）
 func (s *problemService) extractFinalSolution(content string) string {
+	// 新形式: Stage 5では図形が不要な場合もある
+	// まず「図形は不要」チェック
+	if strings.Contains(content, "図形は不要") || strings.Contains(content, "図形が不要") {
+		return "" // 図形不要の場合は空文字列を返す
+	}
+	
+	// 図形描画コードを抽出（Pythonコードブロック）
+	pythonCode := s.extractPythonCode(content)
+	if pythonCode != "" {
+		return pythonCode
+	}
+	
+	// 旧形式との互換性
 	re := regexp.MustCompile(`(?s)---FINAL_SOLUTION_START---(.*?)---FINAL_SOLUTION_END---`)
 	matches := re.FindStringSubmatch(content)
 	if len(matches) > 1 {
@@ -947,13 +977,6 @@ func (s *problemService) extractFinalSolution(content string) string {
 	
 	// Stage 5のマーカーを探す
 	re = regexp.MustCompile(`(?s)---STAGE5_START---(.*?)---STAGE5_END---`)
-	matches = re.FindStringSubmatch(content)
-	if len(matches) > 1 {
-		return strings.TrimSpace(matches[1])
-	}
-	
-	// フォールバック：【最終解答】を探す
-	re = regexp.MustCompile(`(?s)【最終解答】(.*?)(?:---|\n\n|\z)`)
 	matches = re.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
@@ -2234,13 +2257,27 @@ func (s *problemService) generateSinglePattern(
 		ConversationHistory: patternHistory,
 	}
 	
-	// 3. Stage 1-5を順次実行
+	// 3. Stage 1-5を順次実行（新しいプロセス）
 	for stage := 1; stage <= 5; stage++ {
 		globalStage := baseStage + stage - 1
 		fmt.Printf("🔄 [Pattern] Executing stage %d (global stage %d)\n", stage, globalStage)
 		
+		var stageDescription string
+		switch stage {
+		case 1:
+			stageDescription = "問題（大問と小問）の生成"
+		case 2:
+			stageDescription = "解法の生成（テキストベース）"
+		case 3:
+			stageDescription = "数値計算プログラムの生成・実行"
+		case 4:
+			stageDescription = "user用の解答・解説を生成"
+		case 5:
+			stageDescription = "問題図形描画プログラムの生成・実行"
+		}
+		
 		if progressCallback != nil {
-			progressCallback(globalStage, fmt.Sprintf("%s - Stage %d を実行中", patternName, stage))
+			progressCallback(globalStage, fmt.Sprintf("%s - Stage %d: %s", patternName, stage, stageDescription))
 		}
 		
 		// ステージを実行
@@ -2255,44 +2292,75 @@ func (s *problemService) generateSinglePattern(
 		
 		logBuilder.WriteString(stageLog)
 		
-		// 結果を格納
+		// 結果を格納（新しいプロセスに対応）
 		switch stage {
 		case 1:
+			// Stage 1: 問題文を生成
 			result.Stage1Result = stageResult
 			result.Stage1Log = stageLog
+			result.Content = s.extractSubProblemsAndProcess(stageResult)
+			if result.Content == "" {
+				result.Content = strings.TrimSpace(stageResult)
+			}
+			fmt.Printf("📝 [Pattern] Stage 1: Problem text extracted (length: %d)\n", len(result.Content))
+			
 		case 2:
+			// Stage 2: 解法手順を生成
 			result.Stage2Result = stageResult
 			result.Stage2Log = stageLog
+			solutionSteps := s.extractSolutionSteps(stageResult)
+			fmt.Printf("📚 [Pattern] Stage 2: Solution steps extracted (length: %d)\n", len(solutionSteps))
+			
 		case 3:
+			// Stage 3: 数値計算プログラムを生成・実行
 			result.Stage3Result = stageResult
 			result.Stage3Log = stageLog
-			// Stage 3では図形を生成
-			pythonCode := s.extractPythonCode(stageResult)
+			calculationProgram := s.extractCalculationProgram(stageResult)
+			if calculationProgram != "" {
+				fmt.Printf("🧮 [Pattern] Stage 3: Executing calculation program\n")
+				logBuilder.WriteString("🧮 数値計算プログラムを実行中...\n")
+				calculationResults, err := s.executeCalculationProgram(ctx, calculationProgram)
+				if err != nil {
+					fmt.Printf("⚠️ [Pattern] Calculation execution failed: %v\n", err)
+					logBuilder.WriteString(fmt.Sprintf("⚠️ 数値計算の実行に失敗: %v\n", err))
+				} else {
+					fmt.Printf("✅ [Pattern] Stage 3: Calculation completed\n")
+					logBuilder.WriteString("✅ 数値計算を実行しました\n")
+					// 計算結果を会話履歴に追加（Stage 4で使用）
+					s.buildConversationHistory(patternHistory, "", fmt.Sprintf("計算結果:\n%s", calculationResults), stage)
+				}
+			}
+			
+		case 4:
+			// Stage 4: 解答・解説を生成（Stage 2の解法 + Stage 3の計算結果を統合）
+			result.Stage4Result = stageResult
+			result.Stage4Log = stageLog
+			result.Solution = s.extractCompleteProblem(stageResult)
+			if result.Solution == "" {
+				result.Solution = strings.TrimSpace(stageResult)
+			}
+			fmt.Printf("📖 [Pattern] Stage 4: Solution/explanation extracted (length: %d)\n", len(result.Solution))
+			
+		case 5:
+			// Stage 5: 図形描画プログラムを生成・実行（必要な場合）
+			result.Stage5Result = stageResult
+			result.Stage5Log = stageLog
+			pythonCode := s.extractFinalSolution(stageResult)
 			if pythonCode != "" {
-				fmt.Printf("🎨 [Pattern] Generating geometry from Python code\n")
-				imageBase64, err := s.coreClient.GenerateCustomGeometry(ctx, pythonCode, uploadedProblemContent)
+				fmt.Printf("🎨 [Pattern] Stage 5: Generating geometry from Python code\n")
+				logBuilder.WriteString("🎨 図形を生成中...\n")
+				imageBase64, err := s.coreClient.GenerateCustomGeometry(ctx, pythonCode, result.Content)
 				if err != nil {
 					fmt.Printf("⚠️ [Pattern] Geometry generation failed: %v\n", err)
 					logBuilder.WriteString(fmt.Sprintf("⚠️ 図形生成に失敗: %v\n", err))
 				} else {
 					result.ImageBase64 = imageBase64
-					fmt.Printf("✅ [Pattern] Geometry generated successfully\n")
+					fmt.Printf("✅ [Pattern] Stage 5: Geometry generated successfully\n")
 					logBuilder.WriteString("✅ 図形を生成しました\n")
 				}
-			}
-		case 4:
-			result.Stage4Result = stageResult
-			result.Stage4Log = stageLog
-			result.Content = s.extractCompleteProblem(stageResult)
-			if result.Content == "" {
-				result.Content = strings.TrimSpace(stageResult)
-			}
-		case 5:
-			result.Stage5Result = stageResult
-			result.Stage5Log = stageLog
-			result.Solution = s.extractFinalSolution(stageResult)
-			if result.Solution == "" {
-				result.Solution = strings.TrimSpace(stageResult)
+			} else {
+				fmt.Printf("ℹ️ [Pattern] Stage 5: No geometry needed for this problem\n")
+				logBuilder.WriteString("ℹ️ この問題には図形は不要です\n")
 			}
 		}
 		
