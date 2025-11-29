@@ -11,6 +11,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	Update(ctx context.Context, user *models.User) error
 	UpdateFigureRegenerationCount(userID int64, count int) error
+	IncrementPreviewCount(ctx context.Context, userID int64) error
 }
 
 type ProblemRepository interface {

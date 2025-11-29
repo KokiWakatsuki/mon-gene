@@ -239,3 +239,19 @@ func (r *memoryUserRepository) UpdateFigureRegenerationCount(userID int64, count
 	
 	return fmt.Errorf("user not found")
 }
+
+// IncrementPreviewCount プレビュー回数をインクリメント
+func (r *memoryUserRepository) IncrementPreviewCount(ctx context.Context, userID int64) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	
+	for _, user := range r.users {
+		if user.ID == userID {
+			user.PreviewCount++
+			user.UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("user not found")
+}

@@ -126,7 +126,7 @@ export default function FileUpload({
   };
 
   return (
-    <div className="space-y-6">
+    <div className={onSolutionFilesChange && uploadedSolutionFiles !== undefined ? "grid grid-cols-1 md:grid-cols-2 gap-6" : "space-y-6"}>
       {/* 問題ファイルアップロード */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
         <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-800 mb-4">

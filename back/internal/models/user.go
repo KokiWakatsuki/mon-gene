@@ -11,6 +11,8 @@ type User struct {
 	ProblemGenerationCount int     `json:"problem_generation_count" db:"problem_generation_count"` // 現在の生成回数
 	FigureRegenerationLimit int    `json:"figure_regeneration_limit" db:"figure_regeneration_limit"` // -1 = 制限なし, 0以上 = 制限回数
 	FigureRegenerationCount int    `json:"figure_regeneration_count" db:"figure_regeneration_count"` // 現在の再生成回数
+	PreviewLimit            int    `json:"preview_limit" db:"preview_limit"`                         // -1 = 制限なし, 0以上 = 制限回数
+	PreviewCount            int    `json:"preview_count" db:"preview_count"`                         // 現在のプレビュー回数
 	Role                 string    `json:"role" db:"role"`                                         // admin, developer, teacher
 	PreferredAPI         string    `json:"preferred_api" db:"preferred_api"`                       // chatgpt, claude, gemini
 	PreferredModel       string    `json:"preferred_model" db:"preferred_model"`                   // モデル名

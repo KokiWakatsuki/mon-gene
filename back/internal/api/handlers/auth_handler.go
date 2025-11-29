@@ -105,6 +105,8 @@ func (h *AuthHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		"problem_generation_count":  user.ProblemGenerationCount,
 		"figure_regeneration_limit": user.FigureRegenerationLimit,
 		"figure_regeneration_count": user.FigureRegenerationCount,
+		"preview_limit":             user.PreviewLimit,
+		"preview_count":             user.PreviewCount,
 		"role":                      user.Role,
 		"preferred_api":             user.PreferredAPI,
 		"preferred_model":           user.PreferredModel,
@@ -152,6 +154,8 @@ func (h *AuthHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 		"problem_generation_count":  user.ProblemGenerationCount,
 		"figure_regeneration_limit": user.FigureRegenerationLimit,
 		"figure_regeneration_count": user.FigureRegenerationCount,
+		"preview_limit":             user.PreviewLimit,
+		"preview_count":             user.PreviewCount,
 	}
 
 	utils.WriteJSONResponse(w, http.StatusOK, response)

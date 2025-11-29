@@ -341,7 +341,7 @@ func (h *SSEHandler) GenerateThreeProblemsSSE(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// PreviewPDFContent PDFファイルの内容をプレビュー用に抽出
+// PreviewPDFContent PDFファイルの内容をプレビュー用に抽出（回数制限付き）
 func (h *SSEHandler) PreviewPDFContent(w http.ResponseWriter, r *http.Request) {
 	// CORSヘッダーを設定
 	utils.EnableCORS(w)
@@ -360,9 +360,15 @@ func (h *SSEHandler) PreviewPDFContent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := strings.TrimPrefix(authHeader, "Bearer ")
-	_, err := h.authService.ValidateToken(r.Context(), token)
+	user, err := h.authService.ValidateToken(r.Context(), token)
 	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証に失敗しました")
+		return
+	}
+	
+	// プレビュー回数制限チェック
+	if user.PreviewLimit != -1 && user.PreviewCount >= user.PreviewLimit {
+		utils.WriteErrorResponse(w, http.StatusForbidden, fmt.Sprintf("問題概要表示の上限（%d回）に達しました", user.PreviewLimit))
 		return
 	}
 
@@ -405,6 +411,14 @@ func (h *SSEHandler) PreviewPDFContent(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	fmt.Printf("✅ [PreviewPDF] Successfully extracted text from PDF (length: %d)\n", len(extractedText))
+	
+	// プレビュー回数をインクリメント
+	if err := h.authService.IncrementPreviewCount(r.Context(), user.ID); err != nil {
+		fmt.Printf("⚠️ [PreviewPDF] Failed to increment preview count: %v\n", err)
+		// エラーでも処理は続行（カウント失敗は致命的ではない）
+	} else {
+		fmt.Printf("✅ [PreviewPDF] Preview count incremented for user %d\n", user.ID)
+	}
 	
 	// レスポンスを返す
 	response := map[string]interface{}{

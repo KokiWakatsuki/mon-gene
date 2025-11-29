@@ -31,8 +31,9 @@ func NewMySQLUserRepository(db *sqlx.DB) UserRepository {
 func (r *MySQLUserRepository) GetBySchoolCode(ctx context.Context, schoolCode string) (*models.User, error) {
 	user := &models.User{}
 	query := `
-		SELECT id, school_code, email, password_hash, problem_generation_limit, 
+		SELECT id, school_code, email, password_hash, problem_generation_limit,
 			   problem_generation_count, figure_regeneration_limit, figure_regeneration_count,
+			   preview_limit, preview_count,
 			   role, preferred_api, preferred_model, created_at, updated_at
 		FROM users WHERE school_code = ?
 	`
@@ -48,8 +49,9 @@ func (r *MySQLUserRepository) GetBySchoolCode(ctx context.Context, schoolCode st
 func (r *MySQLUserRepository) GetByID(ctx context.Context, id int64) (*models.User, error) {
 	user := &models.User{}
 	query := `
-		SELECT id, school_code, email, password_hash, problem_generation_limit, 
+		SELECT id, school_code, email, password_hash, problem_generation_limit,
 			   problem_generation_count, figure_regeneration_limit, figure_regeneration_count,
+			   preview_limit, preview_count,
 			   role, preferred_api, preferred_model, created_at, updated_at
 		FROM users WHERE id = ?
 	`
@@ -124,6 +126,18 @@ func (r *MySQLUserRepository) UpdateFigureRegenerationCount(userID int64, count 
 	_, err := r.db.Exec(query, count, userID)
 	if err != nil {
 		return fmt.Errorf("図形再生成回数の更新に失敗: %w", err)
+	}
+	
+	return nil
+}
+
+// IncrementPreviewCount プレビュー回数をインクリメント
+func (r *MySQLUserRepository) IncrementPreviewCount(ctx context.Context, userID int64) error {
+	query := `UPDATE users SET preview_count = preview_count + 1 WHERE id = ?`
+	
+	_, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("プレビュー回数の更新に失敗: %w", err)
 	}
 	
 	return nil

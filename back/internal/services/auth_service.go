@@ -18,6 +18,7 @@ type AuthService interface {
 	ValidateToken(ctx context.Context, token string) (*models.User, error)
 	Logout(ctx context.Context, token string) error
 	UpdateUserSettings(ctx context.Context, schoolCode, preferredAPI, preferredModel string) error
+	IncrementPreviewCount(ctx context.Context, userID int64) error
 }
 
 type authService struct {
@@ -182,6 +183,11 @@ func (s *authService) UpdateUserSettings(ctx context.Context, schoolCode, prefer
 	}
 
 	return nil
+}
+
+// IncrementPreviewCount プレビュー回数をインクリメント
+func (s *authService) IncrementPreviewCount(ctx context.Context, userID int64) error {
+	return s.userRepo.IncrementPreviewCount(ctx, userID)
 }
 
 // generateToken generates a random token

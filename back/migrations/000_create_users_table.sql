@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     problem_generation_count INT NOT NULL DEFAULT 0 COMMENT '現在の問題生成回数',
     figure_regeneration_limit INT NOT NULL DEFAULT 2 COMMENT '図形再生成制限回数（-1 = 制限なし, 0以上 = 制限回数）',
     figure_regeneration_count INT NOT NULL DEFAULT 0 COMMENT '現在の図形再生成回数',
+    preview_limit INT NOT NULL DEFAULT 5 COMMENT '問題概要表示制限回数（-1 = 制限なし, 0以上 = 制限回数）',
+    preview_count INT NOT NULL DEFAULT 0 COMMENT '現在の問題概要表示回数',
     role VARCHAR(50) NOT NULL DEFAULT 'teacher' COMMENT 'ユーザーロール（admin, developer, teacher）',
     preferred_api VARCHAR(50) NOT NULL DEFAULT 'claude' COMMENT '優先API（chatgpt, claude, gemini）',
     preferred_model VARCHAR(100) NOT NULL DEFAULT 'claude-3-haiku' COMMENT '優先モデル名',

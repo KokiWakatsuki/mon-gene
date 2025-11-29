@@ -48,6 +48,8 @@ export default function Home() {
     email: string;
     problem_generation_limit: number;
     problem_generation_count: number;
+    preview_limit: number;
+    preview_count: number;
   } | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -55,7 +57,7 @@ export default function Home() {
   const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('partial');
   
   // 生成システム用の状態（5段階 or 3問生成）
-  const [generationMode, setGenerationMode] = useState<'five-stage' | 'three-problems'>('five-stage');
+  const [generationMode, setGenerationMode] = useState<'five-stage' | 'three-problems'>('three-problems');
   
   // ファイルアップロード用の状態
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -549,9 +551,8 @@ export default function Home() {
         const processedSolution = problem.solution ? processContent(problem.solution) : '';
         
         const imageHtml = problem.imageBase64
-          ? `<div style="text-align: center; margin: 20px 0;">
+          ? `<div class="image-container">
                <img src="data:image/png;base64,${problem.imageBase64}"
-                    style="max-width: 100%; height: auto; border: 1px solid #ddd;"
                     alt="問題図形" />
              </div>`
           : '';
@@ -671,14 +672,22 @@ export default function Home() {
                 vertical-align: sub;
                 line-height: 0;
               }
+              .problem-layout {
+                display: flex;
+                gap: 20px;
+                align-items: flex-start;
+              }
               .image-container {
-                text-align: center;
-                margin: 20px 0;
+                flex: 0 0 50%;
+                max-width: 50%;
               }
               .image-container img {
-                max-width: 100%;
+                width: 100%;
                 height: auto;
                 border: 1px solid #ddd;
+              }
+              .content-container {
+                flex: 1;
               }
               @media print {
                 body { margin: 0; }
@@ -689,8 +698,15 @@ export default function Home() {
           </head>
           <body>
             <h1>${problem.title}</h1>
-            <div class="content">${processedContent}</div>
-            ${imageHtml}
+            ${problem.imageBase64
+              ? `<div class="problem-layout">
+                   <div class="content-container">
+                     <div class="content">${processedContent}</div>
+                   </div>
+                   ${imageHtml}
+                 </div>`
+              : `<div class="content">${processedContent}</div>`
+            }
             ${solutionHtml}
           </body>
           </html>
@@ -1619,6 +1635,23 @@ export default function Home() {
               onOpinionProfileChange={setOpinionProfileV2}
             />
             
+            {/* 検索モード時の「一覧に戻る」ボタン */}
+            {isSearchMode && (
+              <div className="mb-6">
+                <button
+                  onClick={() => {
+                    setIsSearchMode(false);
+                    setSearchKeyword('');
+                    fetchProblemHistory();
+                  }}
+                  className="px-6 py-3 bg-gray-500 text-white rounded-lg font-bold hover:brightness-110 transition-all flex items-center gap-2"
+                >
+                  <span>←</span>
+                  <span>一覧に戻る</span>
+                </button>
+              </div>
+            )}
+            
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-6" aria-label="問題一覧">
               {(isSearchMode ? searchResults : problems).map((problem) => (
                 <ProblemCard
@@ -1651,7 +1684,7 @@ export default function Home() {
                   }`}
                 >
                   <div className="text-center">
-                    <div className="text-lg mb-1">🔥 5段階生成</div>
+                    <div className="text-lg mb-1">🔥 通常生成</div>
                     <div className="text-xs">1問を5段階で生成</div>
                   </div>
                 </button>
@@ -1664,7 +1697,7 @@ export default function Home() {
                   }`}
                 >
                   <div className="text-center">
-                    <div className="text-lg mb-1">📚 3問生成</div>
+                    <div className="text-lg mb-1">📚 解き直し</div>
                     <div className="text-xs">類似問題を3パターン生成（ファイル必須）</div>
                   </div>
                 </button>
@@ -1686,7 +1719,7 @@ export default function Home() {
                   <div>
                     <div className="font-semibold text-yellow-800 mb-1">ファイルアップロードが必須です</div>
                     <div className="text-sm text-yellow-700">
-                      3問生成モードでは、参考となる問題ファイルのアップロードが必要です。
+                      解き直しモードでは、参考となる問題ファイルのアップロードが必要です。
                       アップロードした問題を基に、3つの類似パターンを生成します。
                     </div>
                   </div>
@@ -1759,19 +1792,30 @@ export default function Home() {
                 </button>
                 
                 {/* アップロードした問題の概要表示ボタン */}
-                {uploadedFiles.length > 0 && (
+                {(uploadedFiles.length > 0 || uploadedSolutionFiles.length > 0) && (
                   <button
-                    className="text-base font-bold px-6 py-3.5 rounded-xl transition-all bg-blue-500 text-white hover:brightness-110 hover:-translate-y-0.5 shadow-[0_4px_15px_rgba(59,130,246,0.4)]"
+                    className={`text-base font-bold px-6 py-3.5 rounded-xl transition-all shadow-[0_4px_15px_rgba(59,130,246,0.4)] ${
+                      userInfo && userInfo.preview_limit !== -1 && userInfo.preview_count >= userInfo.preview_limit
+                        ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                        : 'bg-blue-500 text-white hover:brightness-110 hover:-translate-y-0.5'
+                    }`}
                     type="button"
+                    disabled={userInfo ? (userInfo.preview_limit !== -1 && userInfo.preview_count >= userInfo.preview_limit) : false}
                     onClick={async () => {
+                      // 使用制限チェック
+                      if (userInfo && userInfo.preview_limit !== -1 && userInfo.preview_count >= userInfo.preview_limit) {
+                        alert(`プレビュー回数の上限（${userInfo.preview_limit}回）に達しました。これ以上プレビューを表示することはできません。`);
+                        return;
+                      }
+
                       try {
-                        console.log('📄 Loading file contents...', uploadedFiles);
+                        console.log('📄 Loading file contents...', uploadedFiles, uploadedSolutionFiles);
                         setIsLoading(true);
                         
-                        // ファイル内容を読み込む
-                        const fileContents = await Promise.all(
+                        // 問題ファイルの内容を読み込む
+                        const problemContents = await Promise.all(
                           uploadedFiles.map(async (file) => {
-                            console.log('Processing file:', file.name, 'type:', file.type, 'size:', file.size);
+                            console.log('Processing problem file:', file.name, 'type:', file.type, 'size:', file.size);
                             
                             if (file.type === 'application/pdf') {
                               // PDFファイルの場合：バックエンドAPIを呼び出してテキストを抽出
@@ -1800,22 +1844,73 @@ export default function Home() {
                               const data = await response.json();
                               console.log('✅ PDF content extracted:', data.content.substring(0, 200));
                               
-                              return `【PDFファイル】\nファイル名: ${file.name}\nサイズ: ${(file.size / 1024).toFixed(2)} KB\n\n【抽出された内容】\n${data.content}`;
+                              return `【問題PDFファイル】\nファイル名: ${file.name}\nサイズ: ${(file.size / 1024).toFixed(2)} KB\n\n【抽出された内容】\n${data.content}`;
                             } else {
                               const text = await file.text();
                               console.log('Text file content length:', text.length);
                               const preview = text.substring(0, 1000);
-                              return `【ファイル名: ${file.name}】\nサイズ: ${(file.size / 1024).toFixed(2)} KB\n\n${preview}${text.length > 1000 ? '\n\n... (以下省略)' : ''}`;
+                              return `【問題ファイル名: ${file.name}】\nサイズ: ${(file.size / 1024).toFixed(2)} KB\n\n${preview}${text.length > 1000 ? '\n\n... (以下省略)' : ''}`;
                             }
                           })
                         );
                         
-                        const summary = fileContents.join('\n\n' + '='.repeat(50) + '\n\n');
+                        // 解答ファイルの内容を読み込む
+                        const solutionContents = await Promise.all(
+                          uploadedSolutionFiles.map(async (file) => {
+                            console.log('Processing solution file:', file.name, 'type:', file.type, 'size:', file.size);
+                            
+                            if (file.type === 'application/pdf') {
+                              // PDFファイルの場合：バックエンドAPIを呼び出してテキストを抽出
+                              console.log('📄 Extracting solution PDF content via API...');
+                              
+                              const token = localStorage.getItem('token');
+                              if (!token) {
+                                throw new Error('認証トークンが見つかりません');
+                              }
+                              
+                              const formData = new FormData();
+                              formData.append('file', file);
+                              
+                              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/preview-pdf`, {
+                                method: 'POST',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                },
+                                body: formData
+                              });
+                              
+                              if (!response.ok) {
+                                throw new Error(`解答PDF抽出エラー: ${response.status}`);
+                              }
+                              
+                              const data = await response.json();
+                              console.log('✅ Solution PDF content extracted:', data.content.substring(0, 200));
+                              
+                              return `【解答PDFファイル】\nファイル名: ${file.name}\nサイズ: ${(file.size / 1024).toFixed(2)} KB\n\n【抽出された内容】\n${data.content}`;
+                            } else {
+                              const text = await file.text();
+                              console.log('Solution text file content length:', text.length);
+                              const preview = text.substring(0, 1000);
+                              return `【解答ファイル名: ${file.name}】\nサイズ: ${(file.size / 1024).toFixed(2)} KB\n\n${preview}${text.length > 1000 ? '\n\n... (以下省略)' : ''}`;
+                            }
+                          })
+                        );
+                        
+                        // 問題と解答を結合
+                        const allContents = [
+                          ...problemContents,
+                          ...(solutionContents.length > 0 ? ['\n\n' + '='.repeat(50) + '\n【解答・解説】\n' + '='.repeat(50) + '\n\n', ...solutionContents] : [])
+                        ];
+                        
+                        const summary = allContents.join('\n\n' + '='.repeat(50) + '\n\n');
                         console.log('File summary generated:', summary.substring(0, 200));
                         
                         setFilePreviewContent(summary);
                         setShowFilePreview(true);
                         setIsLoading(false);
+                        
+                        // ユーザー情報を更新（プレビュー回数をインクリメント）
+                        await fetchUserInfo();
                       } catch (error) {
                         console.error('ファイル読み込みエラー:', error);
                         setIsLoading(false);
@@ -1824,6 +1919,11 @@ export default function Home() {
                     }}
                   >
                     📄 問題概要を表示
+                    {userInfo && userInfo.preview_limit !== -1 && (
+                      <span className="ml-2 text-sm">
+                        (残り {userInfo.preview_limit - userInfo.preview_count}回)
+                      </span>
+                    )}
                   </button>
                 )}
               </div>
@@ -1884,9 +1984,9 @@ export default function Home() {
         isOpen={isLoading}
         message={
           generationMode === 'three-problems'
-            ? '📚 3問生成プロセスを実行中...'
+            ? '📚 解き直しプロセスを実行中...'
             : generationMode === 'five-stage'
-            ? '🔥 5段階生成プロセスを実行中...'
+            ? '🔥 通常生成プロセスを実行中...'
             : 'AIが問題を生成しています...'
         }
         showProgress={generationMode === 'five-stage' || generationMode === 'three-problems'}
