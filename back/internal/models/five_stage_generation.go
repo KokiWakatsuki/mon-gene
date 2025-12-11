@@ -198,9 +198,11 @@ type ProgressUpdate struct {
 
 // ThreeProblemGenerationRequest 3問生成のリクエスト
 type ThreeProblemGenerationRequest struct {
-	UploadedProblemContent string `json:"uploaded_problem_content"` // アップロードされた問題の内容（テキスト形式）
-	UploadedProblemPDF     []byte `json:"-"`                        // アップロードされた問題のPDFバイナリデータ（JSONには含めない）
-	Subject                string `json:"subject"`
+	UploadedProblemContent string   `json:"uploaded_problem_content"` // アップロードされた問題の内容（テキスト形式）
+	UploadedProblemPDF     []byte   `json:"-"`                        // アップロードされた問題のPDFバイナリデータ（JSONには含めない）
+	UploadedSolutionContent string  `json:"uploaded_solution_content,omitempty"` // アップロードされた解答・解説の内容（オプション）
+	Subject                string   `json:"subject"`
+	SelectedUnits          []string `json:"selected_units,omitempty"` // 生成時に使用する単元の選択（オプション）
 }
 
 // ThreeProblemGenerationResponse 3問生成のレスポンス（15段階プロセス）

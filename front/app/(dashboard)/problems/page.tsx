@@ -62,6 +62,22 @@ export default function Home() {
   // ファイルアップロード用の状態
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadedSolutionFiles, setUploadedSolutionFiles] = useState<File[]>([]);
+  // 初期状態で1~2年生の単元を含める
+  const [selectedUnits, setSelectedUnits] = useState<string[]>([
+    '正負の数',
+    '文字と式',
+    '方程式',
+    '比例と反比例',
+    '平面図形',
+    '空間図形',
+    'データの活用',
+    '式の計算',
+    '連立方程式',
+    '一次関数',
+    '図形の性質と合同',
+    '図形の性質と証明',
+    '確率'
+  ]);
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [filePreviewContent, setFilePreviewContent] = useState<string>('');
   
@@ -1005,9 +1021,24 @@ export default function Home() {
         const uploadedProblemContent = fileContents.join('\n\n---\n\n');
         console.log('📄 [ThreeProblems] Uploaded problem content length:', uploadedProblemContent.length);
 
+        // 解答ファイルの内容を読み込む（オプション）
+        let uploadedSolutionContent = '';
+        if (uploadedSolutionFiles.length > 0) {
+          const solutionFileContents = await Promise.all(
+            uploadedSolutionFiles.map(async (file) => {
+              const text = await file.text();
+              return `【ファイル名: ${file.name}】\n${text}`;
+            })
+          );
+          uploadedSolutionContent = solutionFileContents.join('\n\n---\n\n');
+          console.log('📄 [ThreeProblems] Uploaded solution content length:', uploadedSolutionContent.length);
+        }
+
         // SSEを使用してリアルタイム進捗を取得
         const requestBody = JSON.stringify({
           uploaded_problem_content: uploadedProblemContent,
+          uploaded_solution_content: uploadedSolutionContent,
+          selected_units: selectedUnits.length > 0 ? selectedUnits : undefined,
           subject: activeSubject
         });
 
@@ -1709,6 +1740,8 @@ export default function Home() {
               onFilesChange={setUploadedFiles}
               uploadedSolutionFiles={uploadedSolutionFiles}
               onSolutionFilesChange={setUploadedSolutionFiles}
+              selectedUnits={selectedUnits}
+              onSelectedUnitsChange={generationMode === 'three-problems' ? setSelectedUnits : undefined}
             />
             
             {/* 3問生成モードの場合はファイル必須の注意書き */}

@@ -367,6 +367,35 @@ func (p *PromptLoader) LoadThreeProblemGenerationPromptWithSolution(uploadedProb
 		"UPLOADED_PROBLEM_CONTENT":  uploadedProblemContent,
 		"UPLOADED_SOLUTION_CONTENT": solutionText,
 		"CURRENT_PATTERN":           currentPattern,
+		"SELECTED_UNITS_INSTRUCTION": "", // デフォルトは空
+	}
+	return p.LoadPrompt("three_problem_generation.txt", variables)
+}
+
+// LoadThreeProblemGenerationPromptWithUnits 3問生成プロンプトを読み込み（使用単元指定付き）
+func (p *PromptLoader) LoadThreeProblemGenerationPromptWithUnits(uploadedProblemContent, uploadedSolutionContent, currentPattern string, selectedUnits []string) (string, error) {
+	solutionText := uploadedSolutionContent
+	if solutionText == "" {
+		solutionText = "(解答ファイルはアップロードされていません)"
+	}
+	
+	// 使用単元の指示を構築（ポジティブな指示）
+	var unitsInstruction string
+	if len(selectedUnits) > 0 {
+		unitsInstruction = "**重要**: 問題生成時には、以下の単元のみを使用してください：\n\n"
+		for _, unit := range selectedUnits {
+			unitsInstruction += fmt.Sprintf("- %s\n", unit)
+		}
+		unitsInstruction += "\n上記の単元の中から適切なものを選んで、元の問題と同じレベルの類似問題を生成してください。"
+	} else {
+		unitsInstruction = "単元の制限はありません。元の問題で使用されている単元をすべて使用してください。"
+	}
+	
+	variables := map[string]string{
+		"UPLOADED_PROBLEM_CONTENT":   uploadedProblemContent,
+		"UPLOADED_SOLUTION_CONTENT":  solutionText,
+		"CURRENT_PATTERN":            currentPattern,
+		"SELECTED_UNITS_INSTRUCTION": unitsInstruction,
 	}
 	return p.LoadPrompt("three_problem_generation.txt", variables)
 }
