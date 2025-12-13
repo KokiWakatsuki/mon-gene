@@ -9,12 +9,12 @@ interface MainTabsProps {
 
 export default function MainTabs({ activeTab, onTabChange }: MainTabsProps) {
   return (
-    <nav className="flex gap-1 border-b-2 border-gray-200 mb-6" aria-label="メインタブ">
+    <nav className="flex gap-1 border-b-2 border-gray-200 my-6 max-w-6xl mx-auto px-4" aria-label="メインタブ">
       <button
-        className={`font-sans text-base font-bold px-5 py-3 border-b-3 transition-colors translate-y-0.5 ${
+        className={`font-sans text-base font-bold px-5 py-3 bg-transparent border-none border-b-[3px] transition-colors translate-y-0.5 cursor-pointer ${
           activeTab === 'list'
-            ? 'text-gray-800 border-blue-500'
-            : 'text-gray-500 border-transparent hover:text-gray-800 hover:bg-gray-100'
+            ? 'text-gray-800 border-b-blue-500'
+            : 'text-gray-500 border-b-transparent hover:text-gray-800 hover:bg-gray-100'
         }`}
         onClick={() => onTabChange('list')}
         aria-current={activeTab === 'list' ? 'page' : undefined}
@@ -22,10 +22,10 @@ export default function MainTabs({ activeTab, onTabChange }: MainTabsProps) {
         問題一覧
       </button>
       <button
-        className={`font-sans text-base font-bold px-5 py-3 border-b-3 transition-colors translate-y-0.5 ${
+        className={`font-sans text-base font-bold px-5 py-3 bg-transparent border-none border-b-[3px] transition-colors translate-y-0.5 cursor-pointer ${
           activeTab === 'generate'
-            ? 'text-gray-800 border-blue-500'
-            : 'text-gray-500 border-transparent hover:text-gray-800 hover:bg-gray-100'
+            ? 'text-gray-800 border-b-blue-500'
+            : 'text-gray-500 border-b-transparent hover:text-gray-800 hover:bg-gray-100'
         }`}
         onClick={() => onTabChange('generate')}
         aria-current={activeTab === 'generate' ? 'page' : undefined}

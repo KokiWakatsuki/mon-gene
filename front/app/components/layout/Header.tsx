@@ -73,41 +73,45 @@ export default function Header() {
   }, [showLogoutMenu]);
 
   return (
-    <header className="flex items-center justify-between mb-5">
-      <div className="flex items-center gap-2.5">
-        <div 
-          className="w-8 h-8 bg-mongene-blue rounded-lg" 
-          aria-hidden="true"
+    <header className="relative flex items-center justify-between bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)]" style={{
+      padding: '16px max(16px, calc((100vw - 1024px) / 2 + 16px))',
+      zIndex: 'var(--z-header)'
+    }}>
+      <a href="#" className="flex items-center no-underline">
+        <img
+          src="/images/モンジェネロゴタイプ.svg"
+          alt="Mongene"
+          className="h-10 w-auto object-contain"
         />
-        <div className="font-extrabold text-mongene-blue text-lg">
-          Mongene
-        </div>
-      </div>
+      </a>
       
       <div className="relative" ref={menuRef}>
         <button
-          className="w-10 h-10 bg-mongene-border rounded-full hover:bg-gray-300 transition-colors cursor-pointer border-none"
+          className="w-10 h-10 rounded-full bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:bg-gray-100"
           onClick={() => setShowLogoutMenu(!showLogoutMenu)}
-          aria-label="ユーザーメニュー"
-        />
+          aria-label="ユーザー設定"
+          aria-expanded={showLogoutMenu}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-6 h-6 text-gray-500">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
+        </button>
         
         {showLogoutMenu && (
-          <div className="absolute right-0 top-12 bg-white border border-mongene-border rounded-xl shadow-lg py-2 min-w-48 z-10">
-            {/* デバッグ情報 */}
-            <div className="px-4 py-2 text-xs text-gray-500 border-b">
-              {user ? `Role: ${user.role}` : 'User: null'}
-            </div>
-            
+          <div
+            className="absolute right-0 top-12 bg-white border border-gray-200 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] py-2 min-w-[200px] flex flex-col"
+            style={{ zIndex: 'var(--z-modal)' }}
+          >
             {user?.role === 'admin' && (
               <button
-                className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors border-none bg-transparent cursor-pointer"
+                className="w-full px-4 py-2.5 text-left text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors border-none bg-transparent cursor-pointer"
                 onClick={handleSettings}
               >
-                設定
+                アカウント設定
               </button>
             )}
             <button
-              className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors border-none bg-transparent cursor-pointer"
+              className="w-full px-4 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-gray-50 transition-colors border-none bg-transparent cursor-pointer border-t border-gray-200 mt-1 pt-3"
               onClick={handleLogout}
             >
               ログアウト

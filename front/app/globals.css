@@ -3,6 +3,55 @@
 @import "tailwindcss/utilities";
 
 :root {
+  /* Colors */
+  --white: #ffffff;
+  --black: #000000;
+  --gray-50:  #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-500: #6b7280;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+
+  --blue-50:   #eff6ff;
+  --blue-400:  #60a5fa;
+  --blue-500:  #3b82f6;
+  --green-500: #8DDB39;
+  --red-500:   #ef4444;
+  --purple-500:#8b5cf6;
+  --orange-500: #c2410c;
+  --orange-100: #ffedd5;
+  --green-100:  #dcfce7;
+  --green-800:  #15803d;
+
+  /* Background Block Colors */
+  --block-green:  #86C85A;
+  --block-yellow: #FFDE00;
+  --block-blue:   #00A9E2;
+  --block-pink:   #E78EA1;
+
+  /* Semantic Colors */
+  --text-main:   var(--gray-800);
+  --text-muted:  var(--gray-500);
+  --text-danger: var(--red-500);
+  --bg-body:     var(--gray-50);
+  --bg-panel:    var(--white);
+  --bg-hover:    var(--gray-100);
+  --bg-active:   var(--blue-50);
+  --border-default: var(--gray-200);
+
+  --primary: var(--blue-500);
+  --success: var(--green-500);
+  --danger:  var(--red-500);
+  --accent:  var(--purple-500);
+
+  /* Z-Index Layers */
+  --z-bg: -1;
+  --z-header: 50;
+  --z-modal: 100;
+  --z-overlay: 9999;
+  
+  /* Legacy compatibility */
   --mongene-green: #8DDB39;
   --mongene-blue: #11B3F2;
   --mongene-yellow: #FFCD0A;
@@ -10,12 +59,6 @@
   --mongene-muted: #6b7280;
   --mongene-border: #e5e7eb;
   --mongene-bg: #ffffff;
-  
-  /* 積み木の色 */
-  --block-green: #86C85A;
-  --block-yellow: #FFDE00;
-  --block-blue: #00A9E2;
-  --block-pink: #E78EA1;
 }
 
 @theme inline {
@@ -27,19 +70,20 @@
   --color-mongene-border: var(--mongene-border);
   --color-mongene-bg: var(--mongene-bg);
   
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-}
-
-body {
-  background: var(--mongene-bg);
-  color: var(--mongene-ink);
-  font-family: var(--font-sans);
-  margin: 0;
-  min-height: 100vh;
+  --font-sans: var(--font-noto-sans-jp), "Noto Sans JP", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 * {
   box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--text-main);
+  min-height: 100vh;
+  position: relative;
+  background-color: var(--bg-body);
 }
 
 /* Background shapes utility classes - 積み木風 */

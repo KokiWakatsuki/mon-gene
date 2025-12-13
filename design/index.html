@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>モンジェネ</title>
+  <link rel="icon" href="images/モンジェネロゴ.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  
+  <div id="bg-container"></div>
+  <div class="bg-overlay"></div>
+
+  <header class="header">
+    <a href="#" class="logo">
+      <img src="images/モンジェネロゴタイプ.svg" alt="Mongene" class="logo-img">
+    </a>
+    <div class="user-actions">
+      <button class="icon-btn" title="ユーザー設定" id="accountToggle" aria-expanded="false" aria-controls="accountModal">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+      </button>
+      <div class="account-modal" id="accountModal" hidden>
+        <a href="#" class="modal-link">アカウント設定</a>
+        <a href="#" class="modal-link modal-link-logout">ログアウト</a>
+      </div>
+    </div>
+  </header>
+  
+  <main class="wrap">
+    <nav class="subject-tabs-container">
+      <button class="subject-tab active" type="button">数学</button>
+    </nav>
+    
+    <nav class="main-tabs-container">
+      <button class="main-tab active" type="button" data-tab="tab-list">問題一覧</button>
+      <button class="main-tab" type="button" data-tab="tab-gen">問題生成</button>
+    </nav>
+
+    <div class="tab-content">
+      
+      <div class="tab-panel active" id="tab-list">
+        <div class="search-bar-container">
+          <div class="search-input-group">
+            <input type="text" id="keywordInput" class="form-input search-input" placeholder="キーワード検索 (例: 面積, 太郎, 最大値...)">
+            <button type="button" id="keywordSearchBtn" class="btn-search-icon" aria-label="検索">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-accordion">
+          <button type="button" class="filter-accordion-header" id="categoryAccordionBtn" aria-expanded="false">
+            <span class="accordion-title-group">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" /><path d="M7 7h.01" /></svg>
+              <span class="accordion-label">タグを選択</span>
+            </span>
+            <svg class="accordion-arrow" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+
+          <div class="filter-accordion-body" id="categoryAccordionBody">
+            <div class="accordion-search-section">
+              <div id="activeTagsArea" class="active-tags-area"></div>
+              <div class="search-wrapper">
+                <input type="text" id="tagSearchInput" placeholder="タグを検索 (例: 相似, 二次関数...)" class="filter-search-input">
+                <div id="tagSuggestions" class="suggestions-list"></div>
+              </div>
+            </div>
+
+            <div class="filter-grid">
+              <div class="filter-group">
+                <h4>📚 単元</h4>
+                <div class="checkbox-list">
+                  <label><input type="checkbox" data-label="数と式" data-category="unit"> 数と式</label>
+                  <label><input type="checkbox" data-label="二次方程式" data-category="unit"> 二次方程式</label>
+                  <label><input type="checkbox" data-label="二次関数" data-category="unit"> 二次関数</label>
+                  
+                  <div id="moreUnitsArea" style="display: none;">
+                    <div class="checkbox-list">
+                      <label><input type="checkbox" data-label="図形の相似" data-category="unit"> 図形の相似</label>
+                      <label><input type="checkbox" data-label="円の性質" data-category="unit"> 円の性質</label>
+                      <label><input type="checkbox" data-label="三平方の定理" data-category="unit"> 三平方の定理</label>
+                    </div>
+                  </div>
+                </div>
+                <button type="button" id="toggleUnitsBtn" class="btn-show-more">
+                  <span>もっと見る</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
+
+              <div class="filter-group">
+                <h4>🏫 出典 (年度・回数)</h4>
+                <div class="source-selector-container">
+                  <div class="select-row">
+                    <div class="select-wrapper">
+                      <select id="selYear" class="modern-select">
+                        <option value="">年度</option>
+                        <option value="2025">2025年</option>
+                        <option value="2024">2024年</option>
+                        <option value="2023">2023年</option>
+                        <option value="2022">2022年</option>
+                      </select>
+                    </div>
+                    <div class="select-wrapper">
+                      <select id="selExam" class="modern-select">
+                        <option value="">回数</option>
+                        <option value="第1回">第1回</option>
+                        <option value="第2回">第2回</option>
+                        <option value="第3回">第3回</option>
+                        <option value="プレ">プレ</option>
+                        <option value="追試">追試</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button type="button" id="btnAddSource" class="btn-add-tag-block">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    リストに追加
+                  </button>
+                </div>
+              </div>
+              
+              <div class="filter-group">
+                <h4>✅ ステータス</h4>
+                <div class="checkbox-list">
+                  <label><input type="checkbox" data-label="チェック済み" data-category="status"> チェック済み</label>
+                  <label><input type="checkbox" data-label="未チェック" data-category="status"> 未チェック</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section class="problem-list" aria-label="問題一覧"></section>
+      </div>
+      
+      <div class="tab-panel" id="tab-gen">
+        
+        <div class="step-section">
+          <div class="step-header">
+            <span class="step-number">1</span>
+            <h3>画像をアップロード</h3>
+          </div>
+          <p class="step-desc">問題文の画像と、あれば解答の画像をアップロードしてください。</p>
+
+          <div class="upload-grid">
+            <section class="section panel">
+              <h3 class="panel-title">
+                <svg class="icon-mr" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#fe2020">
+                  <path d="M478-240q21 0 35.5-14.5T528-290q0-21-14.5-35.5T478-340q-21 0-35.5 14.5T428-290q0 21 14.5 35.5T478-240Zm-36-154h74q0-33 7.5-52t42.5-52q26-26 41-49.5t15-56.5q0-56-41-86t-97-30q-57 0-92.5 30T342-618l66 26q5-18 22.5-39t53.5-21q32 0 48 17.5t16 38.5q0 20-12 37.5T506-526q-44 39-54 59t-10 73Zm38 314q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/>
+                </svg>
+                問題画像
+              </h3>
+              <div class="upload-area" id="uploadAreaProblem">
+                <input type="file" id="fileInputProblem" accept=".jpg, .jpeg, .png, .pdf, .heic, .heif" multiple hidden>
+                <div class="upload-content">
+                  <div class="upload-icon-placeholder">
+                    <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0Z" /></svg>
+                  </div>
+                  <p class="upload-msg">画像をドラッグ＆ドロップ<br><span class="upload-link">ファイルを選択</span></p>
+                </div>
+              </div>
+              <div class="preview-list" id="previewListProblem" hidden></div>
+            </section>
+
+            <section class="section panel">
+              <h3 class="panel-title">
+                <svg class="icon-mr" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#3DD200">
+                  <path d="M276-280h76l40-112h176l40 112h76L520-720h-80L276-280Zm138-176 64-182h4l64 182H414Zm66 376q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z"/>
+                </svg>
+                解答画像 (任意)
+              </h3>
+              <div class="upload-area" id="uploadAreaAnswer">
+                <input type="file" id="fileInputAnswer" accept=".jpg, .jpeg, .png, .pdf, .heic, .heif" multiple hidden>
+                <div class="upload-content">
+                  <div class="upload-icon-placeholder">
+                     <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9Z" /></svg>
+                  </div>
+                  <p class="upload-msg">画像をドラッグ＆ドロップ<br><span class="upload-link">ファイルを選択</span></p>
+                </div>
+              </div>
+              <div class="preview-list" id="previewListAnswer" hidden></div>
+            </section>
+          </div>
+        </div>
+
+        <div class="step-section">
+          <div class="step-header">
+            <span class="step-number">2</span>
+            <h3>まだ習っていない単元を選択</h3>
+          </div>
+          <p class="step-desc">該当する単元をタップして除外してください</p>
+          
+          <div class="panel tags-panel">
+            <div class="checkbox-tags">
+              <label class="check-tag"><input type="checkbox" name="exclude_unit"><span>多項式（展開・因数分解）</span></label>
+              <label class="check-tag"><input type="checkbox" name="exclude_unit"><span>平方根</span></label>
+              <label class="check-tag"><input type="checkbox" name="exclude_unit"><span>二次方程式</span></label>
+              <label class="check-tag"><input type="checkbox" name="exclude_unit"><span>関数 y=ax²</span></label>
+              <label class="check-tag"><input type="checkbox" name="exclude_unit"><span>図形の相似</span></label>
+              <label class="check-tag"><input type="checkbox" name="exclude_unit"><span>円の性質（円周角）</span></label>
+              <label class="check-tag"><input type="checkbox" name="exclude_unit"><span>三平方の定理</span></label>
+              <label class="check-tag"><input type="checkbox" name="exclude_unit"><span>標本調査</span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-section step-final">
+          <div class="step-header">
+            <span class="step-number">3</span>
+            <h3>生成開始！</h3>
+          </div>
+          
+          <div class="generate-button-container">
+            
+            <div class="generation-limit-box">
+              <div class="limit-labels">
+                <span class="limit-title">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; transform:translateY(1px);"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                  残り生成回数
+                </span>
+                <span class="limit-count"><strong class="highlight">3</strong> / 5回</span>
+              </div>
+              <div class="limit-bar-track">
+                <div class="limit-bar-fill" style="width: 60%;"></div>
+              </div>
+              <p class="limit-reset-date">次回リセット: 2026/01/01</p>
+            </div>
+            <button class="btn-generate-main" type="button" id="btnStartGeneration">生成する</button>
+          </div>
+        </div>
+      </div>
+    </div> 
+  </main>
+
+  <div id="loadingModal" class="loading-overlay" hidden>
+    <div class="loading-card">
+      
+      <div id="loadingStep">
+        <div class="loading-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </div>
+        <h3 id="loadingText">準備中...</h3>
+        <div class="progress-container">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p class="loading-subtext">AIが思考しています</p>
+      </div>
+
+      <div id="resultStep">
+        <div class="result-header">
+          <h3>生成プレビュー</h3>
+          <div class="result-tabs" id="resultTabs">
+            <button class="result-tab-btn active" data-target="problem">問題</button>
+            <button class="result-tab-btn" data-target="explanation">解説</button>
+          </div>
+        </div>
+
+        <div class="pdf-viewer-frame">
+          <div id="sheet-problem" class="a4-sheet active">
+            <div class="sheet-title">【問 題】</div>
+            <div id="resProblem" class="sheet-content">
+              ここに問題文が表示されます...
+            </div>
+          </div>
+          <div id="sheet-explanation" class="a4-sheet">
+            <div class="sheet-title">【解 説】</div>
+            <div id="resExplanation" class="sheet-content">
+              ここに解説文が表示されます...
+            </div>
+          </div>
+        </div>
+
+        <div class="result-footer">
+          <div class="result-actions" id="resultActions">
+            <button class="btn-action discard" data-action="discard">破棄</button>
+            <div class="action-group-right">
+              <button class="btn-action later" data-action="later">あとで</button>
+              <button class="btn-action check" data-action="check">チェック完了</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>

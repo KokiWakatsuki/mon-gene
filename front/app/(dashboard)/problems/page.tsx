@@ -56,14 +56,17 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
   const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('partial');
   
-  // 生成システム用の状態（5段階 or 3問生成）
-  const [generationMode, setGenerationMode] = useState<'five-stage' | 'three-problems'>('three-problems');
+  // 生成システム用の状態（3問生成のみ）
+  const [generationMode] = useState<'three-problems'>('three-problems');
   
   // ファイルアップロード用の状態
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadedSolutionFiles, setUploadedSolutionFiles] = useState<File[]>([]);
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [filePreviewContent, setFilePreviewContent] = useState<string>('');
+  
+  // まだ習っていない単元の状態
+  const [excludedUnits, setExcludedUnits] = useState<string[]>([]);
   
   // opinion.md基準での問題生成モード（Ver.2に移行）
   const [useOpinionCriteria] = useState<boolean>(true);
@@ -938,7 +941,13 @@ export default function Home() {
 
     // ファイルアップロードチェック（3問生成では必須）
     if (uploadedFiles.length === 0) {
-      alert('3問生成モードではファイルのアップロードが必須です。参考となる問題ファイルをアップロードしてください。');
+      alert('3問生成モードでは問題ファイルのアップロードが必須です。参考となる問題ファイルをアップロードしてください。');
+      return;
+    }
+
+    // 解答ファイルアップロードチェック（3問生成では必須）
+    if (!uploadedSolutionFiles || uploadedSolutionFiles.length === 0) {
+      alert('3問生成モードでは解答ファイルのアップロードが必須です。解答ファイルをアップロードしてください。');
       return;
     }
 
@@ -974,6 +983,12 @@ export default function Home() {
         const formData = new FormData();
         formData.append('subject', activeSubject);
         
+        // 除外単元をJSON文字列として追加
+        if (excludedUnits.length > 0) {
+          formData.append('excluded_units', JSON.stringify(excludedUnits));
+          console.log('📎 [ThreeProblems] Excluded units:', excludedUnits);
+        }
+        
         // 最初のPDFファイルのみを送信（複数ある場合は最初のもの）
         const pdfFile = uploadedFiles.find(file => file.type === 'application/pdf');
         if (pdfFile) {
@@ -1008,7 +1023,8 @@ export default function Home() {
         // SSEを使用してリアルタイム進捗を取得
         const requestBody = JSON.stringify({
           uploaded_problem_content: uploadedProblemContent,
-          subject: activeSubject
+          subject: activeSubject,
+          excluded_units: excludedUnits, // 除外単元を追加
         });
 
         // fetchでSSE接続（JSON）
@@ -1300,6 +1316,15 @@ export default function Home() {
     filterTexts.push(`科目: ${activeSubject}`);
     filterTexts.push('評価基準: opinion_ver2.md に基づく空間図形問題の詳細指標');
     
+    // まだ習っていない単元を除外
+    if (excludedUnits.length > 0) {
+      filterTexts.push(`\n【除外する単元】`);
+      filterTexts.push(`以下の単元はまだ習っていないため、問題に含めないでください:`);
+      excludedUnits.forEach(unit => {
+        filterTexts.push(`- ${unit}`);
+      });
+    }
+    
     // アップロードされたファイルがある場合は参考資料として追加
     if (uploadedFiles.length > 0) {
       filterTexts.push(`\n【参考資料】`);
@@ -1431,10 +1456,11 @@ export default function Home() {
     return modifiedFilters;
   };
 
-  // キーワード検索する関数
+  // キーワード検索する関数（キーワードなしでもタグ検索可能）
   const searchProblems = async () => {
+    // キーワードがない場合はタグ検索を実行
     if (!searchKeyword.trim()) {
-      alert('検索キーワードを入力してください');
+      await searchProblemsByFilters();
       return;
     }
 
@@ -1594,40 +1620,49 @@ export default function Home() {
     <div className="relative min-h-screen overflow-hidden">
       <BackgroundShapes />
       
-      <div className="relative z-10 max-w-6xl mx-auto p-6">
+      <div className="relative z-10">
         <Header />
         
-        <Tabs
-          subjects={subjects}
-          activeSubject={activeSubject}
-          onSubjectChange={() => {}} // 数学のみなので何もしない
-        />
-        
-        <MainTabs
-          activeTab={activeMainTab}
-          onTabChange={setActiveMainTab}
-        />
-        
-        {/* 問題一覧タブ */}
-        {activeMainTab === 'list' && (
-          <>
-            {/* キーワード検索バー */}
-            <div className="mb-6 flex gap-3">
-              <input
-                type="text"
-                placeholder="キーワード (例: 円錐, サイコロ, 座標...)"
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                className="flex-1 px-4 py-3 border border-gray-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyDown={(e) => e.key === 'Enter' && searchProblems()}
-              />
-              <button
-                onClick={searchProblems}
-                className="px-6 py-3 bg-blue-500 text-white rounded-lg font-bold hover:brightness-110 transition-all"
-              >
-                検索
-              </button>
-            </div>
+        <div className="max-w-6xl mx-auto">
+          <Tabs
+            subjects={subjects}
+            activeSubject={activeSubject}
+            onSubjectChange={() => {}} // 数学のみなので何もしない
+          />
+          
+          <MainTabs
+            activeTab={activeMainTab}
+            onTabChange={setActiveMainTab}
+          />
+          
+          <div className="px-4 pb-12">
+            {/* 問題一覧タブ */}
+            {activeMainTab === 'list' && (
+              <>
+                {/* キーワード検索バー */}
+                <div className="mb-4">
+                  <div className="relative flex gap-2">
+                    <input
+                      type="text"
+                      id="keywordInput"
+                      placeholder="キーワード検索 (例: 面積, 太郎, 最大値...)"
+                      value={searchKeyword}
+                      onChange={(e) => setSearchKeyword(e.target.value)}
+                      className="flex-1 px-4 py-3 pr-12 border border-gray-200 rounded-lg text-base shadow-[0_2px_5px_rgba(0,0,0,0.03)] transition-all focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.1)]"
+                      onKeyDown={(e) => e.key === 'Enter' && searchProblems()}
+                    />
+                    <button
+                      onClick={searchProblems}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 bg-blue-500 text-white border-none rounded-md cursor-pointer flex items-center justify-center transition-colors hover:bg-blue-400"
+                      aria-label="検索"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
             
             {/* 検索オプション（アコーディオン） */}
             <SearchOptions
@@ -1652,93 +1687,146 @@ export default function Home() {
               </div>
             )}
             
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6" aria-label="問題一覧">
-              {(isSearchMode ? searchResults : problems).map((problem) => (
-                <ProblemCard
-                  key={problem.id}
-                  id={problem.id}
-                  title={problem.title}
-                  content={problem.content}
-                  imageBase64={problem.imageBase64}
-                  onPreview={handlePreview}
-                  onPrint={handlePrint}
-                />
-              ))}
-            </section>
-          </>
-        )}
+                <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6" aria-label="問題一覧">
+                  {(isSearchMode ? searchResults : problems).map((problem) => (
+                    <ProblemCard
+                      key={problem.id}
+                      id={problem.id}
+                      title={problem.title}
+                      content={problem.content}
+                      imageBase64={problem.imageBase64}
+                      onPreview={handlePreview}
+                      onPrint={handlePrint}
+                    />
+                  ))}
+                </section>
+              </>
+            )}
         
         {/* 問題生成タブ */}
         {activeMainTab === 'generate' && (
           <>
-            {/* 生成モード選択 */}
-            <div className="mb-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">生成モード選択</h3>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => setGenerationMode('five-stage')}
-                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
-                    generationMode === 'five-stage'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="text-center">
-                    <div className="text-lg mb-1">🔥 通常生成</div>
-                    <div className="text-xs">1問を5段階で生成</div>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setGenerationMode('three-problems')}
-                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
-                    generationMode === 'three-problems'
-                      ? 'border-green-500 bg-green-50 text-green-700 font-semibold'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="text-center">
-                    <div className="text-lg mb-1">📚 解き直し</div>
-                    <div className="text-xs">類似問題を3パターン生成（ファイル必須）</div>
-                  </div>
-                </button>
+            {/* ステップ1: 画像をアップロード */}
+            <div className="mb-10">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="w-6 h-6 bg-gray-800 text-white rounded-full flex items-center justify-center font-extrabold text-base pb-0.5">1</span>
+                <h3 className="text-xl text-gray-800 font-semibold m-0">画像をアップロード</h3>
               </div>
-            </div>
-
-            <FileUpload
+              <p className="text-sm text-gray-500 ml-9 mb-4">問題文の画像と、あれば解答の画像をアップロードしてください。</p>
+              
+              <FileUpload
               uploadedFiles={uploadedFiles}
               onFilesChange={setUploadedFiles}
               uploadedSolutionFiles={uploadedSolutionFiles}
               onSolutionFilesChange={setUploadedSolutionFiles}
-            />
-            
-            {/* 3問生成モードの場合はファイル必須の注意書き */}
-            {generationMode === 'three-problems' && uploadedFiles.length === 0 && (
-              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                <div className="flex items-start gap-2">
-                  <span className="text-yellow-600 text-xl">⚠️</span>
-                  <div>
-                    <div className="font-semibold text-yellow-800 mb-1">ファイルアップロードが必須です</div>
-                    <div className="text-sm text-yellow-700">
-                      解き直しモードでは、参考となる問題ファイルのアップロードが必要です。
-                      アップロードした問題を基に、3つの類似パターンを生成します。
-                    </div>
-                  </div>
+              />
+            </div>
+
+            {/* ステップ2: まだ習っていない単元を選択 */}
+            <div className="mb-10">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="w-6 h-6 bg-gray-800 text-white rounded-full flex items-center justify-center font-extrabold text-base pb-0.5">2</span>
+                <h3 className="text-xl text-gray-800 font-semibold m-0">まだ習っていない単元を選択</h3>
+              </div>
+              <p className="text-sm text-gray-500 ml-9 mb-4">習っていない単元をタップして除外してください</p>
+              
+              <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-[0_2px_4px_rgba(0,0,0,0.03)]">
+                <div className="flex flex-wrap gap-2.5">
+                  {[
+                    '多項式（展開・因数分解）',
+                    '平方根',
+                    '二次方程式',
+                    '関数 y=ax²',
+                    '図形の相似',
+                    '円の性質（円周角）',
+                    '三平方の定理',
+                    '標本調査'
+                  ].map((unit) => {
+                    const isExcluded = excludedUnits.includes(unit);
+                    return (
+                      <label key={unit} className="relative cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="exclude_unit"
+                          checked={isExcluded}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setExcludedUnits([...excludedUnits, unit]);
+                            } else {
+                              setExcludedUnits(excludedUnits.filter(u => u !== unit));
+                            }
+                          }}
+                          className="absolute opacity-0 w-0 h-0"
+                        />
+                        <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
+                          isExcluded
+                            ? 'bg-gray-100 border-transparent text-gray-500 line-through opacity-60 shadow-none'
+                            : 'bg-white border border-gray-200 text-gray-800 hover:border-blue-500 hover:text-blue-500'
+                        }`}>
+                          {unit}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
-            )}
-            
-            {/* OpinionProfileSettingsは5段階モードでのみ表示 */}
-            {generationMode === 'five-stage' && (
-              <div className="mt-6">
-                <OpinionProfileSettings
-                  opinionProfile={opinionProfileV2}
-                  onOpinionProfileChange={setOpinionProfileV2}
-                />
+            </div>
+
+            {/* ステップ3: 生成開始！ */}
+            <div className="mb-10">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="w-6 h-6 bg-gray-800 text-white rounded-full flex items-center justify-center font-extrabold text-base pb-0.5">3</span>
+                <h3 className="text-xl text-gray-800 font-semibold m-0">生成開始！</h3>
               </div>
-            )}
-            
+              
+              <div className="flex flex-col items-start gap-4 max-w-[300px]">
+                {/* 生成回数表示ボックス */}
+                {userInfo && (
+                  <div className="w-full bg-white border border-gray-200 rounded-xl p-3 px-4 shadow-[0_2px_6px_rgba(0,0,0,0.02)]">
+                    <div className="flex justify-between items-center mb-2 text-[13px] font-bold text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '4px', transform: 'translateY(1px)'}}>
+                          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                        </svg>
+                        残り生成回数
+                      </span>
+                      <span className="text-gray-800">
+                        <strong className="text-blue-500 text-base">{userInfo.problem_generation_limit === -1 ? '∞' : Math.max(0, userInfo.problem_generation_limit - userInfo.problem_generation_count)}</strong>
+                        {' / '}
+                        {userInfo.problem_generation_limit === -1 ? '∞' : userInfo.problem_generation_limit}回
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mb-1.5">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-[width] duration-300"
+                        style={{
+                          width: userInfo.problem_generation_limit === -1
+                            ? '100%'
+                            : `${Math.min(100, ((userInfo.problem_generation_limit - userInfo.problem_generation_count) / userInfo.problem_generation_limit) * 100)}%`
+                        }}
+                      ></div>
+                    </div>
+                    <p className="text-[11px] text-gray-500 text-right m-0">次回リセット: 2026/01/01</p>
+                  </div>
+                )}
+                
+                <button
+                  className={`w-full justify-center text-base font-bold px-7 py-3.5 rounded-xl transition-all shadow-[0_4px_15px_rgba(141,219,57,0.4)] border-none cursor-pointer ${
+                    isGenerationLimitReached()
+                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      : 'bg-mongene-green text-gray-800 hover:brightness-105 hover:-translate-y-0.5'
+                  }`}
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={isGenerationLimitReached()}
+                >
+                  生成する
+                </button>
+              </div>
+            </div>
+
             {/* 3問生成結果の表示 */}
-            {generationMode === 'three-problems' && Object.keys(threeProblemsResults).length > 0 && (
+            {Object.keys(threeProblemsResults).length > 0 && (
               <ThreeProblemsDisplay
                 problems={threeProblemsResults}
                 onPreview={handlePreview}
@@ -1746,50 +1834,8 @@ export default function Home() {
               />
             )}
             
-            {/* ユーザー情報表示 */}
-            {userInfo && (
-              <div className="mt-6 p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="text-gray-800">
-                    <span className="font-medium">塾コード: {userInfo.school_code}</span>
-                    <span className="ml-4">
-                      問題生成回数: {userInfo.problem_generation_count}/
-                      {userInfo.problem_generation_limit === -1 ? '無制限' : userInfo.problem_generation_limit}
-                    </span>
-                  </div>
-                  {isGenerationLimitReached() && (
-                    <div className="text-red-600 font-bold">
-                      ⚠️ 生成上限に達しました
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            
             <div className="text-center mt-8">
-              {isGenerationLimitReached() && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-center max-w-md mx-auto">
-                  <div className="font-bold mb-2">🚫 問題生成上限に達しました</div>
-                  <div className="text-sm">
-                    問題生成回数の上限（{userInfo?.problem_generation_limit}回）に達したため、
-                    これ以上問題を生成することはできません。
-                  </div>
-                </div>
-              )}
-              
               <div className="flex items-center justify-center gap-4">
-                <button
-                  className={`text-base font-bold px-7 py-3.5 rounded-xl transition-all shadow-[0_4px_15px_rgba(141,219,57,0.4)] ${
-                    isGenerationLimitReached()
-                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      : 'bg-mongene-green text-gray-800 hover:brightness-105 hover:-translate-y-0.5 cursor-pointer'
-                  }`}
-                  type="button"
-                  onClick={handleGenerate}
-                  disabled={isGenerationLimitReached()}
-                >
-                  {isGenerationLimitReached() ? '生成上限に達しました' : '生成'}
-                </button>
                 
                 {/* アップロードした問題の概要表示ボタン */}
                 {(uploadedFiles.length > 0 || uploadedSolutionFiles.length > 0) && (
@@ -1930,7 +1976,8 @@ export default function Home() {
             </div>
           </>
         )}
-        
+          </div>
+        </div>
       </div>
 
       <ProblemPreviewModal
@@ -1982,17 +2029,11 @@ export default function Home() {
 
       <LoadingModal
         isOpen={isLoading}
-        message={
-          generationMode === 'three-problems'
-            ? '📚 解き直しプロセスを実行中...'
-            : generationMode === 'five-stage'
-            ? '🔥 通常生成プロセスを実行中...'
-            : 'AIが問題を生成しています...'
-        }
-        showProgress={generationMode === 'five-stage' || generationMode === 'three-problems'}
+        message='📚 解き直しプロセスを実行中...'
+        showProgress={true}
         estimatedDuration={60000}
         currentStage={currentStage}
-        maxStages={generationMode === 'three-problems' ? 15 : 5}
+        maxStages={15}
         onStageChange={(stage) => {
           setCurrentStage(stage);
           console.log(`📊 [Frontend] Stage ${stage} に移行`);

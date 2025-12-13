@@ -44,51 +44,23 @@ export default function ProblemCard({ id, title, content, imageBase64, onPreview
   };
 
   return (
-    <article className="bg-white border border-mongene-border rounded-xl p-4 shadow-sm flex flex-col gap-4">
-      <div className="w-full h-96 bg-white border-2 border-gray-300 rounded p-4 mx-auto shadow-sm overflow-hidden">
-        <div className="h-full flex flex-col">
-          <div className="text-sm font-semibold text-mongene-ink mb-2 border-b border-gray-200 pb-2">
-            {title}
-          </div>
-          <div className="flex-1 overflow-hidden">
-            {imageBase64 ? (
-              <div className="h-full flex gap-3">
-                <div className="flex-1 overflow-hidden">
-                  <div className="text-xs text-mongene-ink leading-relaxed whitespace-pre-wrap">
-                    {getPreviewContent()}
-                  </div>
-                </div>
-                <div className="w-40 flex-shrink-0">
-                  <img 
-                    src={`data:image/png;base64,${imageBase64}`}
-                    alt="問題図形"
-                    className="w-full h-full object-contain border border-gray-200 rounded"
-                    onLoad={() => console.log('✅ Image loaded successfully')}
-                    onError={(e) => console.error('❌ Image load error:', e)}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-mongene-ink leading-relaxed whitespace-pre-wrap">
-                {getPreviewContent()}
-                <div className="mt-2 text-xs text-red-500">
-                  🔍 Debug: imageBase64 = {imageBase64 ? 'exists' : 'null/undefined'}
-                </div>
-              </div>
-            )}
-          </div>
+    <article className="bg-white border border-gray-200 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.03)] flex flex-col min-h-[220px]">
+      <div className="p-6 flex-1">
+        <h3 className="m-0 text-gray-800 text-xl font-bold mb-3">{title}</h3>
+        <div className="text-base text-gray-800 max-h-[120px] overflow-hidden text-ellipsis whitespace-pre-wrap leading-relaxed">
+          {getPreviewContent()}
         </div>
       </div>
-      <div className="flex justify-end gap-2">
+      <div className="border-t border-gray-200 px-6 py-4 flex gap-3 bg-gray-100 rounded-b-xl mt-auto">
         <button
-          className="appearance-none border-0 rounded-lg px-3.5 py-2.5 font-bold cursor-pointer bg-mongene-blue text-white hover:brightness-95 focus:outline-none focus:ring-3 focus:ring-mongene-blue/25 focus:ring-offset-2"
+          className="flex-1 appearance-none border-0 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-blue-500 text-white hover:brightness-110 transition-all"
           type="button"
           onClick={() => onPreview(id)}
         >
           プレビュー
         </button>
         <button
-          className="appearance-none border-0 rounded-lg px-3.5 py-2.5 font-bold cursor-pointer bg-mongene-yellow text-mongene-ink hover:brightness-95 focus:outline-none focus:ring-3 focus:ring-mongene-yellow/25 focus:ring-offset-2"
+          className="flex-1 appearance-none border-0 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all"
           type="button"
           onClick={() => onPrint(id)}
         >

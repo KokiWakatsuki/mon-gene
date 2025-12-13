@@ -2086,7 +2086,9 @@ func (s *problemService) GenerateThreeProblemsWithProgress(ctx context.Context, 
 	
 	// 5. パターンA生成（Stage 1-5）
 	fmt.Printf("🎯 [ThreeProblems] Starting Pattern A generation (stages 1-5)\n")
-	patternA, err := s.generateSinglePattern(ctx, "パターンA: 数値だけ違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 1)
+	fmt.Printf("🔍 [ThreeProblems] ExcludedUnits from request: %v\n", req.ExcludedUnits)
+	fmt.Printf("🔍 [ThreeProblems] ExcludedUnits count: %d\n", len(req.ExcludedUnits))
+	patternA, err := s.generateSinglePattern(ctx, "パターンA: 数値だけ違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 1, req.ExcludedUnits)
 	if err != nil || !patternA.Success {
 		errorMsg := fmt.Sprintf("パターンA生成に失敗しました: %v", err)
 		if patternA != nil && patternA.Error != "" {
@@ -2103,7 +2105,8 @@ func (s *problemService) GenerateThreeProblemsWithProgress(ctx context.Context, 
 	
 	// 6. パターンB生成（Stage 6-10）
 	fmt.Printf("🎯 [ThreeProblems] Starting Pattern B generation (stages 6-10)\n")
-	patternB, err := s.generateSinglePattern(ctx, "パターンB: 必要な公式は同じだが、問題自体は違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 6)
+	fmt.Printf("🔍 [ThreeProblems] ExcludedUnits for Pattern B: %v\n", req.ExcludedUnits)
+	patternB, err := s.generateSinglePattern(ctx, "パターンB: 必要な公式は同じだが、問題自体は違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 6, req.ExcludedUnits)
 	if err != nil || !patternB.Success {
 		errorMsg := fmt.Sprintf("パターンB生成に失敗しました: %v", err)
 		if patternB != nil && patternB.Error != "" {
@@ -2121,7 +2124,8 @@ func (s *problemService) GenerateThreeProblemsWithProgress(ctx context.Context, 
 	
 	// 7. パターンC生成（Stage 11-15）
 	fmt.Printf("🎯 [ThreeProblems] Starting Pattern C generation (stages 11-15)\n")
-	patternC, err := s.generateSinglePattern(ctx, "パターンC: 全体的な構成は同じだが、問われている部分が違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 11)
+	fmt.Printf("🔍 [ThreeProblems] ExcludedUnits for Pattern C: %v\n", req.ExcludedUnits)
+	patternC, err := s.generateSinglePattern(ctx, "パターンC: 全体的な構成は同じだが、問われている部分が違う", uploadedProblemContent, userSchoolCode, mainHistory, progressCallback, 11, req.ExcludedUnits)
 	if err != nil || !patternC.Success {
 		errorMsg := fmt.Sprintf("パターンC生成に失敗しました: %v", err)
 		if patternC != nil && patternC.Error != "" {
@@ -2225,6 +2229,7 @@ func (s *problemService) generateSinglePattern(
 	mainHistory *models.ConversationHistory,
 	progressCallback func(stage int, message string),
 	baseStage int, // 1, 6, 11
+	excludedUnits []string, // 除外単元を追加
 ) (*models.PatternResult, error) {
 	fmt.Printf("🎨 [Pattern] Starting pattern generation: %s (base stage: %d)\n", patternName, baseStage)
 	
@@ -2237,8 +2242,10 @@ func (s *problemService) generateSinglePattern(
 	}
 	fmt.Printf("💬 [Pattern] Initialized pattern conversation history\n")
 	
-	// 2. 初期プロンプトを作成
-	initialPrompt, err := s.promptLoader.LoadThreeProblemGenerationPrompt(uploadedProblemContent, patternName)
+	// 2. 初期プロンプトを作成（除外単元を含む）
+	fmt.Printf("🔍 [Pattern] Calling LoadThreeProblemGenerationPrompt with excludedUnits: %v\n", excludedUnits)
+	fmt.Printf("🔍 [Pattern] excludedUnits count: %d\n", len(excludedUnits))
+	initialPrompt, err := s.promptLoader.LoadThreeProblemGenerationPrompt(uploadedProblemContent, patternName, excludedUnits)
 	if err != nil {
 		errorMsg := fmt.Sprintf("プロンプトの読み込みに失敗しました: %v", err)
 		logBuilder.WriteString(fmt.Sprintf("❌ %s\n", errorMsg))
@@ -2247,6 +2254,7 @@ func (s *problemService) generateSinglePattern(
 			Error:   errorMsg,
 		}, err
 	}
+	fmt.Printf("✅ [Pattern] Initial prompt loaded successfully (length: %d)\n", len(initialPrompt))
 	
 	// 初期プロンプトを会話履歴に追加
 	s.buildConversationHistory(patternHistory, initialPrompt, "", 1)

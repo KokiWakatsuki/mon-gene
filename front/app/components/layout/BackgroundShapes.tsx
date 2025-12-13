@@ -61,8 +61,11 @@ export default function BackgroundShapes() {
 
   return (
     <>
-      <div id="bg-container" className="fixed top-0 left-0 w-screen h-screen -z-20 overflow-hidden pointer-events-none bg-gray-50" />
-      <div className="fixed top-5 left-5 right-5 bottom-5 bg-white/75 backdrop-blur -z-10 rounded-[20px] shadow-[0_4px_30px_rgba(0,0,0,0.05)] pointer-events-none md:top-5 md:left-5 md:right-5 md:bottom-5 max-md:top-2.5 max-md:left-2.5 max-md:right-2.5 max-md:bottom-2.5" />
+      <div id="bg-container" className="fixed top-0 left-0 w-screen h-screen overflow-hidden pointer-events-none bg-gray-50" style={{ zIndex: 'var(--z-bg)' }} />
+      <div
+        className="fixed bg-white/75 backdrop-blur rounded-[20px] shadow-[0_4px_30px_rgba(0,0,0,0.05)] pointer-events-none top-5 left-5 right-5 bottom-5 max-md:top-2.5 max-md:left-2.5 max-md:right-2.5 max-md:bottom-2.5"
+        style={{ zIndex: 'var(--z-bg)' }}
+      />
     </>
   );
 }

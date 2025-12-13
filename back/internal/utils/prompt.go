@@ -347,12 +347,35 @@ func (p *PromptLoader) LoadStageTrigger() (string, error) {
 }
 
 // LoadThreeProblemGenerationPrompt 3問生成プロンプトを読み込み
-func (p *PromptLoader) LoadThreeProblemGenerationPrompt(uploadedProblemContent, currentPattern string) (string, error) {
-	variables := map[string]string{
-		"UPLOADED_PROBLEM_CONTENT": uploadedProblemContent,
-		"UPLOADED_SOLUTION_CONTENT": "(解答ファイルはアップロードされていません)",
-		"CURRENT_PATTERN":          currentPattern,
+func (p *PromptLoader) LoadThreeProblemGenerationPrompt(uploadedProblemContent, currentPattern string, excludedUnits []string) (string, error) {
+	// デバッグログ：除外単元を確認
+	fmt.Printf("🔍 [PromptLoader] LoadThreeProblemGenerationPrompt called\n")
+	fmt.Printf("🔍 [PromptLoader] excludedUnits count: %d\n", len(excludedUnits))
+	for i, unit := range excludedUnits {
+		fmt.Printf("🔍 [PromptLoader] excludedUnits[%d]: %s\n", i, unit)
 	}
+	
+	// 除外単元の指示を構築
+	excludedUnitsInstruction := ""
+	if len(excludedUnits) > 0 {
+		excludedUnitsInstruction = "以下の単元はまだ習っていないため、問題に含めないでください:\n"
+		for _, unit := range excludedUnits {
+			excludedUnitsInstruction += fmt.Sprintf("- %s\n", unit)
+		}
+		fmt.Printf("✅ [PromptLoader] excludedUnitsInstruction generated (length: %d)\n", len(excludedUnitsInstruction))
+		fmt.Printf("📝 [PromptLoader] excludedUnitsInstruction content:\n%s\n", excludedUnitsInstruction)
+	} else {
+		fmt.Printf("ℹ️ [PromptLoader] No excluded units specified\n")
+	}
+	
+	variables := map[string]string{
+		"UPLOADED_PROBLEM_CONTENT":    uploadedProblemContent,
+		"UPLOADED_SOLUTION_CONTENT":   "(解答ファイルはアップロードされていません)",
+		"CURRENT_PATTERN":             currentPattern,
+		"EXCLUDED_UNITS_INSTRUCTION":  excludedUnitsInstruction,
+	}
+	
+	fmt.Printf("🔍 [PromptLoader] Variables prepared, loading prompt file...\n")
 	return p.LoadPrompt("three_problem_generation.txt", variables)
 }
 

@@ -117,9 +117,11 @@ export default function LoadingModal({
   const stageMessages = maxStages === 15 ? stageMessages15 : stageMessages5;
 
   return (
-    <div 
-      className="fixed top-0 left-0 w-full h-full bg-white/80 backdrop-blur-[5px] z-[9999] flex items-center justify-center opacity-0 animate-[fadeIn_0.3s_forwards]"
+    <div
+      className="fixed top-0 left-0 w-full h-full z-[9999] flex items-center justify-center opacity-0"
       style={{
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        backdropFilter: 'blur(5px)',
         animation: 'fadeIn 0.3s forwards'
       }}
     >
@@ -132,45 +134,49 @@ export default function LoadingModal({
         }
       `}</style>
       
-      <div className="bg-white px-10 py-10 rounded-[20px] shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-200 text-center w-[90%] max-w-[400px]">
-        <div className="mb-4">
-          <svg 
-            width="48" 
-            height="48" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            strokeWidth="2" 
-            stroke="currentColor"
-            className="inline-block text-blue-500 animate-[spin_1.5s_linear_infinite]"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-          </svg>
-        </div>
-        
-        <h3 className="m-0 mb-5 text-lg text-gray-800">
-          {showProgress ? '準備中...' : message}
-        </h3>
-        
-        {showProgress && (
-          <>
-            <div className="w-full h-2 bg-gray-100 rounded mb-3 overflow-hidden">
-              <div
-                className="h-full bg-mongene-green rounded transition-[width] duration-500 ease-out"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-            
-            <p className="text-[13px] text-gray-500 m-0">
-              {stageMessages[currentStage - 1] || 'AIが思考しています'}
+      <div className="bg-white p-5 rounded-2xl w-[95%] max-w-[850px] h-[92vh] max-h-[950px] flex flex-col overflow-hidden relative shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]">
+        {/* Loading View */}
+        <div className="flex-1 w-full h-full flex flex-col justify-center items-center p-5">
+          <div className="mb-6 flex">
+            <svg
+              width="56"
+              height="56"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              stroke="currentColor"
+              className="text-blue-500"
+              style={{ animation: 'spin 1s linear infinite' }}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+          </div>
+          
+          <h3 className="m-0 mb-5 text-lg font-bold text-gray-800 tracking-wider">
+            {showProgress ? '準備中...' : message}
+          </h3>
+          
+          {showProgress && (
+            <>
+              <div className="w-60 h-1.5 bg-gray-100 rounded-full overflow-hidden mb-3">
+                <div
+                  className="h-full bg-mongene-green rounded-full transition-[width] duration-300 ease-out"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              
+              <p className="text-xs text-gray-500 font-medium m-0">
+                {stageMessages[currentStage - 1] || 'AIが思考しています'}
+              </p>
+            </>
+          )}
+          
+          {!showProgress && (
+            <p className="text-xs text-gray-500 font-medium m-0">
+              AIが思考しています
             </p>
-          </>
-        )}
-        
-        {!showProgress && (
-          <p className="text-[13px] text-gray-500 m-0">
-            AIが思考しています
-          </p>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

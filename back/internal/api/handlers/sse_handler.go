@@ -210,6 +210,18 @@ func (h *SSEHandler) GenerateThreeProblemsSSE(w http.ResponseWriter, r *http.Req
 		}
 		req.Subject = subject
 		
+		// excluded_unitsフィールドを取得（JSON文字列として送信されている）
+		excludedUnitsStr := r.FormValue("excluded_units")
+		if excludedUnitsStr != "" {
+			var excludedUnits []string
+			if err := json.Unmarshal([]byte(excludedUnitsStr), &excludedUnits); err != nil {
+				fmt.Printf("⚠️ [SSE] Failed to parse excluded_units: %v\n", err)
+			} else {
+				req.ExcludedUnits = excludedUnits
+				fmt.Printf("📎 [SSE] Excluded units: %v\n", excludedUnits)
+			}
+		}
+		
 		// PDFファイルを取得
 		file, header, err := r.FormFile("file")
 		if err != nil {
