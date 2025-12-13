@@ -12,7 +12,10 @@ interface ProblemPreviewModalProps {
   problemContent?: string;
   imageBase64?: string;
   solutionText?: string;
-  onUpdate?: (updatedData: { content: string; solution: string; imageBase64?: string }) => void;
+  initialCheckInfo?: CheckInfo;
+  onCheck?: (id: string) => void;
+  onUpdate?: (updatedData: { content: string; solution: string; imageBase64?: string; checkInfo?: CheckInfo }) => void;
+  onCheckSave?: (checkInfo: CheckInfo) => Promise<void>;
 }
 
 interface UserInfo {
@@ -24,15 +27,41 @@ interface UserInfo {
   figure_regeneration_count: number;
 }
 
-export default function ProblemPreviewModal({ 
-  isOpen, 
-  onClose, 
-  problemId, 
-  problemTitle, 
-  problemContent, 
-  imageBase64, 
-  solutionText, 
-  onUpdate 
+export interface CheckInfo {
+  problem_text_ok: boolean;
+  solution_ok: boolean;
+  figure_ok: boolean;
+  units: string[];
+  year: string;
+  exam_session: string;
+}
+
+const AVAILABLE_UNITS = [
+  '多項式（展開・因数分解）',
+  '平方根',
+  '二次方程式',
+  '関数 y=ax²',
+  '図形の相似',
+  '円の性質（円周角）',
+  '三平方の定理',
+  '標本調査',
+];
+
+const YEARS = ['2020', '2021', '2022', '2023', '2024', '2025'];
+const EXAM_SESSIONS = ['第1回', '第2回', '第3回', 'プレ', '追試'];
+
+export default function ProblemPreviewModal({
+  isOpen,
+  onClose,
+  problemId,
+  problemTitle,
+  problemContent,
+  imageBase64,
+  solutionText,
+  initialCheckInfo,
+  onCheck,
+  onUpdate,
+  onCheckSave
 }: ProblemPreviewModalProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
@@ -41,6 +70,22 @@ export default function ProblemPreviewModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+  
+  // チェック情報の状態
+  const [checkInfo, setCheckInfo] = useState<CheckInfo>({
+    problem_text_ok: false,
+    solution_ok: false,
+    figure_ok: false,
+    units: [],
+    year: '',
+    exam_session: '',
+  });
+  
+  // アコーディオンの開閉状態（デフォルトは閉じた状態）
+  const [isProblemTextOpen, setIsProblemTextOpen] = useState(false);
+  const [isFigureOpen, setIsFigureOpen] = useState(false);
+  const [isSolutionOpen, setIsSolutionOpen] = useState(false);
 
   // ユーザー情報を取得する関数
   const fetchUserInfo = async () => {
@@ -87,7 +132,21 @@ export default function ProblemPreviewModal({
     setCurrentImageBase64(imageBase64 || '');
     setIsEditMode(false);
     setError(null);
-  }, [problemContent, solutionText, imageBase64, isOpen]);
+    
+    // チェック情報の初期化
+    if (initialCheckInfo) {
+      setCheckInfo(initialCheckInfo);
+    } else {
+      setCheckInfo({
+        problem_text_ok: false,
+        solution_ok: false,
+        figure_ok: false,
+        units: [],
+        year: '',
+        exam_session: '',
+      });
+    }
+  }, [problemContent, solutionText, imageBase64, isOpen, initialCheckInfo]);
 
   // 編集モードに入る
   const handleStartEdit = () => {
@@ -227,6 +286,190 @@ export default function ProblemPreviewModal({
     }
   };
 
+  // チェック情報の更新ハンドラー
+  const handleCheckToggle = (field: 'problem_text_ok' | 'solution_ok' | 'figure_ok') => {
+    setCheckInfo((prev) => ({
+      ...prev,
+      [field]: !prev[field],
+    }));
+  };
+
+  const handleUnitToggle = (unit: string) => {
+    setCheckInfo((prev) => ({
+      ...prev,
+      units: prev.units.includes(unit)
+        ? prev.units.filter((u) => u !== unit)
+        : [...prev.units, unit],
+    }));
+  };
+
+  const handleYearChange = (year: string) => {
+    setCheckInfo((prev) => ({
+      ...prev,
+      year,
+    }));
+  };
+
+  const handleExamSessionChange = (session: string) => {
+    setCheckInfo((prev) => ({
+      ...prev,
+      exam_session: session,
+    }));
+  };
+
+  const isCheckComplete = () => {
+    return (
+      checkInfo.problem_text_ok &&
+      checkInfo.solution_ok &&
+      checkInfo.figure_ok &&
+      checkInfo.units.length > 0 &&
+      checkInfo.year !== '' &&
+      checkInfo.exam_session !== ''
+    );
+  };
+
+  // 未チェックに戻す関数（確認モーダルを表示）
+  const handleResetCheck = () => {
+    setShowResetConfirmModal(true);
+  };
+
+  // 未チェックに戻すことを確定して保存
+  const handleConfirmReset = async () => {
+    if (!problemId) return;
+
+    setIsLoading(true);
+    setError(null);
+    setShowResetConfirmModal(false);
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('認証トークンが見つかりません');
+      }
+
+      // 未チェック状態のチェック情報
+      const resetCheckInfo: CheckInfo = {
+        problem_text_ok: false,
+        solution_ok: false,
+        figure_ok: false,
+        units: [],
+        year: '',
+        exam_session: '',
+      };
+
+      // チェック情報を未チェック状態で保存
+      const checkResponse = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/update-check-info`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: parseInt(problemId),
+          check_info: resetCheckInfo,
+        }),
+      });
+
+      if (!checkResponse.ok) {
+        const errorData = await checkResponse.json();
+        throw new Error(errorData.error || 'チェック情報のリセットに失敗しました');
+      }
+
+      // ローカル状態を更新
+      setCheckInfo(resetCheckInfo);
+
+      // 親コンポーネントの状態を更新
+      if (onUpdate) {
+        onUpdate({
+          content: editedContent,
+          solution: editedSolution,
+          imageBase64: currentImageBase64,
+          checkInfo: resetCheckInfo,
+        });
+      }
+
+      // 編集モードを終了してモーダルを閉じる
+      setIsEditMode(false);
+      onClose();
+    } catch (err) {
+      console.error('Error resetting check info:', err);
+      setError(err instanceof Error ? err.message : 'チェック情報のリセットに失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // リセット確認をキャンセル
+  const handleCancelReset = () => {
+    setShowResetConfirmModal(false);
+  };
+
+  const handleSaveAll = async () => {
+    if (!problemId) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('認証トークンが見つかりません');
+      }
+
+      // 問題内容の更新
+      const updateResponse = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/update`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: parseInt(problemId),
+          content: editedContent,
+          solution: editedSolution,
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        throw new Error('問題の更新に失敗しました');
+      }
+
+      // チェック情報の保存
+      const checkResponse = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/update-check-info`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: parseInt(problemId),
+          check_info: checkInfo,
+        }),
+      });
+
+      if (!checkResponse.ok) {
+        const errorData = await checkResponse.json();
+        throw new Error(errorData.error || 'チェック情報の保存に失敗しました');
+      }
+
+      // 更新成功
+      setIsEditMode(false);
+      if (onUpdate) {
+        onUpdate({
+          content: editedContent,
+          solution: editedSolution,
+          imageBase64: currentImageBase64,
+          checkInfo: checkInfo, // チェック情報を追加
+        });
+      }
+    } catch (err) {
+      console.error('Error saving:', err);
+      setError(err instanceof Error ? err.message : '保存に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   // デバッグログを追加
@@ -263,74 +506,234 @@ export default function ProblemPreviewModal({
             {problemContent ? (
               <div className="text-mongene-ink">
                 {isEditMode ? (
-                  /* 編集モード */
+                  /* 編集・チェックモード */
                   <div className="space-y-6">
                     {/* 問題文編集 */}
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3 text-mongene-ink">問題文</h3>
-                      <textarea
-                        value={editedContent}
-                        onChange={(e) => setEditedContent(e.target.value)}
-                        className="w-full h-40 p-3 border border-mongene-border rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-mongene-yellow"
-                        placeholder="問題文を入力してください..."
-                      />
+                    <div className="border border-gray-200 rounded-lg">
+                      <div
+                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+                        onClick={() => setIsProblemTextOpen(!isProblemTextOpen)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <svg
+                            className={`w-5 h-5 transition-transform ${isProblemTextOpen ? 'rotate-90' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          <h3 className="text-lg font-semibold text-mongene-ink">問題文</h3>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCheckToggle('problem_text_ok');
+                          }}
+                          className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                            checkInfo.problem_text_ok
+                              ? 'bg-green-500 text-white'
+                              : 'bg-gray-300 text-gray-600'
+                          }`}
+                        >
+                          {checkInfo.problem_text_ok ? '✓ チェック済み' : '未チェック'}
+                        </button>
+                      </div>
+                      {isProblemTextOpen && (
+                        <div className="p-3 pt-0">
+                          <textarea
+                            value={editedContent}
+                            onChange={(e) => setEditedContent(e.target.value)}
+                            className="w-full p-3 border border-mongene-border rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-mongene-yellow"
+                            placeholder="問題文を入力してください..."
+                            rows={Math.max(10, (editedContent.match(/\n/g) || []).length + 3)}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* 図形部分 */}
                     {currentImageBase64 && (
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h3 className="text-lg font-semibold text-mongene-ink">図形</h3>
-                            {userInfo && (
-                              <div className="text-xs text-mongene-muted mt-1">
-                                図形再生成回数: {userInfo.figure_regeneration_count ?? 0}/
-                                {userInfo.figure_regeneration_limit === -1 ? '無制限' : (userInfo.figure_regeneration_limit ?? 0)}
-                                {isFigureRegenerationLimitReached() && (
-                                  <span className="text-red-600 font-bold ml-2">⚠️ 上限到達</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            {isFigureRegenerationLimitReached() && (
-                              <div className="text-xs text-red-600 font-bold">
-                                再生成上限に達しました
-                              </div>
-                            )}
-                            <button
-                              onClick={handleRegenerateGeometry}
-                              disabled={isLoading || isFigureRegenerationLimitReached()}
-                              className={`px-3 py-1 rounded-lg text-sm transition-all ${
-                                isFigureRegenerationLimitReached()
-                                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                                  : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed'
-                              }`}
+                      <div className="border border-gray-200 rounded-lg">
+                        <div
+                          className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+                          onClick={() => setIsFigureOpen(!isFigureOpen)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <svg
+                              className={`w-5 h-5 transition-transform ${isFigureOpen ? 'rotate-90' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
                             >
-                              {isLoading ? '再生成中...' : 
-                               isFigureRegenerationLimitReached() ? '再生成不可' : '図形を再生成'}
-                            </button>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            <div>
+                              <h3 className="text-lg font-semibold text-mongene-ink">図形</h3>
+                              {userInfo && (
+                                <div className="text-xs text-mongene-muted mt-1">
+                                  図形再生成回数: {userInfo.figure_regeneration_count ?? 0}/
+                                  {userInfo.figure_regeneration_limit === -1 ? '無制限' : (userInfo.figure_regeneration_limit ?? 0)}
+                                  {isFigureRegenerationLimitReached() && (
+                                    <span className="text-red-600 font-bold ml-2">⚠️ 上限到達</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCheckToggle('figure_ok');
+                            }}
+                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                              checkInfo.figure_ok
+                                ? 'bg-green-500 text-white'
+                                : 'bg-gray-300 text-gray-600'
+                            }`}
+                          >
+                            {checkInfo.figure_ok ? '✓ チェック済み' : '未チェック'}
+                          </button>
                         </div>
-                        <div className="w-80 mx-auto">
-                          <img 
-                            src={`data:image/png;base64,${currentImageBase64}`}
-                            alt="問題図形"
-                            className="w-full h-auto border border-gray-200 rounded"
-                          />
-                        </div>
+                        {isFigureOpen && (
+                          <div className="p-3 pt-0">
+                            <div className="w-80 mx-auto mb-3">
+                              <img
+                                src={`data:image/png;base64,${currentImageBase64}`}
+                                alt="問題図形"
+                                className="w-full h-auto border border-gray-200 rounded"
+                              />
+                            </div>
+                            <div className="flex justify-center">
+                              <button
+                                onClick={handleRegenerateGeometry}
+                                disabled={isLoading || isFigureRegenerationLimitReached()}
+                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                  isFigureRegenerationLimitReached()
+                                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed'
+                                }`}
+                              >
+                                {isLoading ? '再生成中...' :
+                                 isFigureRegenerationLimitReached() ? '再生成不可' : '図形を再生成'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
                     {/* 解答・解説編集 */}
+                    <div className="border border-gray-200 rounded-lg">
+                      <div
+                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+                        onClick={() => setIsSolutionOpen(!isSolutionOpen)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <svg
+                            className={`w-5 h-5 transition-transform ${isSolutionOpen ? 'rotate-90' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          <h3 className="text-lg font-semibold text-mongene-ink">解答・解説</h3>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCheckToggle('solution_ok');
+                          }}
+                          className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                            checkInfo.solution_ok
+                              ? 'bg-green-500 text-white'
+                              : 'bg-gray-300 text-gray-600'
+                          }`}
+                        >
+                          {checkInfo.solution_ok ? '✓ チェック済み' : '未チェック'}
+                        </button>
+                      </div>
+                      {isSolutionOpen && (
+                        <div className="p-3 pt-0">
+                          <textarea
+                            value={editedSolution}
+                            onChange={(e) => setEditedSolution(e.target.value)}
+                            className="w-full p-3 border border-mongene-border rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-mongene-yellow"
+                            placeholder="解答・解説を入力してください..."
+                            rows={Math.max(10, (editedSolution.match(/\n/g) || []).length + 3)}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 使用単元 */}
                     <div>
-                      <h3 className="text-lg font-semibold mb-3 text-mongene-ink">解答・解説</h3>
-                      <textarea
-                        value={editedSolution}
-                        onChange={(e) => setEditedSolution(e.target.value)}
-                        className="w-full h-40 p-3 border border-mongene-border rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-mongene-yellow"
-                        placeholder="解答・解説を入力してください..."
-                      />
+                      <h3 className="text-lg font-semibold mb-3 text-mongene-ink">4. 使用されている単元・公式・定理（複数選択可）</h3>
+                      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-[0_2px_4px_rgba(0,0,0,0.03)]">
+                        <div className="flex flex-wrap gap-2.5">
+                          {AVAILABLE_UNITS.map((unit) => {
+                            const isSelected = checkInfo.units.includes(unit);
+                            return (
+                              <label key={unit} className="relative cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleUnitToggle(unit)}
+                                  className="absolute opacity-0 w-0 h-0"
+                                />
+                                <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${
+                                  isSelected
+                                    ? 'bg-blue-500 text-white border-blue-500'
+                                    : 'bg-white border border-gray-200 text-gray-800 hover:border-blue-500 hover:text-blue-500'
+                                }`}>
+                                  {unit}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 年度 */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3 text-mongene-ink">5. 年度</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {YEARS.map((year) => (
+                          <button
+                            key={year}
+                            onClick={() => handleYearChange(year)}
+                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                              checkInfo.year === year
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {year}年
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 回数 */}
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3 text-mongene-ink">6. 回数</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {EXAM_SESSIONS.map((session) => (
+                          <button
+                            key={session}
+                            onClick={() => handleExamSessionChange(session)}
+                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                              checkInfo.exam_session === session
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {session}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -399,22 +802,40 @@ export default function ProblemPreviewModal({
                     キャンセル
                   </button>
                   <button
-                    onClick={handleSaveChanges}
-                    disabled={isLoading}
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    onClick={handleSaveAll}
+                    disabled={isLoading || !isCheckComplete()}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                      isCheckComplete() && !isLoading
+                        ? 'bg-green-500 text-white hover:bg-green-600'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
                   >
-                    {isLoading ? '保存中...' : '変更を保存'}
+                    {isLoading ? '保存中...' : 'チェック完了'}
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={handleStartEdit}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all"
-                >
-                  編集
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleStartEdit}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all"
+                  >
+                    編集・チェック
+                  </button>
+                </div>
               )}
             </div>
+
+            {/* 中央のボタン（編集モード時のみ表示） */}
+            {isEditMode && (
+              <div className="flex-1 flex justify-center">
+                <button
+                  onClick={handleResetCheck}
+                  className="px-4 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition-all"
+                >
+                  未チェックに戻す
+                </button>
+              </div>
+            )}
 
             {/* 右側のボタン */}
             <div className="flex gap-3">
@@ -696,6 +1117,34 @@ export default function ProblemPreviewModal({
           </div>
         </div>
       </div>
+
+      {/* 未チェックに戻す確認モーダル */}
+      {showResetConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">確認</h3>
+            <p className="text-gray-600 mb-6">
+              本当に未チェックに戻しますか？<br />
+              すべてのチェック情報がリセットされ、保存されます。
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelReset}
+                className="px-6 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                いいえ
+              </button>
+              <button
+                onClick={handleConfirmReset}
+                disabled={isLoading}
+                className="px-6 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'リセット中...' : 'はい'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

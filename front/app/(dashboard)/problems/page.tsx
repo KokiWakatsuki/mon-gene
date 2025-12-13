@@ -12,6 +12,7 @@ import LoadingModal from '../../components/ui/LoadingModal';
 import FileUpload from '../../components/features/problems/FileUpload';
 import SearchOptions from '../../components/features/problems/SearchOptions';
 import ThreeProblemsDisplay from '../../components/features/problems/ThreeProblemsDisplay';
+import CheckFormModal from '../../components/features/problems/CheckFormModal';
 import { API_CONFIG } from '../../lib/config/api';
 
 export default function Home() {
@@ -42,7 +43,26 @@ export default function Home() {
     solutionText: undefined,
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [problems, setProblems] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
+  
+  // チェック情報の型定義
+  interface CheckInfo {
+    problem_text_ok: boolean;
+    solution_ok: boolean;
+    figure_ok: boolean;
+    units: string[];
+    year: string;
+    exam_session: string;
+  }
+  
+  const [problems, setProblems] = useState<Array<{
+    id: string;
+    title: string;
+    content: string;
+    imageBase64?: string;
+    solution?: string;
+    checkInfo?: CheckInfo;
+  }>>([]);
+  
   const [userInfo, setUserInfo] = useState<{
     school_code: string;
     email: string;
@@ -53,8 +73,28 @@ export default function Home() {
   } | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
-  const [searchResults, setSearchResults] = useState<Array<{ id: string; title: string; content: string; imageBase64?: string; solution?: string }>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: string;
+    title: string;
+    content: string;
+    imageBase64?: string;
+    solution?: string;
+    checkInfo?: CheckInfo;
+  }>>([]);
   const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('partial');
+  
+  // チェックフォームモーダルの状態
+  const [checkFormModal, setCheckFormModal] = useState<{
+    isOpen: boolean;
+    problemId: string;
+    problemTitle: string;
+    initialData?: CheckInfo;
+  }>({
+    isOpen: false,
+    problemId: '',
+    problemTitle: '',
+    initialData: undefined,
+  });
   
   // 生成システム用の状態（3問生成のみ）
   const [generationMode] = useState<'three-problems'>('three-problems');
@@ -176,6 +216,7 @@ export default function Home() {
           content: problem.content || problem.problem || '',
           imageBase64: problem.image_base64 || problem.ImageBase64,
           solution: problem.solution || problem.Solution,
+          checkInfo: problem.check_info,
         })) || [];
         
         setProblems(historyProblems);
@@ -438,6 +479,91 @@ export default function Home() {
         }
       }
     });
+  };
+
+  // チェック済みかどうかを判定する関数
+  const isChecked = (checkInfo?: CheckInfo): boolean => {
+    if (!checkInfo) return false;
+    
+    // 1-3: チェックが入っている
+    const basicChecksOk = checkInfo.problem_text_ok && checkInfo.solution_ok && checkInfo.figure_ok;
+    
+    // 4-6: 何かが選択されている
+    const unitsSelected = checkInfo.units && checkInfo.units.length > 0;
+    const yearSelected = !!checkInfo.year && checkInfo.year !== '';
+    const examSessionSelected = !!checkInfo.exam_session && checkInfo.exam_session !== '';
+    
+    return basicChecksOk && unitsSelected && yearSelected && examSessionSelected;
+  };
+
+  // チェックボタンのハンドラー
+  const handleCheck = (id: string) => {
+    const problem = (isSearchMode ? searchResults : problems).find(p => p.id === id);
+    if (problem) {
+      setCheckFormModal({
+        isOpen: true,
+        problemId: id,
+        problemTitle: problem.title,
+        initialData: problem.checkInfo,
+      });
+    }
+  };
+
+  // チェックフォームの保存ハンドラー
+  const handleCheckSave = async (checkInfo: CheckInfo) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('認証トークンが見つかりません');
+        return;
+      }
+
+      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/update-check-info`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: parseInt(checkFormModal.problemId),
+          check_info: checkInfo,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'チェック情報の保存に失敗しました');
+      }
+
+      // 問題リストを更新
+      setProblems(prev => prev.map(problem =>
+        problem.id === checkFormModal.problemId
+          ? { ...problem, checkInfo }
+          : problem
+      ));
+
+      // 検索結果も更新
+      if (isSearchMode) {
+        setSearchResults(prev => prev.map(problem =>
+          problem.id === checkFormModal.problemId
+            ? { ...problem, checkInfo }
+            : problem
+        ));
+      }
+
+      // モーダルを閉じる
+      setCheckFormModal({
+        isOpen: false,
+        problemId: '',
+        problemTitle: '',
+        initialData: undefined,
+      });
+
+      alert('チェック情報を保存しました');
+    } catch (error) {
+      console.error('チェック情報の保存エラー:', error);
+      alert(`チェック情報の保存に失敗しました: ${(error as Error).message}`);
+    }
   };
 
   const handlePreview = (id: string) => {
@@ -1483,6 +1609,7 @@ export default function Home() {
           content: problem.content || problem.problem || '',
           imageBase64: problem.image_base64 || problem.ImageBase64,
           solution: problem.solution || problem.Solution,
+          checkInfo: problem.check_info,
         })) || [];
         
         setSearchResults(foundProblems);
@@ -1536,6 +1663,7 @@ export default function Home() {
           content: problem.content || problem.problem || '',
           imageBase64: problem.image_base64 || problem.ImageBase64,
           solution: problem.solution || problem.Solution,
+          checkInfo: problem.check_info,
         })) || [];
         
         setSearchResults(foundProblems);
@@ -1601,6 +1729,7 @@ export default function Home() {
           content: problem.content || problem.problem || '',
           imageBase64: problem.image_base64 || problem.ImageBase64,
           solution: problem.solution || problem.Solution,
+          checkInfo: problem.check_info,
         })) || [];
         
         setSearchResults(foundProblems);
@@ -1695,6 +1824,7 @@ export default function Home() {
                       title={problem.title}
                       content={problem.content}
                       imageBase64={problem.imageBase64}
+                      isChecked={isChecked(problem.checkInfo)}
                       onPreview={handlePreview}
                       onPrint={handlePrint}
                     />
@@ -1988,28 +2118,33 @@ export default function Home() {
         problemContent={previewModal.problemContent}
         imageBase64={previewModal.imageBase64}
         solutionText={previewModal.solutionText}
+        initialCheckInfo={(isSearchMode ? searchResults : problems).find(p => p.id === previewModal.problemId)?.checkInfo}
+        onCheck={handleCheck}
+        onCheckSave={handleCheckSave}
         onUpdate={(updatedData) => {
           // 問題リストを更新
-          setProblems(prev => prev.map(problem => 
-            problem.id === previewModal.problemId 
-              ? { 
-                  ...problem, 
-                  content: updatedData.content, 
+          setProblems(prev => prev.map(problem =>
+            problem.id === previewModal.problemId
+              ? {
+                  ...problem,
+                  content: updatedData.content,
                   solution: updatedData.solution,
-                  imageBase64: updatedData.imageBase64 
+                  imageBase64: updatedData.imageBase64,
+                  checkInfo: updatedData.checkInfo || problem.checkInfo // チェック情報を更新
                 }
               : problem
           ));
 
           // 検索結果も更新
           if (isSearchMode) {
-            setSearchResults(prev => prev.map(problem => 
-              problem.id === previewModal.problemId 
-                ? { 
-                    ...problem, 
-                    content: updatedData.content, 
+            setSearchResults(prev => prev.map(problem =>
+              problem.id === previewModal.problemId
+                ? {
+                    ...problem,
+                    content: updatedData.content,
                     solution: updatedData.solution,
-                    imageBase64: updatedData.imageBase64 
+                    imageBase64: updatedData.imageBase64,
+                    checkInfo: updatedData.checkInfo || problem.checkInfo // チェック情報を更新
                   }
                 : problem
             ));
@@ -2038,6 +2173,16 @@ export default function Home() {
           setCurrentStage(stage);
           console.log(`📊 [Frontend] Stage ${stage} に移行`);
         }}
+      />
+
+      {/* チェックフォームモーダル */}
+      <CheckFormModal
+        isOpen={checkFormModal.isOpen}
+        onClose={() => setCheckFormModal({ isOpen: false, problemId: '', problemTitle: '', initialData: undefined })}
+        onSave={handleCheckSave}
+        problemId={checkFormModal.problemId}
+        problemTitle={checkFormModal.problemTitle}
+        initialCheckInfo={checkFormModal.initialData}
       />
 
       {/* ファイルプレビューモーダル */}

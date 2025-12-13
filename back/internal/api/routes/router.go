@@ -202,6 +202,16 @@ func NewRouter(
 		}
 	})
 
+	// Problem check info endpoint
+	mux.HandleFunc("/api/problems/update-check-info", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PUT", "OPTIONS":
+			problemHandler.UpdateCheckInfo(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
 	// Chat endpoint
 	mux.HandleFunc("/api/chat", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

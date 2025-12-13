@@ -21,6 +21,7 @@ type ProblemRepository interface {
 	GetByUserID(ctx context.Context, userID int64, limit, offset int) ([]*models.Problem, error)
 	Update(ctx context.Context, problem *models.Problem) error
 	UpdateGeometry(ctx context.Context, id int64, imageBase64 string) error
+	UpdateCheckInfo(ctx context.Context, id int64, userID int64, checkInfo *models.CheckInfo) error
 	Delete(ctx context.Context, id int64) error
 	// パラメータで検索（完全一致）
 	SearchByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error)

@@ -7,11 +7,12 @@ interface ProblemCardProps {
   title: string;
   content?: string;
   imageBase64?: string;
+  isChecked?: boolean;
   onPreview: (id: string) => void;
   onPrint: (id: string) => void;
 }
 
-export default function ProblemCard({ id, title, content, imageBase64, onPreview, onPrint }: ProblemCardProps) {
+export default function ProblemCard({ id, title, content, imageBase64, isChecked, onPreview, onPrint }: ProblemCardProps) {
   // デバッグ用コンソール出力
   React.useEffect(() => {
     console.log(`🔍 ProblemCard Debug - ID: ${id}`);
@@ -44,23 +45,41 @@ export default function ProblemCard({ id, title, content, imageBase64, onPreview
   };
 
   return (
-    <article className="bg-white border border-gray-200 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.03)] flex flex-col min-h-[220px]">
+    <article className={`bg-white border-2 rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.03)] flex flex-col min-h-[220px] relative ${
+      isChecked ? 'border-green-500' : 'border-gray-200'
+    }`}>
+      {isChecked ? (
+        <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          チェック済み
+        </div>
+      ) : (
+        <div className="absolute top-3 right-3 bg-gray-400 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+          未チェック
+        </div>
+      )}
       <div className="p-6 flex-1">
         <h3 className="m-0 text-gray-800 text-xl font-bold mb-3">{title}</h3>
         <div className="text-base text-gray-800 max-h-[120px] overflow-hidden text-ellipsis whitespace-pre-wrap leading-relaxed">
           {getPreviewContent()}
         </div>
       </div>
-      <div className="border-t border-gray-200 px-6 py-4 flex gap-3 bg-gray-100 rounded-b-xl mt-auto">
+      <div className="border-t border-gray-200 px-6 py-4 flex gap-2 bg-gray-50 rounded-b-xl mt-auto">
         <button
-          className="flex-1 appearance-none border-0 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-blue-500 text-white hover:brightness-110 transition-all"
+          className="flex-1 appearance-none border border-blue-500 rounded-lg px-3 py-2 text-sm font-bold cursor-pointer bg-blue-500 text-white hover:brightness-110 transition-all shadow-sm"
           type="button"
           onClick={() => onPreview(id)}
         >
           プレビュー
         </button>
         <button
-          className="flex-1 appearance-none border-0 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all"
+          className="flex-1 appearance-none border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold cursor-pointer bg-white text-gray-800 hover:bg-gray-50 transition-all shadow-sm"
           type="button"
           onClick={() => onPrint(id)}
         >

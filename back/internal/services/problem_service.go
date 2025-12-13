@@ -17,6 +17,7 @@ type ProblemService interface {
 	GenerateProblem(ctx context.Context, req models.GenerateProblemRequest, userSchoolCode string) (*models.Problem, error)
 	GeneratePDF(ctx context.Context, req models.PDFGenerateRequest) (string, error)
 	UpdateProblem(ctx context.Context, req models.UpdateProblemRequest, userID int64) (*models.Problem, error)
+	UpdateCheckInfo(ctx context.Context, req models.UpdateCheckInfoRequest, userID int64) (*models.Problem, error)
 	RegenerateGeometry(ctx context.Context, req models.RegenerateGeometryRequest, userID int64) (string, error)
 	SearchProblemsByFilters(ctx context.Context, userID int64, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 	SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
@@ -509,6 +510,33 @@ func (s *problemService) UpdateProblem(ctx context.Context, req models.UpdatePro
 
 	fmt.Printf("✅ Problem %d updated successfully\n", req.ID)
 	return &updatedProblem, nil
+}
+
+// UpdateCheckInfo 問題のチェック情報を更新
+func (s *problemService) UpdateCheckInfo(ctx context.Context, req models.UpdateCheckInfoRequest, userID int64) (*models.Problem, error) {
+	if s.problemRepo == nil {
+		return nil, fmt.Errorf("problem repository is not initialized")
+	}
+
+	// 問題の所有者確認
+	_, err := s.problemRepo.GetByIDAndUserID(ctx, req.ID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get problem: %w", err)
+	}
+
+	// チェック情報を更新
+	if err := s.problemRepo.UpdateCheckInfo(ctx, req.ID, userID, req.CheckInfo); err != nil {
+		return nil, fmt.Errorf("failed to update check info: %w", err)
+	}
+
+	// 更新後の問題を取得
+	updatedProblem, err := s.problemRepo.GetByIDAndUserID(ctx, req.ID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get updated problem: %w", err)
+	}
+
+	fmt.Printf("✅ Problem %d check info updated successfully\n", req.ID)
+	return updatedProblem, nil
 }
 
 // RegenerateGeometry 問題の図形を再生成（会話履歴を使用）

@@ -14,8 +14,19 @@ type Problem struct {
 	OpinionProfile      *OpinionProfile      `json:"opinion_profile,omitempty" db:"opinion_profile"`           // opinion_ver1.md基準のプロファイル（レガシー）
 	OpinionProfileV2    *OpinionProfileV2    `json:"opinion_profile_v2,omitempty" db:"opinion_profile_v2"`     // opinion_ver2.md基準のプロファイル
 	ConversationHistory *ConversationHistory `json:"conversation_history,omitempty" db:"conversation_history"` // 5段階生成プロセスの会話履歴
+	CheckInfo           *CheckInfo           `json:"check_info,omitempty" db:"check_info"`                     // チェック情報
 	CreatedAt           time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt           time.Time            `json:"updated_at" db:"updated_at"`
+}
+
+// CheckInfo はチェック情報を格納する構造体
+type CheckInfo struct {
+	ProblemTextOK  bool     `json:"problem_text_ok"`  // 問題文が適切か
+	SolutionOK     bool     `json:"solution_ok"`      // 解答・解説が適切か
+	FigureOK       bool     `json:"figure_ok"`        // 図が適切か
+	Units          []string `json:"units"`            // 使用されている単元・公式・定理（複数選択）
+	Year           string   `json:"year"`             // 年度（2020~2025）
+	ExamSession    string   `json:"exam_session"`     // 回数（第1回、第2回、第3回、プレ、追試）
 }
 
 // OpinionProfile は opinion_ver1.md の評価基準に基づく問題プロファイル（レガシー）
@@ -106,4 +117,15 @@ type RegenerateGeometryResponse struct {
 	Success     bool   `json:"success"`
 	ImageBase64 string `json:"image_base64,omitempty"`
 	Error       string `json:"error,omitempty"`
+}
+
+type UpdateCheckInfoRequest struct {
+	ID        int64      `json:"id" validate:"required"`
+	CheckInfo *CheckInfo `json:"check_info" validate:"required"`
+}
+
+type UpdateCheckInfoResponse struct {
+	Success bool     `json:"success"`
+	Problem *Problem `json:"problem,omitempty"`
+	Error   string   `json:"error,omitempty"`
 }

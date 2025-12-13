@@ -19,11 +19,12 @@ func NewMySQLProblemRepository(db *sqlx.DB) ProblemRepository {
 	return &MySQLProblemRepository{db: db}
 }
 
-// 共通のスキャン処理（opinion_profile + opinion_profile_v2対応）
+// 共通のスキャン処理（opinion_profile + opinion_profile_v2 + check_info対応）
 func (r *MySQLProblemRepository) scanProblem(rows *sql.Rows) (*models.Problem, error) {
 	var problem models.Problem
 	var opinionProfileJSON []byte
 	var opinionProfileV2JSON []byte
+	var checkInfoJSON []byte
 
 	err := rows.Scan(
 		&problem.ID,
@@ -35,6 +36,7 @@ func (r *MySQLProblemRepository) scanProblem(rows *sql.Rows) (*models.Problem, e
 		&problem.ImageBase64,
 		&opinionProfileJSON,
 		&opinionProfileV2JSON,
+		&checkInfoJSON,
 		&problem.CreatedAt,
 		&problem.UpdatedAt,
 	)
@@ -54,14 +56,21 @@ func (r *MySQLProblemRepository) scanProblem(rows *sql.Rows) (*models.Problem, e
 		}
 	}
 
+	if len(checkInfoJSON) > 0 {
+		if err := json.Unmarshal(checkInfoJSON, &problem.CheckInfo); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal check_info: %w", err)
+		}
+	}
+
 	return &problem, nil
 }
 
-// 共通のスキャン処理（単一行用、opinion_profile + opinion_profile_v2対応）
+// 共通のスキャン処理（単一行用、opinion_profile + opinion_profile_v2 + check_info対応）
 func (r *MySQLProblemRepository) scanProblemRow(row *sql.Row) (*models.Problem, error) {
 	var problem models.Problem
 	var opinionProfileJSON []byte
 	var opinionProfileV2JSON []byte
+	var checkInfoJSON []byte
 
 	err := row.Scan(
 		&problem.ID,
@@ -73,6 +82,7 @@ func (r *MySQLProblemRepository) scanProblemRow(row *sql.Row) (*models.Problem, 
 		&problem.ImageBase64,
 		&opinionProfileJSON,
 		&opinionProfileV2JSON,
+		&checkInfoJSON,
 		&problem.CreatedAt,
 		&problem.UpdatedAt,
 	)
@@ -89,6 +99,12 @@ func (r *MySQLProblemRepository) scanProblemRow(row *sql.Row) (*models.Problem, 
 	if len(opinionProfileV2JSON) > 0 {
 		if err := json.Unmarshal(opinionProfileV2JSON, &problem.OpinionProfileV2); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal opinion_profile_v2: %w", err)
+		}
+	}
+
+	if len(checkInfoJSON) > 0 {
+		if err := json.Unmarshal(checkInfoJSON, &problem.CheckInfo); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal check_info: %w", err)
 		}
 	}
 
@@ -115,9 +131,17 @@ func (r *MySQLProblemRepository) Create(ctx context.Context, problem *models.Pro
 	}
 
 	query := `
-		INSERT INTO problems (user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+		INSERT INTO problems (user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, check_info, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
 	`
+
+	var checkInfoJSON []byte
+	if problem.CheckInfo != nil {
+		checkInfoJSON, err = json.Marshal(problem.CheckInfo)
+		if err != nil {
+			return fmt.Errorf("failed to marshal check_info: %w", err)
+		}
+	}
 
 	result, err := r.db.ExecContext(ctx, query,
 		problem.UserID,
@@ -128,6 +152,7 @@ func (r *MySQLProblemRepository) Create(ctx context.Context, problem *models.Pro
 		problem.ImageBase64,
 		opinionProfileJSON,
 		opinionProfileV2JSON,
+		checkInfoJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create problem: %w", err)
@@ -144,7 +169,7 @@ func (r *MySQLProblemRepository) Create(ctx context.Context, problem *models.Pro
 
 func (r *MySQLProblemRepository) GetByID(ctx context.Context, id int64) (*models.Problem, error) {
 	query := `
-		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
+		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, check_info, created_at, updated_at
 		FROM problems
 		WHERE id = ?
 	`
@@ -163,7 +188,7 @@ func (r *MySQLProblemRepository) GetByID(ctx context.Context, id int64) (*models
 
 func (r *MySQLProblemRepository) GetByIDAndUserID(ctx context.Context, id, userID int64) (*models.Problem, error) {
 	query := `
-		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
+		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, check_info, created_at, updated_at
 		FROM problems
 		WHERE id = ? AND user_id = ?
 	`
@@ -199,9 +224,17 @@ func (r *MySQLProblemRepository) Update(ctx context.Context, problem *models.Pro
 		}
 	}
 
+	var checkInfoJSON []byte
+	if problem.CheckInfo != nil {
+		checkInfoJSON, err = json.Marshal(problem.CheckInfo)
+		if err != nil {
+			return fmt.Errorf("failed to marshal check_info: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE problems
-		SET subject = ?, prompt = ?, content = ?, solution = ?, image_base64 = ?, opinion_profile = ?, opinion_profile_v2 = ?, updated_at = NOW()
+		SET subject = ?, prompt = ?, content = ?, solution = ?, image_base64 = ?, opinion_profile = ?, opinion_profile_v2 = ?, check_info = ?, updated_at = NOW()
 		WHERE id = ? AND user_id = ?
 	`
 
@@ -213,6 +246,7 @@ func (r *MySQLProblemRepository) Update(ctx context.Context, problem *models.Pro
 		problem.ImageBase64,
 		opinionProfileJSON,
 		opinionProfileV2JSON,
+		checkInfoJSON,
 		problem.ID,
 		problem.UserID,
 	)
@@ -256,9 +290,39 @@ func (r *MySQLProblemRepository) UpdateGeometry(ctx context.Context, id int64, i
 	return nil
 }
 
+// UpdateCheckInfo チェック情報のみを更新
+func (r *MySQLProblemRepository) UpdateCheckInfo(ctx context.Context, id int64, userID int64, checkInfo *models.CheckInfo) error {
+	checkInfoJSON, err := json.Marshal(checkInfo)
+	if err != nil {
+		return fmt.Errorf("failed to marshal check_info: %w", err)
+	}
+
+	query := `
+		UPDATE problems
+		SET check_info = ?, updated_at = NOW()
+		WHERE id = ? AND user_id = ?
+	`
+
+	result, err := r.db.ExecContext(ctx, query, checkInfoJSON, id, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update check_info: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("problem not found or access denied")
+	}
+
+	return nil
+}
+
 func (r *MySQLProblemRepository) GetByUserID(ctx context.Context, userID int64, limit, offset int) ([]*models.Problem, error) {
 	query := `
-		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
+		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, check_info, created_at, updated_at
 		FROM problems
 		WHERE user_id = ?
 		ORDER BY created_at DESC
@@ -292,9 +356,9 @@ func (r *MySQLProblemRepository) SearchCombined(ctx context.Context, userID int6
 	fmt.Printf("  - limit: %d, offset: %d\n", limit, offset)
 	fmt.Printf("  - filters: %+v\n", filters)
 	
-	// 基本クエリの構築（opinion_profile_v2対応）
+	// 基本クエリの構築（opinion_profile_v2 + check_info対応）
 	query := `
-		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
+		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, check_info, created_at, updated_at
 		FROM problems
 		WHERE user_id = ?`
 
@@ -524,7 +588,7 @@ func (r *MySQLProblemRepository) Delete(ctx context.Context, id int64) error {
 
 func (r *MySQLProblemRepository) SearchByParameters(ctx context.Context, userID int64, subject string, prompt string, filters map[string]interface{}) ([]*models.Problem, error) {
 	query := `
-		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
+		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, check_info, created_at, updated_at
 		FROM problems
 		WHERE user_id = ? AND subject = ? AND prompt = ?
 		ORDER BY created_at DESC
@@ -558,7 +622,7 @@ func (r *MySQLProblemRepository) SearchByFilters(ctx context.Context, userID int
 	
 	// まずすべての問題を取得（opinion_profile_v2があるもののみ）
 	query := `
-		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
+		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, check_info, created_at, updated_at
 		FROM problems
 		WHERE user_id = ? AND opinion_profile_v2 IS NOT NULL`
 
@@ -775,7 +839,7 @@ func (r *MySQLProblemRepository) SearchByFilters(ctx context.Context, userID int
 
 func (r *MySQLProblemRepository) SearchByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error) {
 	query := `
-		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, created_at, updated_at
+		SELECT id, user_id, subject, prompt, content, solution, image_base64, opinion_profile, opinion_profile_v2, check_info, created_at, updated_at
 		FROM problems
 		WHERE user_id = ? AND (
 			content LIKE ? OR
