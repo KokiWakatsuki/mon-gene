@@ -1,18 +1,57 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface SearchOptionsProps {
   opinionProfile: any;
   onOpinionProfileChange: (profile: any) => void;
+  searchFilters?: {
+    units?: string[];
+    year?: string;
+    examSession?: string;
+    isChecked?: boolean;
+  };
+  onSearchFiltersChange?: (filters: any) => void;
+  onReset?: () => void;
 }
 
-export default function SearchOptions({ opinionProfile, onOpinionProfileChange }: SearchOptionsProps) {
+export default function SearchOptions({
+  opinionProfile,
+  onOpinionProfileChange,
+  searchFilters = {},
+  onSearchFiltersChange,
+  onReset
+}: SearchOptionsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showMoreUnits, setShowMoreUnits] = useState(false);
-  const [selectedYear, setSelectedYear] = useState('');
-  const [selectedExam, setSelectedExam] = useState('');
-  const [sourceList, setSourceList] = useState<Array<{year: string; exam: string}>>([]);
+  const [selectedUnits, setSelectedUnits] = useState<string[]>(searchFilters.units || []);
+  const [selectedYear, setSelectedYear] = useState(searchFilters.year || '');
+  const [selectedExam, setSelectedExam] = useState(searchFilters.examSession || '');
+  const [checkedStatus, setCheckedStatus] = useState<'all' | 'checked' | 'unchecked'>('all');
+  
+  // searchFiltersが外部から変更された時に内部状態を更新
+  useEffect(() => {
+    setSelectedUnits(searchFilters.units || []);
+    setSelectedYear(searchFilters.year || '');
+    setSelectedExam(searchFilters.examSession || '');
+    if (searchFilters.isChecked === true) {
+      setCheckedStatus('checked');
+    } else if (searchFilters.isChecked === false) {
+      setCheckedStatus('unchecked');
+    } else {
+      setCheckedStatus('all');
+    }
+  }, [searchFilters]);
+  
+  // リセット関数
+  const handleReset = () => {
+    setSelectedUnits([]);
+    setSelectedYear('');
+    setSelectedExam('');
+    setCheckedStatus('all');
+    onSearchFiltersChange?.({});
+    onReset?.();
+  };
 
   return (
     <div className={`mb-4 ${isOpen ? 'is-open' : ''}`}>
@@ -72,17 +111,41 @@ export default function SearchOptions({ opinionProfile, onOpinionProfileChange }
             <div>
               <h4 className="text-base font-semibold text-gray-800 m-0 mb-4 pb-3 border-b border-gray-200">📚 単元</h4>
               <div className="flex flex-col gap-3">
-                {['数と式', '二次方程式', '二次関数'].map((item) => (
+                {['多項式（展開・因数分解）', '平方根', '二次方程式'].map((item) => (
                   <label key={item} className="flex items-center gap-2 text-[15px] cursor-pointer">
-                    <input type="checkbox" className="w-4 h-4" style={{accentColor: 'var(--primary)'}} />
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4"
+                      style={{accentColor: 'var(--primary)'}}
+                      checked={selectedUnits.includes(item)}
+                      onChange={(e) => {
+                        const newUnits = e.target.checked
+                          ? [...selectedUnits, item]
+                          : selectedUnits.filter(u => u !== item);
+                        setSelectedUnits(newUnits);
+                        onSearchFiltersChange?.({ ...searchFilters, units: newUnits });
+                      }}
+                    />
                     <span>{item}</span>
                   </label>
                 ))}
                 {showMoreUnits && (
                   <div className="flex flex-col gap-3">
-                    {['図形の相似', '円の性質', '三平方の定理'].map((item) => (
+                    {['関数 y=ax²', '図形の相似', '円の性質（円周角）', '三平方の定理', '標本調査'].map((item) => (
                       <label key={item} className="flex items-center gap-2 text-[15px] cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4" style={{accentColor: 'var(--primary)'}} />
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4"
+                          style={{accentColor: 'var(--primary)'}}
+                          checked={selectedUnits.includes(item)}
+                          onChange={(e) => {
+                            const newUnits = e.target.checked
+                              ? [...selectedUnits, item]
+                              : selectedUnits.filter(u => u !== item);
+                            setSelectedUnits(newUnits);
+                            onSearchFiltersChange?.({ ...searchFilters, units: newUnits });
+                          }}
+                        />
                         <span>{item}</span>
                       </label>
                     ))}
@@ -120,7 +183,10 @@ export default function SearchOptions({ opinionProfile, onOpinionProfileChange }
                   <div className="relative flex-1">
                     <select
                       value={selectedYear}
-                      onChange={(e) => setSelectedYear(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedYear(e.target.value);
+                        onSearchFiltersChange?.({ ...searchFilters, year: e.target.value });
+                      }}
                       className="w-full px-3.5 py-2.5 pr-9 font-sans text-sm text-gray-800 bg-white border border-gray-200 rounded-lg cursor-pointer appearance-none transition-all hover:bg-gray-50 focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.1)]"
                       style={{backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '16px'}}
                     >
@@ -129,12 +195,17 @@ export default function SearchOptions({ opinionProfile, onOpinionProfileChange }
                       <option value="2024">2024年</option>
                       <option value="2023">2023年</option>
                       <option value="2022">2022年</option>
+                      <option value="2021">2021年</option>
+                      <option value="2020">2020年</option>
                     </select>
                   </div>
                   <div className="relative flex-1">
                     <select
                       value={selectedExam}
-                      onChange={(e) => setSelectedExam(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedExam(e.target.value);
+                        onSearchFiltersChange?.({ ...searchFilters, examSession: e.target.value });
+                      }}
                       className="w-full px-3.5 py-2.5 pr-9 font-sans text-sm text-gray-800 bg-white border border-gray-200 rounded-lg cursor-pointer appearance-none transition-all hover:bg-gray-50 focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.1)]"
                       style={{backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '16px'}}
                     >
@@ -147,55 +218,6 @@ export default function SearchOptions({ opinionProfile, onOpinionProfileChange }
                     </select>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selectedYear && selectedExam) {
-                      // 重複チェック
-                      const isDuplicate = sourceList.some(
-                        item => item.year === selectedYear && item.exam === selectedExam
-                      );
-                      if (!isDuplicate) {
-                        setSourceList([...sourceList, { year: selectedYear, exam: selectedExam }]);
-                        setSelectedYear('');
-                        setSelectedExam('');
-                      } else {
-                        alert('この出典は既にリストに追加されています');
-                      }
-                    } else {
-                      alert('年度と回数の両方を選択してください');
-                    }
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-2.5 py-2.5 text-sm font-bold text-white bg-gray-800 border-none rounded-lg cursor-pointer transition-all hover:bg-black hover:-translate-y-px hover:shadow-[0_2px_5px_rgba(0,0,0,0.1)] active:translate-y-px"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  リストに追加
-                </button>
-                
-                {/* 追加された出典のリスト */}
-                {sourceList.length > 0 && (
-                  <div className="flex flex-col gap-2 mt-2">
-                    {sourceList.map((item, index) => (
-                      <label key={index} className="flex items-center gap-2 text-[15px] cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4" style={{accentColor: 'var(--primary)'}} />
-                        <span>{item.year}年 {item.exam}</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setSourceList(sourceList.filter((_, i) => i !== index));
-                          }}
-                          className="ml-auto text-gray-400 hover:text-red-500 text-sm"
-                        >
-                          ×
-                        </button>
-                      </label>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -203,12 +225,49 @@ export default function SearchOptions({ opinionProfile, onOpinionProfileChange }
             <div>
               <h4 className="text-base font-semibold text-gray-800 m-0 mb-4 pb-3 border-b border-gray-200">✅ ステータス</h4>
               <div className="flex flex-col gap-3">
-                {['チェック済み', '未チェック'].map((item) => (
-                  <label key={item} className="flex items-center gap-2 text-[15px] cursor-pointer">
-                    <input type="checkbox" className="w-4 h-4" style={{accentColor: 'var(--primary)'}} />
-                    <span>{item}</span>
-                  </label>
-                ))}
+                <label className="flex items-center gap-2 text-[15px] cursor-pointer">
+                  <input
+                    type="radio"
+                    name="status"
+                    className="w-4 h-4"
+                    style={{accentColor: 'var(--primary)'}}
+                    checked={checkedStatus === 'checked'}
+                    onChange={() => {
+                      setCheckedStatus('checked');
+                      onSearchFiltersChange?.({ ...searchFilters, isChecked: true });
+                    }}
+                  />
+                  <span>チェック済み</span>
+                </label>
+                <label className="flex items-center gap-2 text-[15px] cursor-pointer">
+                  <input
+                    type="radio"
+                    name="status"
+                    className="w-4 h-4"
+                    style={{accentColor: 'var(--primary)'}}
+                    checked={checkedStatus === 'unchecked'}
+                    onChange={() => {
+                      setCheckedStatus('unchecked');
+                      onSearchFiltersChange?.({ ...searchFilters, isChecked: false });
+                    }}
+                  />
+                  <span>未チェック</span>
+                </label>
+                <label className="flex items-center gap-2 text-[15px] cursor-pointer">
+                  <input
+                    type="radio"
+                    name="status"
+                    className="w-4 h-4"
+                    style={{accentColor: 'var(--primary)'}}
+                    checked={checkedStatus === 'all'}
+                    onChange={() => {
+                      setCheckedStatus('all');
+                      const { isChecked, ...rest } = searchFilters;
+                      onSearchFiltersChange?.(rest);
+                    }}
+                  />
+                  <span>すべて</span>
+                </label>
               </div>
             </div>
           </div>

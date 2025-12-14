@@ -379,8 +379,17 @@ func (r *MySQLProblemRepository) SearchCombined(ctx context.Context, userID int6
 		fmt.Printf("  ✅ Subject filter added: %q\n", subject)
 	}
 
-	// opinion_profile_v2が存在することを確認（フィルターがある場合のみ）
-	if filters != nil && len(filters) > 0 {
+	// opinion_profile_v2が存在することを確認（OpinionProfileV2フィルターがある場合のみ）
+	hasOpinionFilters := false
+	if filters != nil {
+		for key := range filters {
+			if key != "units" && key != "year" && key != "exam_session" && key != "is_checked" {
+				hasOpinionFilters = true
+				break
+			}
+		}
+	}
+	if hasOpinionFilters {
 		query += " AND opinion_profile_v2 IS NOT NULL"
 	}
 
@@ -422,143 +431,217 @@ func (r *MySQLProblemRepository) SearchCombined(ctx context.Context, userID int6
 		return allProblems[start:end], nil
 	}
 
-	// アプリケーション層でフィルタリング（SearchByFiltersと同じロジック）
+	// アプリケーション層でフィルタリング
 	var matchedProblems []*models.Problem
 	
 	for _, problem := range allProblems {
-		if problem.OpinionProfileV2 == nil {
-			continue
-		}
-		
-		profile := problem.OpinionProfileV2
 		matchCount := 0
 		totalConditions := 0
 		
-		// 各フィールドをチェック
-		checkField := func(key string, dbValue interface{}, searchValue interface{}) bool {
-			totalConditions++
+		// OpinionProfileV2のフィールドをチェック
+		if problem.OpinionProfileV2 != nil {
+			profile := problem.OpinionProfileV2
 			
-			switch v := dbValue.(type) {
-			case int:
-				if searchVal, ok := searchValue.(float64); ok {
-					if v == int(searchVal) {
-						matchCount++
-						return true
-					}
-				}
-			case bool:
-				if searchVal, ok := searchValue.(bool); ok {
-					if v == searchVal {
-						matchCount++
-						return true
-					}
-				}
-			case string:
-				if searchVal, ok := searchValue.(string); ok {
-					if v == searchVal {
-						matchCount++
-						return true
-					}
-				}
-			case []string:
-				if searchArr, ok := searchValue.([]interface{}); ok {
-					if len(v) == len(searchArr) {
-						allMatch := true
-						for _, searchItem := range searchArr {
-							if searchStr, ok := searchItem.(string); ok {
-								found := false
-								for _, dbItem := range v {
-									if dbItem == searchStr {
-										found = true
-										break
-									}
-								}
-								if !found {
-									allMatch = false
-									break
-								}
-							}
-						}
-						if allMatch {
+			checkField := func(key string, dbValue interface{}, searchValue interface{}) bool {
+				totalConditions++
+				
+				switch v := dbValue.(type) {
+				case int:
+					if searchVal, ok := searchValue.(float64); ok {
+						if v == int(searchVal) {
 							matchCount++
 							return true
 						}
 					}
+				case bool:
+					if searchVal, ok := searchValue.(bool); ok {
+						if v == searchVal {
+							matchCount++
+							return true
+						}
+					}
+				case string:
+					if searchVal, ok := searchValue.(string); ok {
+						if v == searchVal {
+							matchCount++
+							return true
+						}
+					}
+				case []string:
+					if searchArr, ok := searchValue.([]interface{}); ok {
+						if len(v) == len(searchArr) {
+							allMatch := true
+							for _, searchItem := range searchArr {
+								if searchStr, ok := searchItem.(string); ok {
+									found := false
+									for _, dbItem := range v {
+										if dbItem == searchStr {
+											found = true
+											break
+										}
+									}
+									if !found {
+										allMatch = false
+										break
+									}
+								}
+							}
+							if allMatch {
+								matchCount++
+								return true
+							}
+						}
+					}
 				}
+				return false
 			}
-			return false
+			
+			// OpinionProfileV2の各フィールドをチェック
+			if val, exists := filters["problem_text_length"]; exists {
+				checkField("problem_text_length", profile.ProblemTextLength, val)
+			}
+			if val, exists := filters["sub_problem_text_length"]; exists {
+				checkField("sub_problem_text_length", profile.SubProblemTextLength, val)
+			}
+			if val, exists := filters["given_values_count"]; exists {
+				checkField("given_values_count", profile.GivenValuesCount, val)
+			}
+			if val, exists := filters["sub_problem_count"]; exists {
+				checkField("sub_problem_count", profile.SubProblemCount, val)
+			}
+			if val, exists := filters["sub_problem_types"]; exists {
+				checkField("sub_problem_types", profile.SubProblemTypes, val)
+			}
+			if val, exists := filters["solid_composition"]; exists {
+				checkField("solid_composition", profile.SolidComposition, val)
+			}
+			if val, exists := filters["answer_formats"]; exists {
+				checkField("answer_formats", profile.AnswerFormats, val)
+			}
+			if val, exists := filters["answer_units"]; exists {
+				checkField("answer_units", profile.AnswerUnits, val)
+			}
+			if val, exists := filters["uses_auxiliary_points"]; exists {
+				checkField("uses_auxiliary_points", profile.UsesAuxiliaryPoints, val)
+			}
+			if val, exists := filters["setup_units"]; exists {
+				checkField("setup_units", profile.SetupUnits, val)
+			}
+			if val, exists := filters["solution_units"]; exists {
+				checkField("solution_units", profile.SolutionUnits, val)
+			}
+			if val, exists := filters["total_vertices"]; exists {
+				checkField("total_vertices", profile.TotalVertices, val)
+			}
+			if val, exists := filters["has_moving_point"]; exists {
+				checkField("has_moving_point", profile.HasMovingPoint, val)
+			}
+			if val, exists := filters["figure_values_count"]; exists {
+				checkField("figure_values_count", profile.FigureValuesCount, val)
+			}
+			if val, exists := filters["solution_steps"]; exists {
+				checkField("solution_steps", profile.SolutionSteps, val)
+			}
+			if val, exists := filters["has_logical_branching"]; exists {
+				checkField("has_logical_branching", profile.HasLogicalBranching, val)
+			}
+			if val, exists := filters["theorem_count"]; exists {
+				checkField("theorem_count", profile.TheoremCount, val)
+			}
+			if val, exists := filters["requires_multi_unit_integration"]; exists {
+				checkField("requires_multi_unit_integration", profile.RequiresMultiUnitIntegration, val)
+			}
+			if val, exists := filters["has_irrelevant_info"]; exists {
+				checkField("has_irrelevant_info", profile.HasIrrelevantInfo, val)
+			}
 		}
 		
-		// 各フィールドをチェック
-		if val, exists := filters["problem_text_length"]; exists {
-			checkField("problem_text_length", profile.ProblemTextLength, val)
+		// CheckInfoのフィールドをチェック
+		if problem.CheckInfo != nil {
+			checkInfo := problem.CheckInfo
+			
+			// 単元フィルター（OR条件：いずれかの単元を含む）
+			if val, exists := filters["units"]; exists {
+				totalConditions++
+				if searchUnits, ok := val.([]interface{}); ok && len(searchUnits) > 0 {
+					// いずれかの単元が含まれていればマッチ
+					anyMatch := false
+					for _, searchUnit := range searchUnits {
+						if searchStr, ok := searchUnit.(string); ok {
+							for _, dbUnit := range checkInfo.Units {
+								if dbUnit == searchStr {
+									anyMatch = true
+									break
+								}
+							}
+							if anyMatch {
+								break
+							}
+						}
+					}
+					if anyMatch {
+						matchCount++
+					}
+				}
+			}
+			
+			// 年度フィルター
+			if val, exists := filters["year"]; exists {
+				totalConditions++
+				if searchYear, ok := val.(string); ok {
+					if checkInfo.Year == searchYear {
+						matchCount++
+					}
+				}
+			}
+			
+			// 回数フィルター
+			if val, exists := filters["exam_session"]; exists {
+				totalConditions++
+				if searchSession, ok := val.(string); ok {
+					if checkInfo.ExamSession == searchSession {
+						matchCount++
+					}
+				}
+			}
 		}
-		if val, exists := filters["sub_problem_text_length"]; exists {
-			checkField("sub_problem_text_length", profile.SubProblemTextLength, val)
-		}
-		if val, exists := filters["given_values_count"]; exists {
-			checkField("given_values_count", profile.GivenValuesCount, val)
-		}
-		if val, exists := filters["sub_problem_count"]; exists {
-			checkField("sub_problem_count", profile.SubProblemCount, val)
-		}
-		if val, exists := filters["sub_problem_types"]; exists {
-			checkField("sub_problem_types", profile.SubProblemTypes, val)
-		}
-		if val, exists := filters["solid_composition"]; exists {
-			checkField("solid_composition", profile.SolidComposition, val)
-		}
-		if val, exists := filters["answer_formats"]; exists {
-			checkField("answer_formats", profile.AnswerFormats, val)
-		}
-		if val, exists := filters["answer_units"]; exists {
-			checkField("answer_units", profile.AnswerUnits, val)
-		}
-		if val, exists := filters["uses_auxiliary_points"]; exists {
-			checkField("uses_auxiliary_points", profile.UsesAuxiliaryPoints, val)
-		}
-		if val, exists := filters["setup_units"]; exists {
-			checkField("setup_units", profile.SetupUnits, val)
-		}
-		if val, exists := filters["solution_units"]; exists {
-			checkField("solution_units", profile.SolutionUnits, val)
-		}
-		if val, exists := filters["total_vertices"]; exists {
-			checkField("total_vertices", profile.TotalVertices, val)
-		}
-		if val, exists := filters["has_moving_point"]; exists {
-			checkField("has_moving_point", profile.HasMovingPoint, val)
-		}
-		if val, exists := filters["figure_values_count"]; exists {
-			checkField("figure_values_count", profile.FigureValuesCount, val)
-		}
-		if val, exists := filters["solution_steps"]; exists {
-			checkField("solution_steps", profile.SolutionSteps, val)
-		}
-		if val, exists := filters["has_logical_branching"]; exists {
-			checkField("has_logical_branching", profile.HasLogicalBranching, val)
-		}
-		if val, exists := filters["theorem_count"]; exists {
-			checkField("theorem_count", profile.TheoremCount, val)
-		}
-		if val, exists := filters["requires_multi_unit_integration"]; exists {
-			checkField("requires_multi_unit_integration", profile.RequiresMultiUnitIntegration, val)
-		}
-		if val, exists := filters["has_irrelevant_info"]; exists {
-			checkField("has_irrelevant_info", profile.HasIrrelevantInfo, val)
+		
+		// チェック済みフィルター
+		if val, exists := filters["is_checked"]; exists {
+			totalConditions++
+			if searchChecked, ok := val.(bool); ok {
+				isChecked := problem.CheckInfo != nil &&
+					problem.CheckInfo.ProblemTextOK &&
+					problem.CheckInfo.SolutionOK &&
+					problem.CheckInfo.FigureOK &&
+					len(problem.CheckInfo.Units) > 0 &&
+					problem.CheckInfo.Year != "" &&
+					problem.CheckInfo.ExamSession != ""
+				
+				if isChecked == searchChecked {
+					matchCount++
+				}
+			}
 		}
 		
 		// マッチング判定
+		shouldInclude := false
 		if matchType == "exact" {
-			if matchCount == totalConditions && totalConditions > 0 {
-				matchedProblems = append(matchedProblems, problem)
+			// 完全一致：すべての条件が一致
+			if totalConditions > 0 && matchCount == totalConditions {
+				shouldInclude = true
 				fmt.Printf("  ✅ Problem %d: EXACT MATCH (%d/%d)\n", problem.ID, matchCount, totalConditions)
 			}
 		} else {
+			// 部分一致：1つ以上の条件が一致
 			if matchCount > 0 {
-				matchedProblems = append(matchedProblems, problem)
+				shouldInclude = true
 				fmt.Printf("  ✅ Problem %d: PARTIAL MATCH (%d/%d)\n", problem.ID, matchCount, totalConditions)
 			}
+		}
+		
+		if shouldInclude {
+			matchedProblems = append(matchedProblems, problem)
 		}
 	}
 

@@ -81,7 +81,29 @@ export default function Home() {
     solution?: string;
     checkInfo?: CheckInfo;
   }>>([]);
-  const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('partial');
+  const [searchMatchType, setSearchMatchType] = useState<'exact' | 'partial'>('exact');
+  
+  // check_info検索フィルター
+  const [searchFilters, setSearchFilters] = useState<{
+    units?: string[];
+    year?: string;
+    examSession?: string;
+    isChecked?: boolean;
+  }>({});
+  
+  // 検索リスト
+  interface SavedSearch {
+    id: string;
+    name: string;
+    keyword: string;
+    filters: {
+      units?: string[];
+      year?: string;
+      examSession?: string;
+      isChecked?: boolean;
+    };
+  }
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   
   // チェックフォームモーダルの状態
   const [checkFormModal, setCheckFormModal] = useState<{
@@ -1584,42 +1606,8 @@ export default function Home() {
 
   // キーワード検索する関数（キーワードなしでもタグ検索可能）
   const searchProblems = async () => {
-    // キーワードがない場合はタグ検索を実行
-    if (!searchKeyword.trim()) {
-      await searchProblemsByFilters();
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/search?keyword=${encodeURIComponent(searchKeyword)}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const foundProblems = data.problems?.map((problem: any, index: number) => ({
-          id: problem.id || String(index + 1),
-          title: `検索結果 ${problem.id || index + 1}`,
-          content: problem.content || problem.problem || '',
-          imageBase64: problem.image_base64 || problem.ImageBase64,
-          solution: problem.solution || problem.Solution,
-          checkInfo: problem.check_info,
-        })) || [];
-        
-        setSearchResults(foundProblems);
-        setIsSearchMode(true);
-        console.log('検索結果:', foundProblems.length, '件');
-      }
-    } catch (error) {
-      console.error('検索に失敗しました:', error);
-      alert('検索に失敗しました');
-    }
+    // キーワードとタグの組み合わせ検索を実行
+    await searchProblemsByKeywordAndFilters();
   };
 
   // パラメータ検索する関数（OpinionProfileV2基準対応）
@@ -1679,20 +1667,18 @@ export default function Home() {
     }
   };
 
-  // キーワード + 条件の組み合わせ検索する関数（OpinionProfileV2基準対応）
+  // キーワード + 条件の組み合わせ検索する関数（OpinionProfileV2 + CheckInfo対応）
   const searchProblemsByKeywordAndFilters = async () => {
-    // 変更されたフィールドのみを抽出
-    const modifiedFilters = getModifiedFilters();
-    console.log('🔍 [Frontend] opinionProfileV2:', opinionProfileV2);
-    console.log('🔍 [Frontend] modifiedFilters:', modifiedFilters);
+    console.log('🔍 [Frontend] searchFilters:', searchFilters);
 
     // 検索条件をチェック
     const hasKeyword = searchKeyword.trim() !== '';
     const hasSubject = activeSubject !== '';
-    const hasModifiedFilters = Object.keys(modifiedFilters).length > 0;
+    const hasCheckInfoFilters = Object.keys(searchFilters).length > 0;
 
-    if (!hasKeyword && !hasSubject) {
-      alert('キーワードを入力するか、科目を選択してください');
+    // キーワードなしでもタグ検索は可能
+    if (!hasKeyword && !hasSubject && !hasCheckInfoFilters) {
+      alert('キーワード、科目、または検索条件のいずれかを指定してください');
       return;
     }
 
@@ -1700,17 +1686,31 @@ export default function Home() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // 完全一致の場合は全フィールド、部分一致の場合は変更されたフィールドのみ
-      const filtersToSend = searchMatchType === 'exact' ? opinionProfileV2 : modifiedFilters;
+      // 指定された条件のみを送信（CheckInfoフィルターのみ）
+      const combinedFilters: any = {};
+      
+      // CheckInfoフィルター（指定されたもののみ）
+      if (searchFilters.units && searchFilters.units.length > 0) {
+        combinedFilters.units = searchFilters.units;
+      }
+      if (searchFilters.year) {
+        combinedFilters.year = searchFilters.year;
+      }
+      if (searchFilters.examSession) {
+        combinedFilters.exam_session = searchFilters.examSession;
+      }
+      if (searchFilters.isChecked !== undefined) {
+        combinedFilters.is_checked = searchFilters.isChecked;
+      }
 
       const requestBody = {
         keyword: searchKeyword.trim() || undefined,
         subject: activeSubject || undefined,
-        filters: hasModifiedFilters || searchMatchType === 'exact' ? filtersToSend : undefined,
-        matchType: searchMatchType,
+        filters: Object.keys(combinedFilters).length > 0 ? combinedFilters : undefined,
+        matchType: 'exact', // 常に完全一致（指定された条件すべてを満たす）
       };
 
-      console.log('🔍 [Frontend] 組み合わせ検索リクエスト:', requestBody);
+      console.log('🔍 [Frontend] 検索リクエスト:', requestBody);
 
       const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/search-combined`, {
         method: 'POST',
@@ -1725,7 +1725,7 @@ export default function Home() {
         const data = await response.json();
         const foundProblems = data.problems?.map((problem: any, index: number) => ({
           id: problem.id || String(index + 1),
-          title: `組み合わせ検索結果 ${problem.id || index + 1}`,
+          title: `検索結果 ${problem.id || index + 1}`,
           content: problem.content || problem.problem || '',
           imageBase64: problem.image_base64 || problem.ImageBase64,
           solution: problem.solution || problem.Solution,
@@ -1734,15 +1734,49 @@ export default function Home() {
         
         setSearchResults(foundProblems);
         setIsSearchMode(true);
-        console.log('キーワード+条件検索結果:', foundProblems.length, '件');
+        console.log('検索結果:', foundProblems.length, '件');
       } else {
         const errorData = await response.json();
         alert(`検索に失敗しました: ${errorData.error || 'サーバーエラー'}`);
       }
     } catch (error) {
-      console.error('キーワード+条件検索に失敗しました:', error);
-      alert('キーワード+条件検索に失敗しました');
+      console.error('検索に失敗しました:', error);
+      alert('検索に失敗しました');
     }
+  };
+  
+  // 検索条件をリセット
+  const resetSearchConditions = () => {
+    setSearchKeyword('');
+    setSearchFilters({});
+    setIsSearchMode(false);
+  };
+  
+  // 現在の検索条件を保存
+  const saveCurrentSearch = () => {
+    const searchName = prompt('検索条件の名前を入力してください:');
+    if (!searchName) return;
+    
+    const newSearch: SavedSearch = {
+      id: Date.now().toString(),
+      name: searchName,
+      keyword: searchKeyword,
+      filters: { ...searchFilters },
+    };
+    
+    setSavedSearches([...savedSearches, newSearch]);
+    alert('検索条件を保存しました');
+  };
+  
+  // 保存した検索条件を適用
+  const applySavedSearch = (search: SavedSearch) => {
+    setSearchKeyword(search.keyword);
+    setSearchFilters(search.filters);
+  };
+  
+  // 保存した検索条件を削除
+  const deleteSavedSearch = (id: string) => {
+    setSavedSearches(savedSearches.filter(s => s.id !== id));
   };
 
   return (
@@ -1770,7 +1804,7 @@ export default function Home() {
               <>
                 {/* キーワード検索バー */}
                 <div className="mb-4">
-                  <div className="relative flex gap-2">
+                  <div className="relative flex gap-2 mb-2">
                     <input
                       type="text"
                       id="keywordInput"
@@ -1791,12 +1825,66 @@ export default function Home() {
                       </svg>
                     </button>
                   </div>
+                  
+                  {/* 検索条件の操作ボタン */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={resetSearchConditions}
+                      className="px-4 py-2 bg-gray-500 text-white text-sm rounded-lg font-semibold hover:bg-gray-600 transition-colors"
+                    >
+                      🔄 リセット
+                    </button>
+                    <button
+                      onClick={saveCurrentSearch}
+                      className="px-4 py-2 bg-green-500 text-white text-sm rounded-lg font-semibold hover:bg-green-600 transition-colors"
+                    >
+                      💾 検索リストに追加
+                    </button>
+                  </div>
+                  
+                  {/* 保存した検索条件のリスト */}
+                  {savedSearches.length > 0 && (
+                    <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <h4 className="text-sm font-bold text-gray-700 mb-3">📋 保存した検索条件</h4>
+                      <div className="flex flex-col gap-2">
+                        {savedSearches.map((search) => (
+                          <div key={search.id} className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg">
+                            <div className="flex-1">
+                              <div className="font-semibold text-sm text-gray-800">{search.name}</div>
+                              <div className="text-xs text-gray-500">
+                                {search.keyword && `キーワード: ${search.keyword}`}
+                                {search.filters.units && search.filters.units.length > 0 && ` | 単元: ${search.filters.units.join(', ')}`}
+                                {search.filters.year && ` | 年度: ${search.filters.year}`}
+                                {search.filters.examSession && ` | 回数: ${search.filters.examSession}`}
+                                {search.filters.isChecked === true && ` | ステータス: チェック済み`}
+                                {search.filters.isChecked === false && ` | ステータス: 未チェック`}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => applySavedSearch(search)}
+                              className="px-3 py-1 bg-blue-500 text-white text-xs rounded font-semibold hover:bg-blue-600 transition-colors"
+                            >
+                              適用
+                            </button>
+                            <button
+                              onClick={() => deleteSavedSearch(search.id)}
+                              className="px-2 py-1 text-red-500 hover:text-red-700 text-sm font-bold"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
             
             {/* 検索オプション（アコーディオン） */}
             <SearchOptions
               opinionProfile={opinionProfileV2}
               onOpinionProfileChange={setOpinionProfileV2}
+              searchFilters={searchFilters}
+              onSearchFiltersChange={setSearchFilters}
             />
             
             {/* 検索モード時の「一覧に戻る」ボタン */}
