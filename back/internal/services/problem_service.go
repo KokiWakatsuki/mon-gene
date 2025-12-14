@@ -19,6 +19,7 @@ type ProblemService interface {
 	UpdateProblem(ctx context.Context, req models.UpdateProblemRequest, userID int64) (*models.Problem, error)
 	UpdateCheckInfo(ctx context.Context, req models.UpdateCheckInfoRequest, userID int64) (*models.Problem, error)
 	RegenerateGeometry(ctx context.Context, req models.RegenerateGeometryRequest, userID int64) (string, error)
+	DeleteProblem(ctx context.Context, problemID int64, userID int64) error
 	SearchProblemsByFilters(ctx context.Context, userID int64, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
 	SearchProblemsByKeyword(ctx context.Context, userID int64, keyword string, limit, offset int) ([]*models.Problem, error)
 	SearchProblemsCombined(ctx context.Context, userID int64, keyword string, subject string, filters map[string]interface{}, matchType string, limit, offset int) ([]*models.Problem, error)
@@ -755,6 +756,27 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// DeleteProblem 問題を削除
+func (s *problemService) DeleteProblem(ctx context.Context, problemID int64, userID int64) error {
+	if s.problemRepo == nil {
+		return fmt.Errorf("problem repository is not initialized")
+	}
+
+	// 問題の所有者確認
+	_, err := s.problemRepo.GetByIDAndUserID(ctx, problemID, userID)
+	if err != nil {
+		return fmt.Errorf("problem not found or access denied")
+	}
+
+	// 問題を削除
+	if err := s.problemRepo.Delete(ctx, problemID); err != nil {
+		return fmt.Errorf("failed to delete problem: %w", err)
+	}
+
+	fmt.Printf("✅ Problem %d deleted successfully by user %d\n", problemID, userID)
+	return nil
 }
 
 // 5段階生成システムの実装（高精度）

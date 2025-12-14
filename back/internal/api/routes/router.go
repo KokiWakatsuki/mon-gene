@@ -246,6 +246,16 @@ func NewRouter(
 		}
 	})
 
+	// Problem delete endpoint
+	mux.HandleFunc("/api/problems/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "DELETE", "OPTIONS":
+			problemHandler.DeleteProblem(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
 	// Chat endpoint
 	mux.HandleFunc("/api/chat", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

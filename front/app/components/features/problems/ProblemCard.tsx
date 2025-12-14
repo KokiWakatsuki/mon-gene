@@ -10,9 +10,10 @@ interface ProblemCardProps {
   isChecked?: boolean;
   onPreview: (id: string) => void;
   onPrint: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
-export default function ProblemCard({ id, title, content, imageBase64, isChecked, onPreview, onPrint }: ProblemCardProps) {
+export default function ProblemCard({ id, title, content, imageBase64, isChecked, onPreview, onPrint, onDelete }: ProblemCardProps) {
   // デバッグ用コンソール出力
   React.useEffect(() => {
     console.log(`🔍 ProblemCard Debug - ID: ${id}`);
@@ -49,14 +50,14 @@ export default function ProblemCard({ id, title, content, imageBase64, isChecked
       isChecked ? 'border-green-500' : 'border-gray-200'
     }`}>
       {isChecked ? (
-        <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md">
+        <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md z-10">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
           チェック済み
         </div>
       ) : (
-        <div className="absolute top-3 right-3 bg-gray-400 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md">
+        <div className="absolute top-3 right-3 bg-gray-400 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-md z-10">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -66,24 +67,48 @@ export default function ProblemCard({ id, title, content, imageBase64, isChecked
       )}
       <div className="p-6 flex-1">
         <h3 className="m-0 text-gray-800 text-xl font-bold mb-3">{title}</h3>
-        <div className="text-base text-gray-800 max-h-[120px] overflow-hidden text-ellipsis whitespace-pre-wrap leading-relaxed">
+        <div className="text-base text-gray-800 max-h-[130px] overflow-hidden text-ellipsis whitespace-pre-wrap leading-relaxed">
           {getPreviewContent()}
         </div>
+        {imageBase64 && (
+          <div className="mt-4 flex justify-center">
+            <img
+              src={`data:image/png;base64,${imageBase64}`}
+              alt="問題図形"
+              className="max-w-full h-auto max-h-[200px] object-contain"
+            />
+          </div>
+        )}
       </div>
-      <div className="border-t border-gray-200 px-6 py-4 flex gap-2 bg-gray-50 rounded-b-xl mt-auto">
+      <div className="border-t border-gray-200 px-6 py-4 flex justify-between items-center bg-gray-50 rounded-b-xl mt-auto">
+        <div className="flex gap-2">
+          <button
+            className="appearance-none border border-blue-500 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-blue-500 text-white hover:brightness-110 transition-all shadow-sm"
+            type="button"
+            onClick={() => onPreview(id)}
+          >
+            プレビュー
+          </button>
+          <button
+            className="appearance-none border border-gray-300 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-white text-gray-800 hover:bg-gray-50 transition-all shadow-sm"
+            type="button"
+            onClick={() => onPrint(id)}
+          >
+            印刷
+          </button>
+        </div>
         <button
-          className="appearance-none border border-blue-500 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-blue-500 text-white hover:brightness-110 transition-all shadow-sm"
+          className="appearance-none border border-red-500 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-red-500 text-white hover:brightness-110 transition-all shadow-sm flex items-center gap-1"
           type="button"
-          onClick={() => onPreview(id)}
+          onClick={() => onDelete(id)}
         >
-          プレビュー
-        </button>
-        <button
-          className="appearance-none border border-gray-300 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-white text-gray-800 hover:bg-gray-50 transition-all shadow-sm"
-          type="button"
-          onClick={() => onPrint(id)}
-        >
-          印刷
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          削除
         </button>
       </div>
     </article>

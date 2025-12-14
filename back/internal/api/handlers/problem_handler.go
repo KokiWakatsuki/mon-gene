@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -893,4 +894,60 @@ func (h *ProblemHandler) UpdateCheckInfo(w http.ResponseWriter, r *http.Request)
 	}
 
 	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// DeleteProblem 問題を削除
+func (h *ProblemHandler) DeleteProblem(w http.ResponseWriter, r *http.Request) {
+	// 認証トークンを取得
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	// "Bearer " プレフィックスを削除
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	// トークンからユーザー情報を取得
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	// URLから問題IDを取得
+	// パスは /api/problems/{id} の形式
+	path := r.URL.Path
+	// "/api/problems/" の後の部分を取得
+	idStr := path[len("/api/problems/"):]
+	
+	if idStr == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "問題IDは必須です")
+		return
+	}
+
+	// 文字列をint64に変換
+	var problemID int64
+	if _, err := fmt.Sscanf(idStr, "%d", &problemID); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "無効な問題IDです")
+		return
+	}
+
+	// 問題を削除
+	err = h.problemService.DeleteProblem(r.Context(), problemID, user.ID)
+	if err != nil {
+		if err.Error() == "problem not found or access denied" {
+			utils.WriteErrorResponse(w, http.StatusForbidden, "問題が見つからないか、アクセス権限がありません")
+			return
+		}
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "問題を削除しました",
+	})
 }

@@ -18,6 +18,7 @@ interface ProblemPreviewModalProps {
   onCheck?: (id: string) => void;
   onUpdate?: (updatedData: { content: string; solution: string; imageBase64?: string; checkInfo?: CheckInfo }) => void;
   onCheckSave?: (checkInfo: CheckInfo) => Promise<void>;
+  onDelete?: (id: string) => void;
 }
 
 interface UserInfo {
@@ -52,7 +53,8 @@ export default function ProblemPreviewModal({
   initialCheckInfo,
   onCheck,
   onUpdate,
-  onCheckSave
+  onCheckSave,
+  onDelete
 }: ProblemPreviewModalProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedContent, setEditedContent] = useState('');
@@ -524,17 +526,17 @@ export default function ProblemPreviewModal({
   console.log('  solutionText preview:', solutionText?.substring(0, 100) || 'No solution');
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-mongene-ink">問題プレビュー - {problemTitle}</h2>
-            <button
-              onClick={onClose}
-              className="text-mongene-muted hover:text-mongene-ink text-2xl font-bold w-8 h-8 flex items-center justify-center"
-            >
-              ×
-            </button>
           </div>
           
           <div className="border-2 border-mongene-border rounded-lg p-8 bg-white min-h-[600px] max-h-[70vh] overflow-y-auto">
@@ -894,9 +896,9 @@ export default function ProblemPreviewModal({
           
           <div className="flex justify-between items-center mt-6 no-print">
             {/* 左側のボタン */}
-            <div>
+            <div className="flex gap-3">
               {isEditMode ? (
-                <div className="flex gap-3">
+                <>
                   <button
                     onClick={handleCancelEdit}
                     disabled={isLoading}
@@ -915,42 +917,23 @@ export default function ProblemPreviewModal({
                   >
                     {isLoading ? '保存中...' : 'チェック完了'}
                   </button>
-                </div>
+                  <button
+                    onClick={handleResetCheck}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition-all"
+                  >
+                    未チェックに戻す
+                  </button>
+                </>
               ) : (
-                <div className="flex gap-3">
+                <>
                   <button
                     onClick={handleStartEdit}
                     className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all"
                   >
                     編集・チェック
                   </button>
-                </div>
-              )}
-            </div>
-
-            {/* 中央のボタン（編集モード時のみ表示） */}
-            {isEditMode && (
-              <div className="flex-1 flex justify-center">
-                <button
-                  onClick={handleResetCheck}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition-all"
-                >
-                  未チェックに戻す
-                </button>
-              </div>
-            )}
-
-            {/* 右側のボタン */}
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 border border-mongene-border rounded-lg text-mongene-ink hover:bg-gray-50 transition-colors"
-              >
-                閉じる
-              </button>
-              {!isEditMode && (
-                <button
-                  onClick={() => {
+                  <button
+                    onClick={() => {
                     // MarkdownRendererと同じ処理を使用してHTMLを生成
                     const renderLatexToHtml = (latex: string): string => {
                       return latex
@@ -1224,12 +1207,31 @@ export default function ProblemPreviewModal({
                         printWindow.close();
                       };
                     }
-                  }}
-                  className="px-4 py-2 bg-mongene-yellow text-mongene-ink rounded-lg font-semibold hover:brightness-95 transition-all"
-                >
-                  印刷
-                </button>
+                    }}
+                    className="px-4 py-2 bg-mongene-yellow text-mongene-ink rounded-lg font-semibold hover:brightness-95 transition-all"
+                  >
+                    印刷
+                  </button>
+                </>
               )}
+            </div>
+
+            {/* 右側のボタン */}
+            <div>
+              <button
+                onClick={() => {
+                  if (onDelete && confirm('この問題を削除してもよろしいですか？')) {
+                    onDelete(problemId);
+                    onClose();
+                  }
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-all flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                削除
+              </button>
             </div>
           </div>
         </div>

@@ -588,6 +588,54 @@ export default function Home() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('この問題を削除してもよろしいですか？')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('認証トークンが見つかりません');
+        return;
+      }
+
+      const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/problems/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '問題の削除に失敗しました');
+      }
+
+      // 問題リストから削除
+      setProblems(prev => prev.filter(problem => problem.id !== id));
+
+      // 検索結果からも削除
+      if (isSearchMode) {
+        setSearchResults(prev => prev.filter(problem => problem.id !== id));
+      }
+
+      // 3問生成結果からも削除
+      setThreeProblemsResults(prev => {
+        const newResults = { ...prev };
+        if (prev.patternA?.id === id) delete newResults.patternA;
+        if (prev.patternB?.id === id) delete newResults.patternB;
+        if (prev.patternC?.id === id) delete newResults.patternC;
+        return newResults;
+      });
+
+      alert('問題を削除しました');
+    } catch (error) {
+      console.error('問題削除エラー:', error);
+      alert(`問題の削除に失敗しました: ${(error as Error).message}`);
+    }
+  };
+
   const handlePrint = (id: string) => {
     const problem = problems.find(p => p.id === id);
     if (problem) {
@@ -1819,6 +1867,7 @@ export default function Home() {
                       isChecked={isChecked(problem.checkInfo)}
                       onPreview={handlePreview}
                       onPrint={handlePrint}
+                      onDelete={handleDelete}
                     />
                   ))}
                 </section>
@@ -1953,6 +2002,7 @@ export default function Home() {
                 problems={threeProblemsResults}
                 onPreview={handlePreview}
                 onPrint={handlePrint}
+                onDelete={handleDelete}
               />
             )}
             
@@ -2113,6 +2163,7 @@ export default function Home() {
         initialCheckInfo={(isSearchMode ? searchResults : problems).find(p => p.id === previewModal.problemId)?.checkInfo}
         onCheck={handleCheck}
         onCheckSave={handleCheckSave}
+        onDelete={handleDelete}
         onUpdate={(updatedData) => {
           // 問題リストを更新
           setProblems(prev => prev.map(problem =>
