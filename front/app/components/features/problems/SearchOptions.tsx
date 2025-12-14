@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { createSearchFilter, getUserSearchFilters, deleteSearchFilter, SearchFilter } from '@/app/lib/api/searchFilters';
 import { addSourceListItem, getUserSourceList, deleteSourceListItem, SourceListItem } from '@/app/lib/api/sourceList';
+import { UNITS_HIERARCHY, getAllUnitsFlat, getAllChildren, getIdByLabel } from '@/app/lib/data/units';
+import HierarchicalUnitSelector from './HierarchicalUnitSelector';
 
 interface SearchOptionsProps {
   opinionProfile: any;
@@ -31,7 +33,6 @@ export default function SearchOptions({
   onKeywordChange
 }: SearchOptionsProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [showMoreUnits, setShowMoreUnits] = useState(false);
   const [showMoreSources, setShowMoreSources] = useState(false);
   const [selectedUnits, setSelectedUnits] = useState<string[]>(searchFilters.units || []);
   const [selectedYear, setSelectedYear] = useState(searchFilters.year || '');
@@ -47,17 +48,8 @@ export default function SearchOptions({
   const [tagSearchInput, setTagSearchInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   
-  // 利用可能なすべてのタグ
-  const allAvailableTags = [
-    '多項式（展開・因数分解）',
-    '平方根',
-    '二次方程式',
-    '関数 y=ax²',
-    '図形の相似',
-    '円の性質（円周角）',
-    '三平方の定理',
-    '標本調査'
-  ];
+  // 利用可能なすべてのタグ（階層構造から取得）
+  const allAvailableTags = getAllUnitsFlat();
   
   // searchFiltersが外部から変更された時に内部状態を更新（年度・回数は除外）
   useEffect(() => {
@@ -251,7 +243,26 @@ export default function SearchOptions({
   
   // タグを選択
   const handleSelectTag = (tag: string) => {
-    const newUnits = [...selectedUnits, tag];
+    // タグに対応するIDを取得
+    const tagId = allAvailableTags.indexOf(tag) >= 0 ? getIdByLabel(tag, UNITS_HIERARCHY) : null;
+    
+    let newUnits = [...selectedUnits];
+    
+    // タグ自体を追加
+    if (!newUnits.includes(tag)) {
+      newUnits.push(tag);
+    }
+    
+    // もしタグが親階層の場合、すべての子孫も追加
+    if (tagId) {
+      const children = getAllChildren(tagId, UNITS_HIERARCHY);
+      children.forEach(child => {
+        if (!newUnits.includes(child)) {
+          newUnits.push(child);
+        }
+      });
+    }
+    
     setSelectedUnits(newUnits);
     setTagSearchInput('');
     setShowSuggestions(false);
@@ -379,84 +390,24 @@ export default function SearchOptions({
           </div>
           
           {/* フィルターグリッド */}
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* 単元 */}
             <div>
               <h4 className="text-base font-semibold text-gray-800 m-0 mb-4 pb-3 border-b border-gray-200">📚 単元</h4>
-              <div className="flex flex-col gap-3">
-                {['多項式（展開・因数分解）', '平方根', '二次方程式'].map((item) => (
-                  <label key={item} className="flex items-center gap-2 text-[15px] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4"
-                      style={{accentColor: 'var(--primary)'}}
-                      checked={selectedUnits.includes(item)}
-                      onChange={(e) => {
-                        const newUnits = e.target.checked
-                          ? [...selectedUnits, item]
-                          : selectedUnits.filter(u => u !== item);
-                        setSelectedUnits(newUnits);
-                        // 年度・回数は保持したまま単元のみ更新
-                        onSearchFiltersChange?.({
-                          ...searchFilters,
-                          units: newUnits,
-                          year: selectedYear || searchFilters.year,
-                          examSession: selectedExam || searchFilters.examSession
-                        });
-                      }}
-                    />
-                    <span>{item}</span>
-                  </label>
-                ))}
-                {showMoreUnits && (
-                  <div className="flex flex-col gap-3">
-                    {['関数 y=ax²', '図形の相似', '円の性質（円周角）', '三平方の定理', '標本調査'].map((item) => (
-                      <label key={item} className="flex items-center gap-2 text-[15px] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4"
-                          style={{accentColor: 'var(--primary)'}}
-                          checked={selectedUnits.includes(item)}
-                          onChange={(e) => {
-                            const newUnits = e.target.checked
-                              ? [...selectedUnits, item]
-                              : selectedUnits.filter(u => u !== item);
-                            setSelectedUnits(newUnits);
-                            // 年度・回数は保持したまま単元のみ更新
-                            onSearchFiltersChange?.({
-                              ...searchFilters,
-                              units: newUnits,
-                              year: selectedYear || searchFilters.year,
-                              examSession: selectedExam || searchFilters.examSession
-                            });
-                          }}
-                        />
-                        <span>{item}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowMoreUnits(!showMoreUnits)}
-                  className={`flex items-center justify-center gap-1.5 w-full mt-3 px-0 py-2 bg-transparent border border-dashed border-gray-200 rounded-md text-gray-500 text-[13px] font-bold cursor-pointer transition-all hover:bg-gray-100 hover:text-blue-500 hover:border-blue-500 ${showMoreUnits ? 'is-open' : ''}`}
-                >
-                  <span>{showMoreUnits ? '閉じる' : 'もっと見る'}</span>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`transition-transform duration-300 ${showMoreUnits ? 'rotate-180' : ''}`}
-                  >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
+              <div className="max-h-[400px] overflow-y-auto pr-2 border border-gray-100 rounded-lg p-3">
+                <HierarchicalUnitSelector
+                  units={UNITS_HIERARCHY}
+                  selectedUnits={selectedUnits}
+                  onSelectionChange={(newUnits) => {
+                    setSelectedUnits(newUnits);
+                    onSearchFiltersChange?.({
+                      ...searchFilters,
+                      units: newUnits,
+                      year: selectedYear || searchFilters.year,
+                      examSession: selectedExam || searchFilters.examSession
+                    });
+                  }}
+                />
               </div>
             </div>
 

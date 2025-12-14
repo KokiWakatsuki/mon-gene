@@ -2,10 +2,16 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# システムの依存関係をインストール
+# システムの依存関係と日本語フォントをインストール
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    fonts-noto-cjk \
+    fonts-noto-cjk-extra \
+    fonts-ipafont \
+    fonts-ipaexfont \
+    fontconfig \
+    && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
 
 # Pythonの依存関係をコピーしてインストール

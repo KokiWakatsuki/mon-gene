@@ -2,6 +2,7 @@ import matplotlib
 matplotlib.use('Agg')  # GUI不要のバックエンドを使用
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.font_manager as fm
 import numpy as np
 import base64
 import io
@@ -10,6 +11,43 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits import mplot3d
 
 from app.models.geometry import GeometryResponse, CustomGeometryResponse
+
+# 日本語フォントの設定
+def setup_japanese_font():
+    """日本語フォントを設定する"""
+    try:
+        # 利用可能な日本語フォントを探す
+        japanese_fonts = [
+            'Noto Sans CJK JP',
+            'Noto Sans JP',
+            'IPAexGothic',
+            'IPAGothic',
+            'TakaoPGothic',
+            'VL Gothic',
+            'DejaVu Sans'
+        ]
+        
+        available_fonts = [f.name for f in fm.fontManager.ttflist]
+        
+        for font_name in japanese_fonts:
+            if font_name in available_fonts:
+                plt.rcParams['font.family'] = font_name
+                print(f"✅ Japanese font set to: {font_name}")
+                return font_name
+        
+        # フォールバック: システムのデフォルトフォントを使用
+        print("⚠️ No Japanese font found, using default font")
+        # マイナス記号の文字化けを防ぐ
+        plt.rcParams['axes.unicode_minus'] = False
+        return None
+        
+    except Exception as e:
+        print(f"⚠️ Error setting up Japanese font: {e}")
+        plt.rcParams['axes.unicode_minus'] = False
+        return None
+
+# 初期化時にフォントを設定
+setup_japanese_font()
 
 class GeometryService:
     """図形生成サービス"""
@@ -65,6 +103,13 @@ class GeometryService:
         print(f"🔍 problem_text length: {len(problem_text)}")
         
         try:
+            # 日本語フォントを再設定（exec実行前に毎回設定）
+            font_name = setup_japanese_font()
+            if font_name:
+                print(f"✅ Japanese font configured for this request: {font_name}")
+            else:
+                print(f"⚠️ Using default font for this request")
+            
             # 安全な実行環境を準備
             safe_globals = {
                 'plt': plt,

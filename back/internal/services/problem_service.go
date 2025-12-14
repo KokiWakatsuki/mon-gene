@@ -574,6 +574,10 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 	} else {
 		fmt.Printf("📝 [RegenerateGeometry] Using original content for geometry regeneration\n")
 	}
+	
+	// 解答文を取得（問題の文脈理解を向上させるため）
+	solutionText := problem.Solution
+	fmt.Printf("📚 [RegenerateGeometry] Solution text available: %t (length: %d)\n", solutionText != "", len(solutionText))
 
 	var imageBase64 string
 
@@ -632,9 +636,17 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 	if imageBase64 == "" {
 		fmt.Printf("🤖 [RegenerateGeometry] Generating matplotlib code with AI (standard method)\n")
 		
-		// 図形生成専用のプロンプトを構築
-		geometryPrompt := s.createGeometryPromptWithSamples(contentToAnalyze)
-		fmt.Printf("🔍 [RegenerateGeometry] Enhanced prompt created\n")
+		// 図形生成専用のプロンプトを構築（問題文と解答文の両方を使用）
+		combinedContext := contentToAnalyze
+		if solutionText != "" {
+			combinedContext = fmt.Sprintf("【問題文】\n%s\n\n【解答・解説】\n%s", contentToAnalyze, solutionText)
+			fmt.Printf("🔍 [RegenerateGeometry] Using combined context (problem + solution) for better accuracy\n")
+		} else {
+			fmt.Printf("⚠️ [RegenerateGeometry] No solution text available, using problem text only\n")
+		}
+		
+		geometryPrompt := s.createGeometryPromptWithSamples(combinedContext)
+		fmt.Printf("🔍 [RegenerateGeometry] Enhanced prompt created (length: %d)\n", len(geometryPrompt))
 		
 		// ユーザーの設定に基づいてAIクライアントを選択
 		preferredAPI := user.PreferredAPI
