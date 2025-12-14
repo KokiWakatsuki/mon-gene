@@ -7,6 +7,7 @@ type User struct {
 	SchoolCode           string    `json:"school_code" db:"school_code"`
 	PasswordHash         string    `json:"-" db:"password_hash"`
 	Email                string    `json:"email" db:"email"`
+	ProfileImage         *string   `json:"profile_image,omitempty" db:"profile_image"`
 	ProblemGenerationLimit int     `json:"problem_generation_limit" db:"problem_generation_limit"` // -1 = 制限なし, 0以上 = 制限回数
 	ProblemGenerationCount int     `json:"problem_generation_count" db:"problem_generation_count"` // 現在の生成回数
 	FigureRegenerationLimit int    `json:"figure_regeneration_limit" db:"figure_regeneration_limit"` // -1 = 制限なし, 0以上 = 制限回数

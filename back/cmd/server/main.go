@@ -43,18 +43,24 @@ func main() {
 	var userRepo repositories.UserRepository
 	var sessionRepo repositories.SessionRepository
 	var problemRepo repositories.ProblemRepository
+	var searchFilterRepo repositories.SearchFilterRepository
+	var sourceListRepo repositories.SourceListRepository
 	
 	if db != nil {
 		// MySQLベースのリポジトリを使用
 		userRepo = repositories.NewMySQLUserRepository(db)
 		sessionRepo = repositories.NewMemorySessionRepository() // Sessionは引き続きメモリベース
 		problemRepo = repositories.NewMySQLProblemRepository(db)
+		searchFilterRepo = repositories.NewMySQLSearchFilterRepository(db)
+		sourceListRepo = repositories.NewMySQLSourceListRepository(db)
 		log.Printf("✅ MySQLベースのリポジトリを初期化しました")
 	} else {
 		// メモリベースのリポジトリを使用
 		userRepo = repositories.NewMemoryUserRepository()
 		sessionRepo = repositories.NewMemorySessionRepository()
 		problemRepo = nil
+		searchFilterRepo = nil
+		sourceListRepo = nil
 		log.Printf("✅ メモリベースのリポジトリを初期化しました")
 	}
 	
@@ -64,6 +70,14 @@ func main() {
 	// サービスを初期化
 	authService := services.NewAuthService(userRepo, sessionRepo, emailService)
 	problemService := services.NewProblemService(claudeClient, openaiClient, googleClient, coreClient, problemRepo, userRepo)
+	var searchFilterService services.SearchFilterService
+	if searchFilterRepo != nil {
+		searchFilterService = services.NewSearchFilterService(searchFilterRepo)
+	}
+	var sourceListService *services.SourceListService
+	if sourceListRepo != nil {
+		sourceListService = services.NewSourceListService(sourceListRepo)
+	}
 
 	// ハンドラーの初期化
 	authHandler := handlers.NewAuthHandler(authService)
@@ -71,9 +85,17 @@ func main() {
 	healthHandler := handlers.NewHealthHandler()
 	chatHandler := handlers.NewChatHandler(authService)
 	sseHandler := handlers.NewSSEHandler(problemService, authService)
+	var searchFilterHandler *handlers.SearchFilterHandler
+	if searchFilterService != nil {
+		searchFilterHandler = handlers.NewSearchFilterHandler(searchFilterService, authService)
+	}
+	var sourceListHandler *handlers.SourceListHandler
+	if sourceListService != nil {
+		sourceListHandler = handlers.NewSourceListHandler(sourceListService, authService)
+	}
 
 	// ルーターの設定
-	router := routes.NewRouter(authHandler, problemHandler, healthHandler, chatHandler, sseHandler)
+	router := routes.NewRouter(authHandler, problemHandler, healthHandler, chatHandler, sseHandler, searchFilterHandler, sourceListHandler)
 
 	// サーバーの起動
 	port := os.Getenv("PORT")

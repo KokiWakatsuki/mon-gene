@@ -161,7 +161,7 @@ export default function FileUpload({
               </svg>
             </div>
             <p className="text-base font-semibold text-gray-800 mb-2">
-              画像をドラッグ＆ドロップ<br />
+              ファイルをドラッグ＆ドロップ<br />
               <span className="text-blue-500 underline cursor-pointer">ファイルを選択</span>
             </p>
           </div>
@@ -243,7 +243,7 @@ export default function FileUpload({
                 </svg>
               </div>
               <p className="text-base font-semibold text-gray-800 mb-2">
-                画像をドラッグ＆ドロップ<br />
+                ファイルをドラッグ＆ドロップ<br />
                 <span className="text-green-500 underline cursor-pointer">ファイルを選択</span>
               </p>
             </div>

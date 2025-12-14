@@ -9,6 +9,7 @@ interface User {
   role: string;
   preferred_api: string;
   preferred_model: string;
+  profile_image?: string;
 }
 
 export default function Header() {
@@ -26,7 +27,7 @@ export default function Header() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user-info`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/profile`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -50,9 +51,14 @@ export default function Header() {
     router.push('/login');
   };
 
-  const handleSettings = () => {
+  const handleAccount = () => {
     setShowLogoutMenu(false);
-    router.push('/settings');
+    router.push('/account');
+  };
+
+  const handleLaboratory = () => {
+    setShowLogoutMenu(false);
+    router.push('/laboratory');
   };
 
   // メニューの外側をクリックした時にメニューを閉じる
@@ -87,14 +93,22 @@ export default function Header() {
       
       <div className="relative" ref={menuRef}>
         <button
-          className="w-10 h-10 rounded-full bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:bg-gray-100"
+          className="w-10 h-10 rounded-full bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:bg-gray-100 overflow-hidden"
           onClick={() => setShowLogoutMenu(!showLogoutMenu)}
           aria-label="ユーザー設定"
           aria-expanded={showLogoutMenu}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-6 h-6 text-gray-500">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-          </svg>
+          {user?.profile_image ? (
+            <img
+              src={user.profile_image}
+              alt="Profile"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-6 h-6 text-gray-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+          )}
         </button>
         
         {showLogoutMenu && (
@@ -102,12 +116,18 @@ export default function Header() {
             className="absolute right-0 top-12 bg-white border border-gray-200 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] py-2 min-w-[200px] flex flex-col"
             style={{ zIndex: 'var(--z-modal)' }}
           >
+            <button
+              className="w-full px-4 py-2.5 text-left text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors border-none bg-transparent cursor-pointer"
+              onClick={handleAccount}
+            >
+              アカウント設定
+            </button>
             {user?.role === 'admin' && (
               <button
                 className="w-full px-4 py-2.5 text-left text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors border-none bg-transparent cursor-pointer"
-                onClick={handleSettings}
+                onClick={handleLaboratory}
               >
-                アカウント設定
+                モデル実証実験
               </button>
             )}
             <button

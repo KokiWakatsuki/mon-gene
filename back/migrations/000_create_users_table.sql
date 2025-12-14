@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     school_code VARCHAR(10) NOT NULL UNIQUE COMMENT '学校コード',
     email VARCHAR(255) NOT NULL COMMENT 'メールアドレス',
+    profile_image MEDIUMTEXT COMMENT 'プロフィール画像（base64エンコード）',
     password_hash VARCHAR(255) NOT NULL COMMENT 'ハッシュ化されたパスワード',
     problem_generation_limit INT NOT NULL DEFAULT 10 COMMENT '問題生成制限回数（-1 = 制限なし, 0以上 = 制限回数）',
     problem_generation_count INT NOT NULL DEFAULT 0 COMMENT '現在の問題生成回数',

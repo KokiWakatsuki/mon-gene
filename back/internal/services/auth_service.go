@@ -18,6 +18,10 @@ type AuthService interface {
 	ValidateToken(ctx context.Context, token string) (*models.User, error)
 	Logout(ctx context.Context, token string) error
 	UpdateUserSettings(ctx context.Context, schoolCode, preferredAPI, preferredModel string) error
+	UpdatePassword(ctx context.Context, schoolCode, currentPassword, newPassword string) error
+	UpdateEmail(ctx context.Context, schoolCode, email string) error
+	UpdateProfileImage(ctx context.Context, schoolCode, image string) error
+	DeleteProfileImage(ctx context.Context, schoolCode string) error
 	IncrementPreviewCount(ctx context.Context, userID int64) error
 }
 
@@ -103,23 +107,45 @@ func (s *authService) ForgotPassword(ctx context.Context, req models.ForgotPassw
 		}, nil
 	}
 
-	// 現在のパスワードを通知（本番環境では固定パスワード "password"）
-	currentPassword := "password"
+	// 新しいランダムパスワードを生成
+	newPassword := s.generateRandomPassword()
+
+	// パスワードをハッシュ化
+	hashedPassword, err := s.hashPassword(newPassword)
+	if err != nil {
+		return &models.ForgotPasswordResponse{
+			Success: false,
+			Error:   "パスワードの生成に失敗しました",
+		}, nil
+	}
+
+	// ユーザーのパスワードを更新
+	user.PasswordHash = hashedPassword
+	user.UpdatedAt = time.Now()
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return &models.ForgotPasswordResponse{
+			Success: false,
+			Error:   "パスワードの更新に失敗しました",
+		}, nil
+	}
 
 	// メール送信
-	subject := "【Mongene】パスワードのお知らせ"
+	subject := "【Mongene】パスワードリセットのお知らせ"
 	body := fmt.Sprintf(`
 こんにちは、
 
-お忘れになったパスワードをお知らせいたします。
+パスワードをリセットしました。
+新しいパスワードでログインしてください。
 
 塾コード: %s
-パスワード: %s
+新しいパスワード: %s
+
+※セキュリティのため、ログイン後にパスワードを変更することをお勧めします。
 
 今後ともMongeneをよろしくお願いいたします。
 
 Mongeneサポートチーム
-`, user.SchoolCode, currentPassword)
+`, user.SchoolCode, newPassword)
 
 	if err := s.emailSvc.SendEmail(user.Email, subject, body); err != nil {
 		return &models.ForgotPasswordResponse{
@@ -130,7 +156,7 @@ Mongeneサポートチーム
 
 	return &models.ForgotPasswordResponse{
 		Success: true,
-		Message: "パスワードを記載したメールを送信しました",
+		Message: "新しいパスワードを記載したメールを送信しました",
 	}, nil
 }
 
@@ -180,6 +206,89 @@ func (s *authService) UpdateUserSettings(ctx context.Context, schoolCode, prefer
 	// ユーザーを更新
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return fmt.Errorf("ユーザー設定の更新に失敗しました: %w", err)
+	}
+
+	return nil
+}
+
+func (s *authService) UpdatePassword(ctx context.Context, schoolCode, currentPassword, newPassword string) error {
+	// ユーザーを取得
+	user, err := s.userRepo.GetBySchoolCode(ctx, schoolCode)
+	if err != nil {
+		return fmt.Errorf("ユーザーが見つかりません: %w", err)
+	}
+
+	// 現在のパスワードを検証
+	if !s.verifyPassword(currentPassword, user.PasswordHash) {
+		return fmt.Errorf("現在のパスワードが正しくありません")
+	}
+
+	// 新しいパスワードをハッシュ化
+	hashedPassword, err := s.hashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("パスワードのハッシュ化に失敗しました: %w", err)
+	}
+
+	// パスワードを更新
+	user.PasswordHash = hashedPassword
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("パスワードの更新に失敗しました: %w", err)
+	}
+
+	return nil
+}
+
+func (s *authService) UpdateEmail(ctx context.Context, schoolCode, email string) error {
+	// ユーザーを取得
+	user, err := s.userRepo.GetBySchoolCode(ctx, schoolCode)
+	if err != nil {
+		return fmt.Errorf("ユーザーが見つかりません: %w", err)
+	}
+
+	// メールアドレスを更新
+	user.Email = email
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("メールアドレスの更新に失敗しました: %w", err)
+	}
+
+	return nil
+}
+
+func (s *authService) UpdateProfileImage(ctx context.Context, schoolCode, image string) error {
+	// ユーザーを取得
+	user, err := s.userRepo.GetBySchoolCode(ctx, schoolCode)
+	if err != nil {
+		return fmt.Errorf("ユーザーが見つかりません: %w", err)
+	}
+
+	// プロフィール画像を更新
+	user.ProfileImage = &image
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("プロフィール画像の更新に失敗しました: %w", err)
+	}
+
+	return nil
+}
+
+func (s *authService) DeleteProfileImage(ctx context.Context, schoolCode string) error {
+	// ユーザーを取得
+	user, err := s.userRepo.GetBySchoolCode(ctx, schoolCode)
+	if err != nil {
+		return fmt.Errorf("ユーザーが見つかりません: %w", err)
+	}
+
+	// プロフィール画像を削除
+	user.ProfileImage = nil
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("プロフィール画像の削除に失敗しました: %w", err)
 	}
 
 	return nil

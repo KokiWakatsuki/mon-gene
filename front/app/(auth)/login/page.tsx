@@ -10,7 +10,6 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({
     schoolCode: '',
     password: '',
-    remember: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -45,7 +44,7 @@ export default function LoginPage() {
 
     try {
       console.log('API URL:', API_CONFIG.API_BASE_URL);
-      console.log('Login data:', { schoolCode: formData.schoolCode, password: formData.password, remember: formData.remember });
+      console.log('Login data:', { schoolCode: formData.schoolCode, password: formData.password });
       
       const response = await fetch(API_CONFIG.LOGIN_API_URL, {
         method: 'POST',
@@ -53,7 +52,6 @@ export default function LoginPage() {
         body: JSON.stringify({
           schoolCode: formData.schoolCode,
           password: formData.password,
-          remember: formData.remember,
         }),
       });
       
@@ -125,99 +123,91 @@ export default function LoginPage() {
       <BackgroundShapes />
       
       <div className="relative z-10 max-w-7xl mx-auto p-6">
-        {/* Header */}
-        <header className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-mongene-blue rounded-lg" aria-hidden="true"></div>
-            <div className="font-extrabold text-mongene-blue">Mongene</div>
-          </div>
-        </header>
-
         {/* Main Content */}
-        <main className="grid place-items-center p-6" aria-labelledby="loginTitle">
-          <section className="w-full max-w-lg bg-white border border-mongene-border rounded-2xl shadow-xl p-5" role="region" aria-label="ログインフォーム">
-            <h1 id="loginTitle" className="text-2xl font-semibold mb-1.5">ログイン</h1>
-            <p className="text-mongene-muted text-sm mb-4">塾コードとパスワードを入力してください。</p>
+        <main className="grid place-items-center min-h-screen p-6" aria-labelledby="loginTitle">
+          <div className="flex flex-col gap-8 items-center w-full max-w-lg">
+            {/* Logo Section */}
+            <div className="flex justify-center items-center w-full">
+              <img
+                src="/images/モンジェネロゴタイプ.svg"
+                alt="Mongene"
+                className="w-full max-w-sm h-auto object-contain"
+              />
+            </div>
 
-            {error && (
-              <div className="border border-red-200 bg-red-50 text-red-800 rounded-lg p-2.5 text-sm mb-3" role="alert">
-                {error}
-              </div>
-            )}
+            {/* Login Form Section */}
+            <section className="w-full bg-white border border-mongene-border rounded-2xl shadow-xl p-8" role="region" aria-label="ログインフォーム">
+              <h1 id="loginTitle" className="text-2xl font-semibold mb-1.5">ログイン</h1>
+              <p className="text-mongene-muted text-sm mb-4">塾コードとパスワードを入力してください。</p>
 
-            <form onSubmit={handleSubmit} noValidate className="grid gap-3">
-              <div>
-                <label htmlFor="schoolCode" className="block font-bold text-sm mb-1">塾コード</label>
-                <input
-                  className="w-full border border-mongene-border rounded-xl px-3.5 py-3 text-base focus:outline-none focus:ring-3 focus:ring-mongene-blue/25 focus:ring-offset-2"
-                  id="schoolCode"
-                  name="schoolCode"
-                  type="text"
-                  placeholder="例: ABC123"
-                  value={formData.schoolCode}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+              {error && (
+                <div className="border border-red-200 bg-red-50 text-red-800 rounded-lg p-2.5 text-sm mb-3" role="alert">
+                  {error}
+                </div>
+              )}
 
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label htmlFor="password" className="font-bold text-sm">パスワード</label>
-                  <button 
+              <form onSubmit={handleSubmit} noValidate className="grid gap-3">
+                <div>
+                  <label htmlFor="schoolCode" className="block font-bold text-sm mb-1">塾コード</label>
+                  <input
+                    className="w-full border border-mongene-border rounded-xl px-3.5 py-3 text-base focus:outline-none focus:ring-3 focus:ring-mongene-blue/25 focus:ring-offset-2"
+                    id="schoolCode"
+                    name="schoolCode"
+                    type="text"
+                    placeholder="例: ABC123"
+                    value={formData.schoolCode}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="password" className="block font-bold text-sm mb-1.5">パスワード</label>
+                  <div className="relative">
+                    <input
+                      className="w-full border border-mongene-border rounded-xl px-3.5 py-3 text-base focus:outline-none focus:ring-3 focus:ring-mongene-blue/25 focus:ring-offset-2"
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                      minLength={8}
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 border border-mongene-border bg-white rounded-lg px-2 py-1.5 font-bold text-xs cursor-pointer"
+                      aria-controls="password"
+                      aria-label="パスワードの表示切替"
+                      onClick={togglePasswordVisibility}
+                    >
+                      {showPassword ? '非表示' : '表示'}
+                    </button>
+                  </div>
+                  <button
                     type="button"
-                    className="text-sm text-blue-600 no-underline hover:underline bg-transparent border-none cursor-pointer"
+                    className="text-sm text-blue-600 no-underline hover:underline bg-transparent border-none cursor-pointer mt-2"
                     onClick={() => setShowForgotPassword(true)}
                   >
                     パスワードをお忘れですか？
                   </button>
                 </div>
-                <div className="relative">
-                  <input
-                    className="w-full border border-mongene-border rounded-xl px-3.5 py-3 text-base focus:outline-none focus:ring-3 focus:ring-mongene-blue/25 focus:ring-offset-2"
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    minLength={8}
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    required
-                  />
+
+                <div className="flex justify-end">
                   <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 border border-mongene-border bg-white rounded-lg px-2 py-1.5 font-bold text-xs cursor-pointer"
-                    aria-controls="password"
-                    aria-label="パスワードの表示切替"
-                    onClick={togglePasswordVisibility}
+                    className="appearance-none border-0 rounded-xl px-4 py-3 font-extrabold cursor-pointer bg-mongene-green text-white shadow-lg hover:brightness-98 hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-3 focus:ring-mongene-green/25 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    type="submit"
+                    aria-label="サインイン"
+                    disabled={isLoading}
                   >
-                    {showPassword ? '非表示' : '表示'}
+                    {isLoading ? 'ログイン中...' : 'サインイン'}
                   </button>
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <label className="flex items-center gap-2 font-semibold">
-                  <input
-                    type="checkbox"
-                    id="remember"
-                    name="remember"
-                    checked={formData.remember}
-                    onChange={handleInputChange}
-                  />
-                  次回から自動的にログイン
-                </label>
-                <button
-                  className="appearance-none border-0 rounded-xl px-4 py-3 font-extrabold cursor-pointer bg-mongene-green text-white shadow-lg hover:brightness-98 hover:-translate-y-0.5 transition-all focus:outline-none focus:ring-3 focus:ring-mongene-green/25 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  type="submit"
-                  aria-label="サインイン"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'ログイン中...' : 'サインイン'}
-                </button>
-              </div>
-            </form>
-          </section>
+              </form>
+            </section>
+          </div>
         </main>
       </div>
 

@@ -39,3 +39,18 @@ type SessionRepository interface {
 	Delete(ctx context.Context, token string) error
 	DeleteExpired(ctx context.Context) error
 }
+
+type SearchFilterRepository interface {
+	Create(ctx context.Context, filter *models.SearchFilter) error
+	GetByID(ctx context.Context, id int64) (*models.SearchFilter, error)
+	GetByUserID(ctx context.Context, userID int64) ([]*models.SearchFilter, error)
+	Update(ctx context.Context, filter *models.SearchFilter) error
+	Delete(ctx context.Context, id int64) error
+}
+
+type SourceListRepository interface {
+	Create(item *models.SourceListItem) error
+	GetByUserID(userID int64) ([]*models.SourceListItem, error)
+	Delete(id int64, userID int64) error
+	DeleteByYearAndExam(userID int64, year string, examSession string) error
+}

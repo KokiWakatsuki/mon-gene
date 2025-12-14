@@ -34,7 +34,7 @@ func (r *MySQLUserRepository) GetBySchoolCode(ctx context.Context, schoolCode st
 		SELECT id, school_code, email, password_hash, problem_generation_limit,
 			   problem_generation_count, figure_regeneration_limit, figure_regeneration_count,
 			   preview_limit, preview_count,
-			   role, preferred_api, preferred_model, created_at, updated_at
+			   role, preferred_api, preferred_model, profile_image, created_at, updated_at
 		FROM users WHERE school_code = ?
 	`
 	
@@ -52,7 +52,7 @@ func (r *MySQLUserRepository) GetByID(ctx context.Context, id int64) (*models.Us
 		SELECT id, school_code, email, password_hash, problem_generation_limit,
 			   problem_generation_count, figure_regeneration_limit, figure_regeneration_count,
 			   preview_limit, preview_count,
-			   role, preferred_api, preferred_model, created_at, updated_at
+			   role, preferred_api, preferred_model, profile_image, created_at, updated_at
 		FROM users WHERE id = ?
 	`
 	
@@ -91,17 +91,17 @@ func (r *MySQLUserRepository) Create(ctx context.Context, user *models.User) err
 
 func (r *MySQLUserRepository) Update(ctx context.Context, user *models.User) error {
 	query := `
-		UPDATE users 
-		SET email = ?, password_hash = ?, problem_generation_limit = ?, 
+		UPDATE users
+		SET email = ?, password_hash = ?, problem_generation_limit = ?,
 			problem_generation_count = ?, figure_regeneration_limit = ?, figure_regeneration_count = ?,
-			role = ?, preferred_api = ?, preferred_model = ?
+			role = ?, preferred_api = ?, preferred_model = ?, profile_image = ?
 		WHERE id = ?
 	`
 	
-	_, err := r.db.Exec(query, 
+	_, err := r.db.Exec(query,
 		user.Email, user.PasswordHash, user.ProblemGenerationLimit, user.ProblemGenerationCount,
 		user.FigureRegenerationLimit, user.FigureRegenerationCount,
-		user.Role, user.PreferredAPI, user.PreferredModel, user.ID)
+		user.Role, user.PreferredAPI, user.PreferredModel, user.ProfileImage, user.ID)
 	if err != nil {
 		return fmt.Errorf("ユーザーの更新に失敗: %w", err)
 	}

@@ -15,6 +15,8 @@ func NewRouter(
 	healthHandler *handlers.HealthHandler,
 	chatHandler *handlers.ChatHandler,
 	sseHandler *handlers.SSEHandler,
+	searchFilterHandler *handlers.SearchFilterHandler,
+	sourceListHandler *handlers.SourceListHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -52,6 +54,38 @@ func NewRouter(
 		switch r.Method {
 		case "PUT", "OPTIONS":
 			authHandler.UpdateUserSettings(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	// User password endpoint (supports PUT and OPTIONS)
+	mux.HandleFunc("/api/user/password", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PUT", "OPTIONS":
+			authHandler.UpdatePassword(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	// User email endpoint (supports PUT and OPTIONS)
+	mux.HandleFunc("/api/user/email", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PUT", "OPTIONS":
+			authHandler.UpdateEmail(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	// User profile image endpoint (supports PUT, DELETE and OPTIONS)
+	mux.HandleFunc("/api/user/profile-image", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "PUT", "OPTIONS":
+			authHandler.UpdateProfileImage(w, r)
+		case "DELETE":
+			authHandler.DeleteProfileImage(w, r)
 		default:
 			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}
@@ -217,6 +251,52 @@ func NewRouter(
 		switch r.Method {
 		case "POST", "OPTIONS":
 			chatHandler.Chat(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	// Search filter endpoints
+	mux.HandleFunc("/api/search-filters", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET", "OPTIONS":
+			searchFilterHandler.GetUserSearchFilters(w, r)
+		case "POST":
+			searchFilterHandler.CreateSearchFilter(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	mux.HandleFunc("/api/search-filters/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET", "OPTIONS":
+			searchFilterHandler.GetSearchFilter(w, r)
+		case "PUT":
+			searchFilterHandler.UpdateSearchFilter(w, r)
+		case "DELETE":
+			searchFilterHandler.DeleteSearchFilter(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	// Source list endpoints
+	mux.HandleFunc("/api/source-list", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET", "OPTIONS":
+			sourceListHandler.GetUserItems(w, r)
+		case "POST":
+			sourceListHandler.CreateItem(w, r)
+		default:
+			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	})
+
+	mux.HandleFunc("/api/source-list/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "DELETE", "OPTIONS":
+			sourceListHandler.DeleteItem(w, r)
 		default:
 			utils.WriteErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 		}

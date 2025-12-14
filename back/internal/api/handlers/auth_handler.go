@@ -158,7 +158,200 @@ func (h *AuthHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 		"preview_count":             user.PreviewCount,
 	}
 
+	if user.ProfileImage != nil {
+		response["profile_image"] = *user.ProfileImage
+	}
+
 	utils.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	utils.EnableCORS(w)
+	
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "現在のパスワードと新しいパスワードは必須です")
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "新しいパスワードは8文字以上である必要があります")
+		return
+	}
+
+	err = h.authService.UpdatePassword(r.Context(), user.SchoolCode, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "パスワードを変更しました",
+	})
+}
+
+func (h *AuthHandler) UpdateEmail(w http.ResponseWriter, r *http.Request) {
+	utils.EnableCORS(w)
+	
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	if req.Email == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "メールアドレスは必須です")
+		return
+	}
+
+	err = h.authService.UpdateEmail(r.Context(), user.SchoolCode, req.Email)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "メールアドレスを変更しました",
+	})
+}
+
+func (h *AuthHandler) UpdateProfileImage(w http.ResponseWriter, r *http.Request) {
+	utils.EnableCORS(w)
+	
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	var req struct {
+		Image string `json:"image"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	if req.Image == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "画像データは必須です")
+		return
+	}
+
+	err = h.authService.UpdateProfileImage(r.Context(), user.SchoolCode, req.Image)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "プロフィール画像を更新しました",
+	})
+}
+
+func (h *AuthHandler) DeleteProfileImage(w http.ResponseWriter, r *http.Request) {
+	utils.EnableCORS(w)
+	
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "認証トークンが必要です")
+		return
+	}
+
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	user, err := h.authService.ValidateToken(r.Context(), token)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "無効な認証トークンです")
+		return
+	}
+
+	err = h.authService.DeleteProfileImage(r.Context(), user.SchoolCode)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.WriteJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "プロフィール画像を削除しました",
+	})
 }
 
 func (h *AuthHandler) UpdateUserSettings(w http.ResponseWriter, r *http.Request) {

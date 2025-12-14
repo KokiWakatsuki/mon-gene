@@ -91,20 +91,6 @@ export default function Home() {
     isChecked?: boolean;
   }>({});
   
-  // 検索リスト
-  interface SavedSearch {
-    id: string;
-    name: string;
-    keyword: string;
-    filters: {
-      units?: string[];
-      year?: string;
-      examSession?: string;
-      isChecked?: boolean;
-    };
-  }
-  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  
   // チェックフォームモーダルの状態
   const [checkFormModal, setCheckFormModal] = useState<{
     isOpen: boolean;
@@ -1744,40 +1730,6 @@ export default function Home() {
       alert('検索に失敗しました');
     }
   };
-  
-  // 検索条件をリセット
-  const resetSearchConditions = () => {
-    setSearchKeyword('');
-    setSearchFilters({});
-    setIsSearchMode(false);
-  };
-  
-  // 現在の検索条件を保存
-  const saveCurrentSearch = () => {
-    const searchName = prompt('検索条件の名前を入力してください:');
-    if (!searchName) return;
-    
-    const newSearch: SavedSearch = {
-      id: Date.now().toString(),
-      name: searchName,
-      keyword: searchKeyword,
-      filters: { ...searchFilters },
-    };
-    
-    setSavedSearches([...savedSearches, newSearch]);
-    alert('検索条件を保存しました');
-  };
-  
-  // 保存した検索条件を適用
-  const applySavedSearch = (search: SavedSearch) => {
-    setSearchKeyword(search.keyword);
-    setSearchFilters(search.filters);
-  };
-  
-  // 保存した検索条件を削除
-  const deleteSavedSearch = (id: string) => {
-    setSavedSearches(savedSearches.filter(s => s.id !== id));
-  };
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -1786,7 +1738,7 @@ export default function Home() {
       <div className="relative z-10">
         <Header />
         
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <Tabs
             subjects={subjects}
             activeSubject={activeSubject}
@@ -1826,57 +1778,6 @@ export default function Home() {
                     </button>
                   </div>
                   
-                  {/* 検索条件の操作ボタン */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={resetSearchConditions}
-                      className="px-4 py-2 bg-gray-500 text-white text-sm rounded-lg font-semibold hover:bg-gray-600 transition-colors"
-                    >
-                      🔄 リセット
-                    </button>
-                    <button
-                      onClick={saveCurrentSearch}
-                      className="px-4 py-2 bg-green-500 text-white text-sm rounded-lg font-semibold hover:bg-green-600 transition-colors"
-                    >
-                      💾 検索リストに追加
-                    </button>
-                  </div>
-                  
-                  {/* 保存した検索条件のリスト */}
-                  {savedSearches.length > 0 && (
-                    <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                      <h4 className="text-sm font-bold text-gray-700 mb-3">📋 保存した検索条件</h4>
-                      <div className="flex flex-col gap-2">
-                        {savedSearches.map((search) => (
-                          <div key={search.id} className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg">
-                            <div className="flex-1">
-                              <div className="font-semibold text-sm text-gray-800">{search.name}</div>
-                              <div className="text-xs text-gray-500">
-                                {search.keyword && `キーワード: ${search.keyword}`}
-                                {search.filters.units && search.filters.units.length > 0 && ` | 単元: ${search.filters.units.join(', ')}`}
-                                {search.filters.year && ` | 年度: ${search.filters.year}`}
-                                {search.filters.examSession && ` | 回数: ${search.filters.examSession}`}
-                                {search.filters.isChecked === true && ` | ステータス: チェック済み`}
-                                {search.filters.isChecked === false && ` | ステータス: 未チェック`}
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => applySavedSearch(search)}
-                              className="px-3 py-1 bg-blue-500 text-white text-xs rounded font-semibold hover:bg-blue-600 transition-colors"
-                            >
-                              適用
-                            </button>
-                            <button
-                              onClick={() => deleteSavedSearch(search.id)}
-                              className="px-2 py-1 text-red-500 hover:text-red-700 text-sm font-bold"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
             
             {/* 検索オプション（アコーディオン） */}
@@ -1885,6 +1786,9 @@ export default function Home() {
               onOpinionProfileChange={setOpinionProfileV2}
               searchFilters={searchFilters}
               onSearchFiltersChange={setSearchFilters}
+              keyword={searchKeyword}
+              subject={activeSubject}
+              onKeywordChange={setSearchKeyword}
             />
             
             {/* 検索モード時の「一覧に戻る」ボタン */}
@@ -1904,7 +1808,7 @@ export default function Home() {
               </div>
             )}
             
-                <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6" aria-label="問題一覧">
+                <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6" aria-label="問題一覧">
                   {(isSearchMode ? searchResults : problems).map((problem) => (
                     <ProblemCard
                       key={problem.id}
@@ -1928,9 +1832,9 @@ export default function Home() {
             <div className="mb-10">
               <div className="flex items-center gap-3 mb-3">
                 <span className="w-6 h-6 bg-gray-800 text-white rounded-full flex items-center justify-center font-extrabold text-base pb-0.5">1</span>
-                <h3 className="text-xl text-gray-800 font-semibold m-0">画像をアップロード</h3>
+                <h3 className="text-xl text-gray-800 font-semibold m-0">ファイルをアップロード</h3>
               </div>
-              <p className="text-sm text-gray-500 ml-9 mb-4">問題文の画像と、あれば解答の画像をアップロードしてください。</p>
+              <p className="text-sm text-gray-500 ml-9 mb-4">問題文のファイルと、解答のファイルをアップロードしてください。</p>
               
               <FileUpload
               uploadedFiles={uploadedFiles}

@@ -337,7 +337,7 @@ export default function SettingsPage() {
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-800">設定</h1>
+              <h1 className="text-2xl font-bold text-gray-800">モデル実証実験画面</h1>
               <div className="space-x-2">
                 <button
                   onClick={() => router.push('/problems')}

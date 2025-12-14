@@ -72,14 +72,14 @@ export default function ProblemCard({ id, title, content, imageBase64, isChecked
       </div>
       <div className="border-t border-gray-200 px-6 py-4 flex gap-2 bg-gray-50 rounded-b-xl mt-auto">
         <button
-          className="flex-1 appearance-none border border-blue-500 rounded-lg px-3 py-2 text-sm font-bold cursor-pointer bg-blue-500 text-white hover:brightness-110 transition-all shadow-sm"
+          className="appearance-none border border-blue-500 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-blue-500 text-white hover:brightness-110 transition-all shadow-sm"
           type="button"
           onClick={() => onPreview(id)}
         >
           プレビュー
         </button>
         <button
-          className="flex-1 appearance-none border border-gray-300 rounded-lg px-3 py-2 text-sm font-bold cursor-pointer bg-white text-gray-800 hover:bg-gray-50 transition-all shadow-sm"
+          className="appearance-none border border-gray-300 rounded-lg px-4 py-2 text-sm font-bold cursor-pointer bg-white text-gray-800 hover:bg-gray-50 transition-all shadow-sm"
           type="button"
           onClick={() => onPrint(id)}
         >

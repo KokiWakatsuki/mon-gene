@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"time"
+)
 
 type Problem struct {
 	ID          int64                  `json:"id" db:"id"`
@@ -128,4 +132,96 @@ type UpdateCheckInfoResponse struct {
 	Success bool     `json:"success"`
 	Problem *Problem `json:"problem,omitempty"`
 	Error   string   `json:"error,omitempty"`
+}
+
+// SearchFilter は保存された検索条件を表す構造体
+type SearchFilter struct {
+	ID          int64      `json:"id" db:"id"`
+	UserID      int64      `json:"user_id" db:"user_id"`
+	Name        string     `json:"name" db:"name"`
+	Keyword     string     `json:"keyword,omitempty" db:"keyword"`
+	Subject     string     `json:"subject,omitempty" db:"subject"`
+	Units       StringList `json:"units,omitempty" db:"units"`
+	Year        string     `json:"year,omitempty" db:"year"`
+	ExamSession string     `json:"exam_session,omitempty" db:"exam_session"`
+	IsChecked   *bool      `json:"is_checked,omitempty" db:"is_checked"` // null許容のためポインタ
+	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+// StringList はJSON配列として保存される文字列リスト
+type StringList []string
+
+// Scan はデータベースからの読み込み時に呼ばれる
+func (s *StringList) Scan(value interface{}) error {
+	if value == nil {
+		*s = []string{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(bytes, s)
+}
+
+// Value はデータベースへの書き込み時に呼ばれる
+func (s StringList) Value() (driver.Value, error) {
+	if len(s) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(s)
+}
+
+// CreateSearchFilterRequest は検索条件作成リクエスト
+type CreateSearchFilterRequest struct {
+	Name        string   `json:"name" validate:"required"`
+	Keyword     string   `json:"keyword,omitempty"`
+	Subject     string   `json:"subject,omitempty"`
+	Units       []string `json:"units,omitempty"`
+	Year        string   `json:"year,omitempty"`
+	ExamSession string   `json:"exam_session,omitempty"`
+	IsChecked   *bool    `json:"is_checked,omitempty"`
+}
+
+// UpdateSearchFilterRequest は検索条件更新リクエスト
+type UpdateSearchFilterRequest struct {
+	ID          int64    `json:"id" validate:"required"`
+	Name        string   `json:"name" validate:"required"`
+	Keyword     string   `json:"keyword,omitempty"`
+	Subject     string   `json:"subject,omitempty"`
+	Units       []string `json:"units,omitempty"`
+	Year        string   `json:"year,omitempty"`
+	ExamSession string   `json:"exam_session,omitempty"`
+	IsChecked   *bool    `json:"is_checked,omitempty"`
+}
+
+// SearchFilterResponse は検索条件のレスポンス
+type SearchFilterResponse struct {
+	Success      bool            `json:"success"`
+	SearchFilter *SearchFilter   `json:"search_filter,omitempty"`
+	Filters      []*SearchFilter `json:"filters,omitempty"`
+	Error        string          `json:"error,omitempty"`
+}
+
+// SourceListItem は出典リストの項目を表す
+type SourceListItem struct {
+	ID          int64     `db:"id" json:"id"`
+	UserID      int64     `db:"user_id" json:"user_id"`
+	Year        string    `db:"year" json:"year"`
+	ExamSession string    `db:"exam_session" json:"exam_session"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+}
+
+// CreateSourceListItemRequest は出典リスト項目作成リクエスト
+type CreateSourceListItemRequest struct {
+	Year        string `json:"year" binding:"required"`
+	ExamSession string `json:"exam_session" binding:"required"`
+}
+
+// SourceListResponse は出典リスト取得レスポンス
+type SourceListResponse struct {
+	Success bool              `json:"success"`
+	Items   []*SourceListItem `json:"items,omitempty"`
+	Error   string            `json:"error,omitempty"`
 }
