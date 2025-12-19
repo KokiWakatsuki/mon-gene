@@ -70,6 +70,7 @@ export default function Home() {
     problem_generation_count: number;
     preview_limit: number;
     preview_count: number;
+    role?: string;
   } | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -2216,6 +2217,7 @@ export default function Home() {
           setCurrentStage(stage);
           console.log(`📊 [Frontend] Stage ${stage} に移行`);
         }}
+        isDemoMode={userInfo?.role === 'demo'}
       />
 
       {/* チェックフォームモーダル */}

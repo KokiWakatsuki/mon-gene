@@ -28,6 +28,7 @@ interface UserInfo {
   problem_generation_count: number;
   figure_regeneration_limit: number;
   figure_regeneration_count: number;
+  role: string;
 }
 
 export interface CheckInfo {
@@ -112,10 +113,17 @@ export default function ProblemPreviewModal({
   // 図形再生成制限チェック
   const isFigureRegenerationLimitReached = () => {
     if (!userInfo) return true; // ユーザー情報がない場合は安全のため制限扱い
+    // デモモードの場合は常に制限扱い
+    if (userInfo.role === 'demo') return true;
     if (userInfo.figure_regeneration_limit === undefined || userInfo.figure_regeneration_limit === null) return true;
     if (userInfo.figure_regeneration_count === undefined || userInfo.figure_regeneration_count === null) return true;
     if (userInfo.figure_regeneration_limit === -1) return false; // 制限なし
     return userInfo.figure_regeneration_count >= userInfo.figure_regeneration_limit;
+  };
+  
+  // デモモードかどうかを判定
+  const isDemoMode = () => {
+    return userInfo?.role === 'demo';
   };
 
   // モーダルが開かれたときにユーザー情報を取得
@@ -614,10 +622,16 @@ export default function ProblemPreviewModal({
                             <h3 className="text-lg font-semibold text-mongene-ink">図形</h3>
                             {userInfo && (
                               <div className="text-xs text-mongene-muted mt-1">
-                                図形再生成回数: {userInfo.figure_regeneration_count ?? 0}/
-                                {userInfo.figure_regeneration_limit === -1 ? '無制限' : (userInfo.figure_regeneration_limit ?? 0)}
-                                {isFigureRegenerationLimitReached() && (
-                                  <span className="text-red-600 font-bold ml-2">⚠️ 上限到達</span>
+                                {isDemoMode() ? (
+                                  <span className="text-orange-600 font-bold">デモモードでは図形の再生成はサポートされていません</span>
+                                ) : (
+                                  <>
+                                    図形再生成回数: {userInfo.figure_regeneration_count ?? 0}/
+                                    {userInfo.figure_regeneration_limit === -1 ? '無制限' : (userInfo.figure_regeneration_limit ?? 0)}
+                                    {isFigureRegenerationLimitReached() && (
+                                      <span className="text-red-600 font-bold ml-2">⚠️ 上限到達</span>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             )}
@@ -657,8 +671,10 @@ export default function ProblemPreviewModal({
                                       ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
                                       : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed'
                                   }`}
+                                  title={isDemoMode() ? 'デモモードでは図形の再生成はサポートされていません' : ''}
                                 >
                                   {isLoading ? '再生成中...' :
+                                   isDemoMode() ? 'デモモードでは利用不可' :
                                    isFigureRegenerationLimitReached() ? '再生成不可' : '図形を再生成'}
                                 </button>
                               </div>
@@ -674,8 +690,10 @@ export default function ProblemPreviewModal({
                                     ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
                                     : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed'
                                 }`}
+                                title={isDemoMode() ? 'デモモードでは図形の生成はサポートされていません' : ''}
                               >
                                 {isLoading ? '生成中...' :
+                                 isDemoMode() ? 'デモモードでは利用不可' :
                                  isFigureRegenerationLimitReached() ? '生成不可' : '図形を生成'}
                               </button>
                             </div>

@@ -4,8 +4,13 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
+	"strconv"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/mon-gene/back/internal/models"
@@ -16,7 +21,14 @@ type MySQLProblemRepository struct {
 }
 
 func NewMySQLProblemRepository(db *sqlx.DB) ProblemRepository {
-	return &MySQLProblemRepository{db: db}
+	repo := &MySQLProblemRepository{db: db}
+	
+	// CSVからseedデータを読み込み
+	if err := repo.loadSeedData(); err != nil {
+		log.Printf("⚠️ problem seedデータの読み込みに失敗: %v", err)
+	}
+	
+	return repo
 }
 
 // 共通のスキャン処理（opinion_profile + opinion_profile_v2 + check_info対応）
@@ -951,4 +963,76 @@ func (r *MySQLProblemRepository) SearchByKeyword(ctx context.Context, userID int
 	}
 
 	return problems, nil
+}
+
+// loadSeedData はCSVファイルからseedデータを読み込んでデータベースに挿入します
+func (r *MySQLProblemRepository) loadSeedData() error {
+	// 既存の問題数をチェック
+	var count int
+	if err := r.db.Get(&count, "SELECT COUNT(*) FROM problems"); err != nil {
+		return fmt.Errorf("問題数の取得に失敗: %w", err)
+	}
+	
+	// 既に問題が存在する場合はseedデータの読み込みをスキップ
+	if count > 0 {
+		log.Printf("✅ 既存の問題が%d件存在するため、seedデータの読み込みをスキップします", count)
+		return nil
+	}
+
+	file, err := os.Open("data/problem.csv")
+	if err != nil {
+		return fmt.Errorf("CSVファイルの読み込みに失敗: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return fmt.Errorf("CSV解析に失敗: %w", err)
+	}
+
+	// ヘッダーをスキップ
+	for i, record := range records[1:] {
+		if len(record) < 8 {
+			log.Printf("⚠️ 行%d: データが不完全です: %v", i+2, record)
+			continue
+		}
+
+		userID, err := strconv.ParseInt(record[1], 10, 64)
+		if err != nil {
+			log.Printf("⚠️ 行%d: user_idの解析に失敗: %v", i+2, err)
+			continue
+		}
+
+		problem := &models.Problem{
+			UserID:      userID,
+			Subject:     record[2],
+			Prompt:      record[3],
+			Content:     record[4],
+			Solution:    record[5],
+			ImageBase64: record[6],
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+
+		// OpinionProfileV2がある場合はパース
+		if len(record) > 7 && record[7] != "" {
+			var opinionProfileV2 models.OpinionProfileV2
+			if err := json.Unmarshal([]byte(record[7]), &opinionProfileV2); err != nil {
+				log.Printf("⚠️ 行%d: opinion_profile_v2の解析に失敗: %v", i+2, err)
+			} else {
+				problem.OpinionProfileV2 = &opinionProfileV2
+			}
+		}
+
+		if err := r.Create(context.Background(), problem); err != nil {
+			log.Printf("⚠️ 行%d: 問題作成に失敗: %v", i+2, err)
+			continue
+		}
+
+		log.Printf("📝 問題追加: ID=%d, UserID=%d, Subject=%s", problem.ID, problem.UserID, problem.Subject)
+	}
+
+	log.Printf("✅ CSVファイルから %d 件の問題を読み込みました", len(records)-1)
+	return nil
 }

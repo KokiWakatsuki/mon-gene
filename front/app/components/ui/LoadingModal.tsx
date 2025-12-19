@@ -10,6 +10,7 @@ interface LoadingModalProps {
   currentStage?: number;
   maxStages?: number; // 最大ステージ数（5 or 15）
   onStageChange?: (stage: number) => void;
+  isDemoMode?: boolean; // デモモードフラグ
 }
 
 export default function LoadingModal({
@@ -19,7 +20,8 @@ export default function LoadingModal({
   estimatedDuration = 60000,
   currentStage: externalStage,
   maxStages = 5,
-  onStageChange
+  onStageChange,
+  isDemoMode = false
 }: LoadingModalProps) {
   const [progress, setProgress] = useState(0);
   const [currentStage, setCurrentStage] = useState(1);
@@ -135,6 +137,16 @@ export default function LoadingModal({
       `}</style>
       
       <div className="bg-white p-5 rounded-2xl w-[95%] max-w-[850px] h-[92vh] max-h-[950px] flex flex-col overflow-hidden relative shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]">
+        {/* デモモードバッジ */}
+        {isDemoMode && (
+          <div className="absolute top-4 right-4 bg-orange-100 text-orange-600 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            デモモード
+          </div>
+        )}
+        
         {/* Loading View */}
         <div className="flex-1 w-full h-full flex flex-col justify-center items-center p-5">
           <div className="mb-6 flex">
@@ -152,9 +164,15 @@ export default function LoadingModal({
             </svg>
           </div>
           
-          <h3 className="m-0 mb-5 text-lg font-bold text-gray-800 tracking-wider">
+          <h3 className="m-0 mb-3 text-lg font-bold text-gray-800 tracking-wider">
             {showProgress ? '準備中...' : message}
           </h3>
+          
+          {isDemoMode && (
+            <p className="text-sm text-orange-600 font-medium mb-4 bg-orange-50 px-4 py-2 rounded-lg">
+              事前に用意された問題を読み込んでいます
+            </p>
+          )}
           
           {showProgress && (
             <>

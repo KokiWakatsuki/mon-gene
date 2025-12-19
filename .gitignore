@@ -82,6 +82,7 @@ Thumbs.db
 
 # User data files (sensitive information)
 back/data/users.csv
+back/data/problem.csv
 
 # Go specific
 *.exe

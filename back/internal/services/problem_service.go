@@ -557,6 +557,11 @@ func (s *problemService) RegenerateGeometry(ctx context.Context, req models.Rege
 	if err != nil {
 		return "", fmt.Errorf("failed to get user: %w", err)
 	}
+	
+	// デモモードチェック：roleが"demo"の場合はエラーを返す
+	if user.Role == "demo" {
+		return "", fmt.Errorf("デモモードでは図形の再生成はサポートされていません")
+	}
 
 	// 図形再生成回数の制限をチェック
 	if user.FigureRegenerationLimit >= 0 && user.FigureRegenerationCount >= user.FigureRegenerationLimit {
@@ -2076,6 +2081,12 @@ func (s *problemService) GenerateThreeProblemsWithProgress(ctx context.Context, 
 		}, nil
 	}
 	
+	// デモモードチェック：roleが"demo"の場合は事前データを返す
+	if user.Role == "demo" {
+		fmt.Printf("🎭 [ThreeProblems] Demo mode detected for user: %s\n", userSchoolCode)
+		return s.generateDemoProblems(ctx, user.ID, req.Subject, progressCallback)
+	}
+	
 	// 1.5. PDFデータがある場合は、Google Files APIを使用してテキストを抽出
 	var uploadedProblemContent string
 	if len(req.UploadedProblemPDF) > 0 {
@@ -2502,4 +2513,83 @@ func (s *problemService) executePatternStage(
 	logBuilder.WriteString(fmt.Sprintf("✅ [Stage%d] ステージ%dが完了しました\n", stage, stage))
 	
 	return content, logBuilder.String(), nil
+}
+
+// generateDemoProblems デモモード用に事前データ(id=2,3,4)を返す
+func (s *problemService) generateDemoProblems(ctx context.Context, userID int64, subject string, progressCallback func(stage int, message string)) (*models.ThreeProblemGenerationResponse, error) {
+	fmt.Printf("🎭 [DemoMode] Fetching pre-generated problems (id=2,3,4) for demo user\n")
+	
+	// 進捗通知（デモモードであることを明示）
+	if progressCallback != nil {
+		progressCallback(1, "デモモード：事前生成された問題を読み込んでいます...")
+	}
+	
+	// デモモードであることを示すために5秒待機
+	fmt.Printf("⏳ [DemoMode] Waiting 5 seconds to simulate generation process...\n")
+	time.Sleep(5 * time.Second)
+	
+	// id=2,3,4の問題を取得
+	problem2, err := s.problemRepo.GetByID(ctx, 2)
+	if err != nil {
+		return &models.ThreeProblemGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("デモ問題(id=2)の取得に失敗しました: %v", err),
+		}, nil
+	}
+	
+	problem3, err := s.problemRepo.GetByID(ctx, 3)
+	if err != nil {
+		return &models.ThreeProblemGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("デモ問題(id=3)の取得に失敗しました: %v", err),
+		}, nil
+	}
+	
+	problem4, err := s.problemRepo.GetByID(ctx, 4)
+	if err != nil {
+		return &models.ThreeProblemGenerationResponse{
+			Success: false,
+			Error:   fmt.Sprintf("デモ問題(id=4)の取得に失敗しました: %v", err),
+		}, nil
+	}
+	
+	// 進捗通知
+	if progressCallback != nil {
+		progressCallback(15, "デモモード：問題の読み込みが完了しました")
+	}
+	
+	fmt.Printf("✅ [DemoMode] Successfully fetched 3 demo problems\n")
+	
+	// PatternResultに変換
+	patternA := &models.PatternResult{
+		Success:             true,
+		Content:             problem2.Content,
+		Solution:            problem2.Solution,
+		ImageBase64:         problem2.ImageBase64,
+		ConversationHistory: problem2.ConversationHistory,
+	}
+	
+	patternB := &models.PatternResult{
+		Success:             true,
+		Content:             problem3.Content,
+		Solution:            problem3.Solution,
+		ImageBase64:         problem3.ImageBase64,
+		ConversationHistory: problem3.ConversationHistory,
+	}
+	
+	patternC := &models.PatternResult{
+		Success:             true,
+		Content:             problem4.Content,
+		Solution:            problem4.Solution,
+		ImageBase64:         problem4.ImageBase64,
+		ConversationHistory: problem4.ConversationHistory,
+	}
+	
+	return &models.ThreeProblemGenerationResponse{
+		Success:  true,
+		PatternA: *patternA,
+		PatternB: *patternB,
+		PatternC: *patternC,
+		Log:      "デモモード：事前生成された3問を返しました",
+	}, nil
 }

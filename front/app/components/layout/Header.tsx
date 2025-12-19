@@ -83,13 +83,25 @@ export default function Header() {
       padding: '16px max(16px, calc((100vw - 1024px) / 2 + 16px))',
       zIndex: 'var(--z-header)'
     }}>
-      <a href="#" className="flex items-center no-underline">
-        <img
-          src="/images/モンジェネロゴタイプ.svg"
-          alt="Mongene"
-          className="h-10 w-auto object-contain"
-        />
-      </a>
+      <div className="flex items-center gap-4">
+        <a href="#" className="flex items-center no-underline">
+          <img
+            src="/images/モンジェネロゴタイプ.svg"
+            alt="Mongene"
+            className="h-10 w-auto object-contain"
+          />
+        </a>
+        {user?.role === 'demo' && (
+          <div className="bg-orange-100 border-2 border-orange-400 text-orange-700 px-4 py-1.5 rounded-full font-bold text-sm flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            デモモード
+          </div>
+        )}
+      </div>
       
       <div className="relative" ref={menuRef}>
         <button

@@ -6,49 +6,133 @@ export interface UnitItem {
   children?: UnitItem[];
 }
 
-// 中学数学の単元階層構造
+// 中学数学の単元階層構造（学年別）
 export const UNITS_HIERARCHY: UnitItem[] = [
   {
-    id: 'number',
-    label: '数と式',
+    id: 'grade1',
+    label: '中学1年',
     children: [
-      { id: 'number-1', label: '正の数・負の数' },
-      { id: 'number-2', label: '文字と式' },
-      { id: 'number-3', label: '一次方程式' },
-      { id: 'number-4', label: '連立方程式' },
-      { id: 'number-5', label: '多項式（展開・因数分解）' },
-      { id: 'number-6', label: '平方根' },
-      { id: 'number-7', label: '二次方程式' },
+      {
+        id: 'grade1-function',
+        label: '関数',
+        children: [
+          { id: 'grade1-function-1', label: '比例式を求める・グラフ' },
+          { id: 'grade1-function-2', label: '反比例の式・グラフ' },
+        ],
+      },
+      {
+        id: 'grade1-geometry',
+        label: '図形',
+        children: [
+          {
+            id: 'grade1-geometry-plane',
+            label: '平面図形',
+            children: [
+              { id: 'grade1-geometry-plane-1', label: '直線と角' },
+              { id: 'grade1-geometry-plane-2', label: '図形の移動' },
+              { id: 'grade1-geometry-plane-3', label: '円' },
+              { id: 'grade1-geometry-plane-4', label: 'おうぎ形' },
+            ],
+          },
+          {
+            id: 'grade1-geometry-space',
+            label: '空間図形',
+            children: [
+              { id: 'grade1-geometry-space-1', label: '直線と平面の位置関係' },
+              { id: 'grade1-geometry-space-2', label: '立体の表面積' },
+              { id: 'grade1-geometry-space-3', label: '立体の体積' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'grade1-data',
+        label: '資料の整理',
+        children: [
+          { id: 'grade1-data-1', label: '度数・相対度数' },
+          { id: 'grade1-data-2', label: '代表値（平均・中央値・最頻値）' },
+          { id: 'grade1-data-3', label: '真の値・有効数字' },
+        ],
+      },
     ],
   },
   {
-    id: 'function',
-    label: '関数',
+    id: 'grade2',
+    label: '中学2年',
     children: [
-      { id: 'function-1', label: '比例・反比例' },
-      { id: 'function-2', label: '一次関数' },
-      { id: 'function-3', label: '関数 y=ax²' },
+      { id: 'grade2-equation', label: '連立方程式' },
+      {
+        id: 'grade2-function',
+        label: '一次関数',
+        children: [
+          { id: 'grade2-function-1', label: '変化の割合' },
+          { id: 'grade2-function-2', label: 'グラフ・式の求め方' },
+        ],
+      },
+      {
+        id: 'grade2-geometry',
+        label: '合同な図形',
+        children: [
+          { id: 'grade2-geometry-1', label: '図形の性質' },
+          { id: 'grade2-geometry-2', label: '三角形と四角形' },
+        ],
+      },
+      {
+        id: 'grade2-probability',
+        label: '確率',
+        children: [
+          { id: 'grade2-probability-1', label: '確率の求め方' },
+          { id: 'grade2-probability-2', label: 'いろいろな確率' },
+        ],
+      },
     ],
   },
   {
-    id: 'geometry',
-    label: '図形',
+    id: 'grade3',
+    label: '中学3年',
     children: [
-      { id: 'geometry-1', label: '平面図形' },
-      { id: 'geometry-2', label: '空間図形' },
-      { id: 'geometry-3', label: '図形の性質と合同' },
-      { id: 'geometry-4', label: '図形の相似' },
-      { id: 'geometry-5', label: '円の性質（円周角）' },
-      { id: 'geometry-6', label: '三平方の定理' },
-    ],
-  },
-  {
-    id: 'data',
-    label: 'データの活用',
-    children: [
-      { id: 'data-1', label: 'データの整理と活用' },
-      { id: 'data-2', label: '確率' },
-      { id: 'data-3', label: '標本調査' },
+      { id: 'grade3-calculation', label: '式の計算' },
+      { id: 'grade3-sqrt', label: '平方根' },
+      { id: 'grade3-quadratic', label: '二次方程式' },
+      {
+        id: 'grade3-function',
+        label: '二次関数（2乗に比例する関数）',
+        children: [
+          { id: 'grade3-function-1', label: '関数の決定・グラフ' },
+          { id: 'grade3-function-2', label: '変域・値の変化' },
+          { id: 'grade3-function-3', label: '放物線と直線' },
+        ],
+      },
+      {
+        id: 'grade3-similarity',
+        label: '相似な図形',
+        children: [
+          { id: 'grade3-similarity-1', label: '拡大・縮小' },
+          { id: 'grade3-similarity-2', label: '相似条件' },
+          { id: 'grade3-similarity-3', label: '三角形と比' },
+          { id: 'grade3-similarity-4', label: '中点連結定理・平行線と線分の比' },
+          { id: 'grade3-similarity-5', label: '面積比・表面積比・体積比' },
+        ],
+      },
+      { id: 'grade3-circle', label: '円周角の定理' },
+      {
+        id: 'grade3-pythagorean',
+        label: '三平方の定理',
+        children: [
+          { id: 'grade3-pythagorean-1', label: '定理とその逆' },
+          { id: 'grade3-pythagorean-2', label: '平面図形への利用' },
+          { id: 'grade3-pythagorean-3', label: '空間図形への利用' },
+        ],
+      },
+      {
+        id: 'grade3-data',
+        label: '資料の活用',
+        children: [
+          { id: 'grade3-data-1', label: '母集団と標本' },
+          { id: 'grade3-data-2', label: '標本抽出と平均' },
+          { id: 'grade3-data-3', label: '母集団の推定' },
+        ],
+      },
     ],
   },
 ];
