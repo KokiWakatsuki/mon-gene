@@ -41,7 +41,7 @@ export interface CheckInfo {
 }
 
 const YEARS = ['2020', '2021', '2022', '2023', '2024', '2025'];
-const EXAM_SESSIONS = ['第1回', '第2回', '第3回', 'プレ', '追試'];
+const EXAM_SESSIONS = ['第1回模試', '第2回模試', '第3回模試', '第4回模試', '第5回模試', '第6回模試', '第7回模試', '第8回模試', '本番'];
 
 export default function ProblemPreviewModal({
   isOpen,
