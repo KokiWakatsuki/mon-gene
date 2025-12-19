@@ -18,18 +18,6 @@ function LoginForm() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
 
-  // URLパラメータから自動ログイン
-  useEffect(() => {
-    const schoolCode = searchParams.get('schoolCode');
-    const password = searchParams.get('password');
-    
-    if (schoolCode && password) {
-      setFormData({ schoolCode, password });
-      // 自動的にログイン処理を実行
-      performLogin(schoolCode, password);
-    }
-  }, [searchParams]);
-
   const performLogin = async (schoolCode: string, password: string) => {
     setError('');
     setIsLoading(true);
@@ -59,6 +47,19 @@ function LoginForm() {
       setIsLoading(false);
     }
   };
+
+  // URLパラメータから自動ログイン
+  useEffect(() => {
+    const schoolCode = searchParams.get('schoolCode');
+    const password = searchParams.get('password');
+    
+    if (schoolCode && password) {
+      setFormData({ schoolCode, password });
+      // 自動的にログイン処理を実行
+      performLogin(schoolCode, password);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
