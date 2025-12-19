@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -986,6 +987,8 @@ func (r *MySQLProblemRepository) loadSeedData() error {
 	defer file.Close()
 
 	reader := csv.NewReader(file)
+	reader.LazyQuotes = true // 引用符の問題を許容
+	reader.FieldsPerRecord = -1 // フィールド数の不一致を許容
 	records, err := reader.ReadAll()
 	if err != nil {
 		return fmt.Errorf("CSV解析に失敗: %w", err)
@@ -993,8 +996,8 @@ func (r *MySQLProblemRepository) loadSeedData() error {
 
 	// ヘッダーをスキップ
 	for i, record := range records[1:] {
-		if len(record) < 8 {
-			log.Printf("⚠️ 行%d: データが不完全です: %v", i+2, record)
+		if len(record) < 7 {
+			log.Printf("⚠️ 行%d: データが不完全です（最低7列必要）: %v", i+2, record)
 			continue
 		}
 
@@ -1015,11 +1018,53 @@ func (r *MySQLProblemRepository) loadSeedData() error {
 			UpdatedAt:   time.Now(),
 		}
 
-		// OpinionProfileV2がある場合はパース
-		if len(record) > 7 && record[7] != "" {
+		// CSVがJSONのカンマで分割されている場合、カラムを結合してJSONを再構築
+		// 期待されるカラム数は13だが、実際には27カラムに分割されている
+		// Column 8-22: check_info (JSONが分割されている)
+		// Column 23: opinion_profile (NULL)
+		// Column 24: opinion_profile_v2 (NULL)
+		// Column 25: created_at
+		// Column 26: updated_at
+		
+		// CheckInfoを再構築（Column 8-22を結合）
+		if len(record) > 22 && record[8] != "" && record[8] != "NULL" && record[8] != "null" {
+			// Column 8-22を結合してJSONを再構築
+			checkInfoParts := record[8:23]
+			checkInfoStr := strings.Join(checkInfoParts, ",")
+			
+			// CSVパーサーによる分割で欠けた引用符を修正
+			// Step 1: {year" -> {"year"
+			checkInfoStr = strings.Replace(checkInfoStr, `{year"`, `{"year"`, 1)
+			// Step 2: "YYYY, "units" -> "YYYY", "units" (yearの値の閉じクォートを追加)
+			if strings.Contains(checkInfoStr, `"2025, "units"`) {
+				checkInfoStr = strings.Replace(checkInfoStr, `"2025, "units"`, `"2025", "units"`, 1)
+			} else if strings.Contains(checkInfoStr, `"2024, "units"`) {
+				checkInfoStr = strings.Replace(checkInfoStr, `"2024, "units"`, `"2024", "units"`, 1)
+			} else if strings.Contains(checkInfoStr, `"2023, "units"`) {
+				checkInfoStr = strings.Replace(checkInfoStr, `"2023, "units"`, `"2023", "units"`, 1)
+			}
+			// Step 3: 最後の余分な}" を削除（CSVのクォート処理の問題）
+			checkInfoStr = strings.TrimSuffix(checkInfoStr, `}"`)
+			checkInfoStr = checkInfoStr + "}"
+			
+			var checkInfo models.CheckInfo
+			if err := json.Unmarshal([]byte(checkInfoStr), &checkInfo); err != nil {
+				displayLen := len(checkInfoStr)
+				if displayLen > 250 {
+					displayLen = 250
+				}
+				log.Printf("⚠️ 行%d: check_infoの解析に失敗: %v, データ: %q", i+2, err, checkInfoStr[:displayLen])
+			} else {
+				problem.CheckInfo = &checkInfo
+				log.Printf("✅ 行%d: check_infoを正常に解析しました", i+2)
+			}
+		}
+
+		// OpinionProfileV2（Column 24、通常はNULL）
+		if len(record) > 24 && record[24] != "" && record[24] != "NULL" && record[24] != "null" {
 			var opinionProfileV2 models.OpinionProfileV2
-			if err := json.Unmarshal([]byte(record[7]), &opinionProfileV2); err != nil {
-				log.Printf("⚠️ 行%d: opinion_profile_v2の解析に失敗: %v", i+2, err)
+			if err := json.Unmarshal([]byte(record[24]), &opinionProfileV2); err != nil {
+				log.Printf("⚠️ 行%d: opinion_profile_v2の解析に失敗（スキップ）: %v", i+2, err)
 			} else {
 				problem.OpinionProfileV2 = &opinionProfileV2
 			}
