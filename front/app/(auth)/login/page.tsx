@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import BackgroundShapes from '../../components/layout/BackgroundShapes';
 import { API_CONFIG } from '../../lib/config/api';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
     schoolCode: '',
     password: '',
@@ -16,6 +17,48 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+
+  // URLパラメータから自動ログイン
+  useEffect(() => {
+    const schoolCode = searchParams.get('schoolCode');
+    const password = searchParams.get('password');
+    
+    if (schoolCode && password) {
+      setFormData({ schoolCode, password });
+      // 自動的にログイン処理を実行
+      performLogin(schoolCode, password);
+    }
+  }, [searchParams]);
+
+  const performLogin = async (schoolCode: string, password: string) => {
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(API_CONFIG.LOGIN_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolCode, password }),
+      });
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'ログインに失敗しました');
+      }
+      
+      // トークンをローカルストレージに保存
+      localStorage.setItem('token', data.token);
+      
+      // トップページへリダイレクト
+      router.push('/problems');
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error instanceof Error ? error.message : '塾コードまたはパスワードが正しくありません。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -27,55 +70,18 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setIsLoading(true);
 
     // バリデーション
     if (!formData.schoolCode.trim()) {
       setError('塾コードを入力してください。');
-      setIsLoading(false);
       return;
     }
     if (!formData.password.trim()) {
       setError('パスワードを入力してください。');
-      setIsLoading(false);
       return;
     }
 
-    try {
-      console.log('API URL:', API_CONFIG.API_BASE_URL);
-      console.log('Login data:', { schoolCode: formData.schoolCode, password: formData.password });
-      
-      const response = await fetch(API_CONFIG.LOGIN_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          schoolCode: formData.schoolCode,
-          password: formData.password,
-        }),
-      });
-      
-      console.log('Response status:', response.status);
-      const data = await response.json();
-      console.log('Response data:', data);
-      
-      if (!data.success) {
-        throw new Error(data.error || 'ログインに失敗しました');
-      }
-      
-      // トークンをローカルストレージに保存
-      localStorage.setItem('token', data.token);
-      console.log('Token saved:', data.token);
-      
-      // トップページへリダイレクト
-      console.log('Redirecting to /problems');
-      router.push('/problems');
-    } catch (error) {
-      console.error('Login error:', error);
-      setError(error instanceof Error ? error.message : '塾コードまたはパスワードが正しくありません。');
-    } finally {
-      setIsLoading(false);
-    }
+    await performLogin(formData.schoolCode, formData.password);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
