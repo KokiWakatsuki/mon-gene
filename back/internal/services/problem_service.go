@@ -223,12 +223,16 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 		UpdatedAt:        time.Now(),
 	}
 
-	// リポジトリが実装されている場合のみ保存
+	// リポジトリが実装されている場合のみ保存（testロールは保存しない）
 	if s.problemRepo != nil {
-		if err := s.problemRepo.Create(ctx, problem); err != nil {
-			return nil, fmt.Errorf("failed to save problem: %w", err)
+		if user.Role == "test" {
+			fmt.Printf("⏭️ [Test Account] Skipping database save for test user: %s\n", userSchoolCode)
+		} else {
+			if err := s.problemRepo.Create(ctx, problem); err != nil {
+				return nil, fmt.Errorf("failed to save problem: %w", err)
+			}
+			fmt.Printf("💾 Problem saved to database with ID: %d\n", problem.ID)
 		}
-		fmt.Printf("💾 Problem saved to database with ID: %d\n", problem.ID)
 	}
 
 
@@ -1320,13 +1324,17 @@ func (s *problemService) GenerateProblemFiveStageWithProgress(ctx context.Contex
 		UpdatedAt:           time.Now(),
 	}
 
-	// リポジトリが実装されている場合のみ保存
+	// リポジトリが実装されている場合のみ保存（testロールは保存しない）
 	if s.problemRepo != nil {
-		if err := s.problemRepo.Create(ctx, problem); err != nil {
-			fmt.Printf("⚠️ [FiveStage] Failed to save problem to database: %v\n", err)
-			// データベース保存に失敗してもレスポンスは成功として返す（問題生成自体は成功）
+		if user.Role == "test" {
+			fmt.Printf("⏭️ [FiveStage] [Test Account] Skipping database save for test user: %s\n", userSchoolCode)
 		} else {
-			fmt.Printf("✅ [FiveStage] Problem saved to database with ID: %d\n", problem.ID)
+			if err := s.problemRepo.Create(ctx, problem); err != nil {
+				fmt.Printf("⚠️ [FiveStage] Failed to save problem to database: %v\n", err)
+				// データベース保存に失敗してもレスポンスは成功として返す（問題生成自体は成功）
+			} else {
+				fmt.Printf("✅ [FiveStage] Problem saved to database with ID: %d\n", problem.ID)
+			}
 		}
 	} else {
 		fmt.Printf("⚠️ [FiveStage] Problem repository is not initialized, skipping database save\n")
@@ -2232,10 +2240,14 @@ func (s *problemService) GenerateThreeProblemsWithProgress(ctx context.Context, 
 	}
 	
 	if s.problemRepo != nil {
-		if err := s.problemRepo.Create(ctx, problemA); err != nil {
-			fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern A: %v\n", err)
+		if user.Role == "test" {
+			fmt.Printf("⏭️ [ThreeProblems] [Test Account] Skipping database save for test user\n")
 		} else {
-			fmt.Printf("✅ [ThreeProblems] Pattern A saved with ID: %d\n", problemA.ID)
+			if err := s.problemRepo.Create(ctx, problemA); err != nil {
+				fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern A: %v\n", err)
+			} else {
+				fmt.Printf("✅ [ThreeProblems] Pattern A saved with ID: %d\n", problemA.ID)
+			}
 		}
 	}
 	
@@ -2253,10 +2265,12 @@ func (s *problemService) GenerateThreeProblemsWithProgress(ctx context.Context, 
 	}
 	
 	if s.problemRepo != nil {
-		if err := s.problemRepo.Create(ctx, problemB); err != nil {
-			fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern B: %v\n", err)
-		} else {
-			fmt.Printf("✅ [ThreeProblems] Pattern B saved with ID: %d\n", problemB.ID)
+		if user.Role != "test" {
+			if err := s.problemRepo.Create(ctx, problemB); err != nil {
+				fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern B: %v\n", err)
+			} else {
+				fmt.Printf("✅ [ThreeProblems] Pattern B saved with ID: %d\n", problemB.ID)
+			}
 		}
 	}
 	
@@ -2274,10 +2288,12 @@ func (s *problemService) GenerateThreeProblemsWithProgress(ctx context.Context, 
 	}
 	
 	if s.problemRepo != nil {
-		if err := s.problemRepo.Create(ctx, problemC); err != nil {
-			fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern C: %v\n", err)
-		} else {
-			fmt.Printf("✅ [ThreeProblems] Pattern C saved with ID: %d\n", problemC.ID)
+		if user.Role != "test" {
+			if err := s.problemRepo.Create(ctx, problemC); err != nil {
+				fmt.Printf("⚠️ [ThreeProblems] Failed to save Pattern C: %v\n", err)
+			} else {
+				fmt.Printf("✅ [ThreeProblems] Pattern C saved with ID: %d\n", problemC.ID)
+			}
 		}
 	}
 	
