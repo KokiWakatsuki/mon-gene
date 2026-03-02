@@ -38,6 +38,7 @@ services:
       - "8080"
     depends_on:
       - db
+      - core
     environment:
       - GO_ENV=staging
       - DB_HOST=db
@@ -45,7 +46,17 @@ services:
       - DB_NAME=staging
       - DB_USER=user
       - DB_PASSWORD=password
-      - CORE_SERVICE_URL=http://core:1234
+      - CORE_API_URL=${CORE_API_URL:-http://core:1234}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LABORATORY_API_KEY=${LABORATORY_API_KEY}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://mon-gene.wakatsuki.app}
+      - ENVIRONMENT=staging
     networks:
       - mon-gene-network
     tty: true

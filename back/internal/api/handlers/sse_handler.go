@@ -410,15 +410,35 @@ func (h *SSEHandler) PreviewPDFContent(w http.ResponseWriter, r *http.Request) {
 	
 	fmt.Printf("✅ [PreviewPDF] PDF data loaded successfully (%d bytes)\n", len(pdfData))
 	
+	// PDFファイルサイズのバリデーション（20MBまで）
+	maxPDFSize := 20 * 1024 * 1024 // 20MB
+	if len(pdfData) > maxPDFSize {
+		fmt.Printf("❌ [PreviewPDF] PDF file too large: %d bytes (max: %d bytes)\n", len(pdfData), maxPDFSize)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("PDFファイルが大きすぎます（最大20MB）。現在のサイズ: %.2f MB", float64(len(pdfData))/(1024*1024)))
+		return
+	}
+	
 	// Google Files APIを使用してPDFからテキストを抽出
 	// 簡単な抽出プロンプトを使用
 	extractPrompt := "このPDFファイルに含まれる問題文を正確に抽出してください。数式、図形の説明、問題番号などすべての情報を含めてください。"
+	
+	fmt.Printf("🔄 [PreviewPDF] Starting PDF text extraction with Google API...\n")
 	
 	// Google Clientを使用（ユーザーの設定に関わらずGoogle APIを使用）
 	googleClient := clients.NewGoogleClient("gemini-2.0-flash-exp")
 	extractedText, err := googleClient.GenerateContentWithPDF(r.Context(), extractPrompt, pdfData)
 	if err != nil {
-		utils.WriteErrorResponse(w, http.StatusInternalServerError, fmt.Sprintf("PDFからのテキスト抽出に失敗しました: %v", err))
+		fmt.Printf("❌ [PreviewPDF] PDF extraction failed: %v\n", err)
+		// エラーの種類に応じて適切なメッセージを返す
+		errorMsg := fmt.Sprintf("PDFからのテキスト抽出に失敗しました: %v", err)
+		if strings.Contains(err.Error(), "API key") {
+			errorMsg = "Google API キーが設定されていません。管理者に連絡してください。"
+		} else if strings.Contains(err.Error(), "quota") || strings.Contains(err.Error(), "rate limit") {
+			errorMsg = "APIの利用制限に達しました。しばらく待ってから再試行してください。"
+		} else if strings.Contains(err.Error(), "too large") || strings.Contains(err.Error(), "size") {
+			errorMsg = "PDFファイルが大きすぎます。より小さいファイルを使用してください。"
+		}
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, errorMsg)
 		return
 	}
 	

@@ -116,20 +116,24 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 	fmt.Printf("🔍 User prompt: %s\n", req.Prompt)
 	
 	var content string
+	fmt.Printf("🔄 [GenerateProblem] Starting API call to %s with model %s\n", preferredAPI, preferredModel)
+	
 	switch preferredAPI {
 	case "openai", "chatgpt":
 		// ユーザーの設定に基づいて新しいクライアントを作成
 		dynamicClient := clients.NewOpenAIClient(preferredModel)
 		content, err = dynamicClient.GenerateContent(ctx, req.Prompt)
 		if err != nil {
-			return nil, fmt.Errorf("OpenAI APIでの問題生成に失敗しました: %w", err)
+			fmt.Printf("❌ [GenerateProblem] OpenAI API error: %v\n", err)
+			return nil, fmt.Errorf("OpenAI APIでの問題生成に失敗しました。エラー詳細: %w。API設定を確認してください（設定ページ > AI設定）", err)
 		}
 	case "google", "gemini":
 		// ユーザーの設定に基づいて新しいクライアントを作成
 		dynamicClient := clients.NewGoogleClient(preferredModel)
 		content, err = dynamicClient.GenerateContent(ctx, req.Prompt)
 		if err != nil {
-			return nil, fmt.Errorf("Google APIでの問題生成に失敗しました: %w", err)
+			fmt.Printf("❌ [GenerateProblem] Google API error: %v\n", err)
+			return nil, fmt.Errorf("Google APIでの問題生成に失敗しました。エラー詳細: %w。API設定を確認してください（設定ページ > AI設定）", err)
 		}
 	case "claude", "laboratory":
 		// ユーザーの設定に基づいて新しいクライアントを作成
@@ -137,11 +141,15 @@ func (s *problemService) GenerateProblem(ctx context.Context, req models.Generat
 		dynamicClient := clients.NewClaudeClient(preferredModel)
 		content, err = dynamicClient.GenerateContent(ctx, req.Prompt)
 		if err != nil {
-			return nil, fmt.Errorf("Claude APIでの問題生成に失敗しました: %w", err)
+			fmt.Printf("❌ [GenerateProblem] Claude API error: %v\n", err)
+			return nil, fmt.Errorf("Claude APIでの問題生成に失敗しました。エラー詳細: %w。API設定を確認してください（設定ページ > AI設定）", err)
 		}
 	default:
+		fmt.Printf("❌ [GenerateProblem] Unsupported API: %s\n", preferredAPI)
 		return nil, fmt.Errorf("サポートされていないAPI「%s」が指定されています。設定ページで正しいAPIを選択してください。サポートされているAPI: openai, google, claude", preferredAPI)
 	}
+	
+	fmt.Printf("✅ [GenerateProblem] API call successful, content length: %d\n", len(content))
 	
 	contentPreview := content
 	if len(content) > 200 {
