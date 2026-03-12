@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mon-gene/back/internal/clients"
 	"github.com/mon-gene/back/internal/models"
@@ -85,54 +86,85 @@ func (h *SSEHandler) GenerateProblemFiveStageSSE(w http.ResponseWriter, r *http.
 	// 各ステージを順次実行し、進捗をSSEで送信
 	ctx := r.Context()
 	
+	// イベントと完了通知用のチャネル
+	eventChan := make(chan StageProgressEvent, 100)
+	doneChan := make(chan struct{})
+	
 	// Stage 1開始
-	h.sendSSEEvent(w, StageProgressEvent{
+	eventChan <- StageProgressEvent{
 		Type:    "stage_start",
 		Stage:   1,
 		Message: "小問構成と解答プロセスを生成中...",
-	})
-	
-	// 実際の5段階生成を実行（内部で各ステージの完了を検知）
-	// この部分は後で実装します（現在のGenerateProblemFiveStageを分割）
-	result, err := h.problemService.GenerateProblemFiveStageWithProgress(ctx, req, userSchoolCode, func(stage int, message string) {
-		h.sendSSEEvent(w, StageProgressEvent{
-			Type:    "stage_complete",
-			Stage:   stage,
-			Message: message,
-		})
-		
-		// 次のステージ開始通知
-		if stage < 5 {
-			nextStageMessages := []string{
-				"",
-				"パラメータ設定と動的検証を実行中...",
-				"問題文用の図形を描画中...",
-				"完全な問題文を生成中...",
-				"完全な解答・解説を生成中...",
-			}
-			h.sendSSEEvent(w, StageProgressEvent{
-				Type:    "stage_start",
-				Stage:   stage + 1,
-				Message: nextStageMessages[stage],
-			})
-		}
-	})
-	
-	if err != nil {
-		h.sendSSEEvent(w, StageProgressEvent{
-			Type:  "error",
-			Error: fmt.Sprintf("問題生成に失敗しました: %v", err),
-		})
-		return
 	}
 	
-	// 完了イベントを送信
-	resultJSON, _ := json.Marshal(result)
-	h.sendSSEEvent(w, StageProgressEvent{
-		Type:    "complete",
-		Stage:   5,
-		Message: string(resultJSON),
-	})
+	// 実際の5段階生成を非同期で実行
+	go func() {
+		defer close(doneChan)
+		result, err := h.problemService.GenerateProblemFiveStageWithProgress(ctx, req, userSchoolCode, func(stage int, message string) {
+			eventChan <- StageProgressEvent{
+				Type:    "stage_complete",
+				Stage:   stage,
+				Message: message,
+			}
+			
+			// 次のステージ開始通知
+			if stage < 5 {
+				nextStageMessages := []string{
+					"",
+					"パラメータ設定と動的検証を実行中...",
+					"問題文用の図形を描画中...",
+					"完全な問題文を生成中...",
+					"完全な解答・解説を生成中...",
+				}
+				eventChan <- StageProgressEvent{
+					Type:    "stage_start",
+					Stage:   stage + 1,
+					Message: nextStageMessages[stage],
+				}
+			}
+		})
+		
+		if err != nil {
+			eventChan <- StageProgressEvent{
+				Type:  "error",
+				Error: fmt.Sprintf("問題生成に失敗しました: %v", err),
+			}
+			return
+		}
+		
+		// 完了イベントを送信
+		resultJSON, _ := json.Marshal(result)
+		eventChan <- StageProgressEvent{
+			Type:    "complete",
+			Stage:   5,
+			Message: string(resultJSON),
+		}
+	}()
+
+	// Cloudflare等のタイムアウト（100秒）防止用Ticker（15秒間隔）
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event := <-eventChan:
+			h.sendSSEEvent(w, event)
+			if event.Type == "error" || event.Type == "complete" {
+				return
+			}
+		case <-ticker.C:
+			// 接続維持のための空コメントを送信
+			fmt.Fprintf(w, ": keepalive\n\n")
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		case <-doneChan:
+			// goroutine終了時はループを抜ける
+			return
+		}
+	}
 }
 
 // sendSSEEvent SSEイベントを送信
@@ -301,56 +333,88 @@ func (h *SSEHandler) GenerateThreeProblemsSSE(w http.ResponseWriter, r *http.Req
 		15: "パターンC - Stage 5: 完全な解答・解説生成中...",
 	}
 	
+	// イベントと完了通知用のチャネル
+	eventChan := make(chan StageProgressEvent, 100)
+	doneChan := make(chan struct{})
+
 	// Stage 1開始
-	h.sendSSEEvent(w, StageProgressEvent{
+	eventChan <- StageProgressEvent{
 		Type:    "stage_start",
 		Stage:   1,
 		Message: stageMessages[1],
-	})
+	}
 	
-	// 3問生成を実行（進捗コールバック付き）
-	result, err := h.problemService.GenerateThreeProblemsWithProgress(ctx, req, userSchoolCode, func(stage int, message string) {
-		// ステージ完了通知
-		h.sendSSEEvent(w, StageProgressEvent{
-			Type:    "stage_complete",
-			Stage:   stage,
-			Message: message,
+	// 3問生成を非同期で実行（進捗コールバック付き）
+	go func() {
+		defer close(doneChan)
+		result, err := h.problemService.GenerateThreeProblemsWithProgress(ctx, req, userSchoolCode, func(stage int, message string) {
+			// ステージ完了通知
+			eventChan <- StageProgressEvent{
+				Type:    "stage_complete",
+				Stage:   stage,
+				Message: message,
+			}
+			
+			// 次のステージ開始通知
+			if stage < 15 {
+				nextStage := stage + 1
+				eventChan <- StageProgressEvent{
+					Type:    "stage_start",
+					Stage:   nextStage,
+					Message: stageMessages[nextStage],
+				}
+			}
 		})
 		
-		// 次のステージ開始通知
-		if stage < 15 {
-			nextStage := stage + 1
-			h.sendSSEEvent(w, StageProgressEvent{
-				Type:    "stage_start",
-				Stage:   nextStage,
-				Message: stageMessages[nextStage],
-			})
+		if err != nil {
+			eventChan <- StageProgressEvent{
+				Type:  "error",
+				Error: fmt.Sprintf("3問生成に失敗しました: %v", err),
+			}
+			return
 		}
-	})
-	
-	if err != nil {
-		h.sendSSEEvent(w, StageProgressEvent{
-			Type:  "error",
-			Error: fmt.Sprintf("3問生成に失敗しました: %v", err),
-		})
-		return
+		
+		if !result.Success {
+			eventChan <- StageProgressEvent{
+				Type:  "error",
+				Error: result.Error,
+			}
+			return
+		}
+		
+		// 完了イベントを送信
+		resultJSON, _ := json.Marshal(result)
+		eventChan <- StageProgressEvent{
+			Type:    "complete",
+			Stage:   15,
+			Message: string(resultJSON),
+		}
+	}()
+
+	// Cloudflare等のタイムアウト（100秒）防止用Ticker（15秒間隔）
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event := <-eventChan:
+			h.sendSSEEvent(w, event)
+			if event.Type == "error" || event.Type == "complete" {
+				return
+			}
+		case <-ticker.C:
+			// 接続維持のための空コメントを送信
+			fmt.Fprintf(w, ": keepalive\n\n")
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		case <-doneChan:
+			// goroutine終了時はループを抜ける
+			return
+		}
 	}
-	
-	if !result.Success {
-		h.sendSSEEvent(w, StageProgressEvent{
-			Type:  "error",
-			Error: result.Error,
-		})
-		return
-	}
-	
-	// 完了イベントを送信
-	resultJSON, _ := json.Marshal(result)
-	h.sendSSEEvent(w, StageProgressEvent{
-		Type:    "complete",
-		Stage:   15,
-		Message: string(resultJSON),
-	})
 }
 
 // PreviewPDFContent PDFファイルの内容をプレビュー用に抽出（回数制限付き）
@@ -423,9 +487,22 @@ func (h *SSEHandler) PreviewPDFContent(w http.ResponseWriter, r *http.Request) {
 	extractPrompt := "このPDFファイルに含まれる問題文を正確に抽出してください。数式、図形の説明、問題番号などすべての情報を含めてください。"
 	
 	fmt.Printf("🔄 [PreviewPDF] Starting PDF text extraction with Google API...\n")
+	fmt.Printf("👤 [PreviewPDF] User API: %s, Model: %s\n", user.PreferredAPI, user.PreferredModel)
 	
-	// Google Clientを使用（ユーザーの設定に関わらずGoogle APIを使用）
-	googleClient := clients.NewGoogleClient("gemini-2.0-flash-exp")
+	// ユーザーの設定に基づいてモデルを選択（Google APIのみ対応）
+	// Google以外のAPIが設定されている場合は、デフォルトでgemini-1.5-flashを使用
+	modelToUse := "gemini-1.5-flash" // デフォルト（安定版）
+	if user.PreferredAPI == "google" || user.PreferredAPI == "gemini" {
+		if user.PreferredModel != "" {
+			modelToUse = user.PreferredModel
+			fmt.Printf("🔧 [PreviewPDF] Using user's preferred model: %s\n", modelToUse)
+		}
+	} else {
+		fmt.Printf("⚠️ [PreviewPDF] User's API (%s) doesn't support PDF, using default Google model: %s\n", user.PreferredAPI, modelToUse)
+	}
+	
+	// Google Clientを使用
+	googleClient := clients.NewGoogleClient(modelToUse)
 	extractedText, err := googleClient.GenerateContentWithPDF(r.Context(), extractPrompt, pdfData)
 	if err != nil {
 		fmt.Printf("❌ [PreviewPDF] PDF extraction failed: %v\n", err)
@@ -437,6 +514,8 @@ func (h *SSEHandler) PreviewPDFContent(w http.ResponseWriter, r *http.Request) {
 			errorMsg = "APIの利用制限に達しました。しばらく待ってから再試行してください。"
 		} else if strings.Contains(err.Error(), "too large") || strings.Contains(err.Error(), "size") {
 			errorMsg = "PDFファイルが大きすぎます。より小さいファイルを使用してください。"
+		} else if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "404") {
+			errorMsg = fmt.Sprintf("指定されたモデル（%s）が利用できません。gemini-1.5-flashまたはgemini-1.5-proを使用してください。", modelToUse)
 		}
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, errorMsg)
 		return
